@@ -96,7 +96,8 @@ $Info = [ordered]@{
     source_code    = $Manifest.source_code
     fetched_at     = (Get-Date).ToUniversalTime().ToString("o")
 }
-$Info | ConvertTo-Json | Set-Content -Path (Join-Path $Vendor "VERSION.json") -Encoding UTF8
+# 以不含 BOM 的 UTF-8 寫入（Windows PowerShell 5.1 的 Set-Content -Encoding UTF8 會加上 BOM）
+[System.IO.File]::WriteAllText((Join-Path $Vendor "VERSION.json"), ($Info | ConvertTo-Json), (New-Object System.Text.UTF8Encoding $false))
 Remove-Item -Recurse -Force $Extract
 Write-Host "完成：$BinDir"
 Write-Host $VersionLine

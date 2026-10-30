@@ -51,7 +51,7 @@ if BUNDLE_FFMPEG:
     datas.append((str(manifest), "ffmpeg"))
     for extra in sorted(ffmpeg_root.glob("LICENSE*")) + sorted(ffmpeg_root.glob("README*")):
         datas.append((str(extra), "ffmpeg"))
-    print("隨附 FFmpeg：", json.loads(manifest.read_text(encoding="utf-8")).get("version"))
+    print("隨附 FFmpeg：", json.loads(manifest.read_text(encoding="utf-8-sig")).get("version"))
 
 # ---- Deno（由 requirements.txt 固定版本的 deno 套件提供）----
 if BUNDLE_DENO:
