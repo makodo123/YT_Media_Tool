@@ -17,10 +17,10 @@
   資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中；README.md 的「功能」表已涵蓋全部要求。
 
-### 目前階段：v2.1.3 已推送到 `main`，等 CI 通過後由使用者發布
+### 目前階段：v2.1.3 已推送到 `main`、CI 通過，等使用者發布 `v2.1.3-beta.1`
 
 - 使用者要求「以使用者角度檢查文字與功能」並同意全部修正（版本號 2.1.3），已合併到 `main`。
-  等 Windows CI 兩個工作都 success 後，請使用者 Run workflow（建議先 `v2.1.3-beta.1`）。
+  commit 36d10af 的 Windows CI 兩個工作皆 success（run 41144347137）；已請使用者 Run workflow，tag `v2.1.3-beta.1`。
 
 - **最新正式版 `v2.1.2`**（標示為 Latest），提供安裝版（`-setup.exe`）與免安裝版（zip）：
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.2
@@ -167,7 +167,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-- **待辦**：v2.1.3 合併到 `main` → CI → 使用者發布 → 實測（見第 1 節）。
+- **待辦**：使用者發布 `v2.1.3-beta.1` → 確認 Release 附件 → 使用者實測 → 發布正式版 `v2.1.3`。
 
 以下為之後可能的方向（皆需使用者決定）：
 
