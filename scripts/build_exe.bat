@@ -23,12 +23,14 @@ if not exist "%PY%" goto novenv
 set "VERSION=2.0.0"
 set "DIST=dist\YT_Media_Tool"
 
+rem 測試使用 offscreen；結束後還原原本的設定（CI 會預先設定 offscreen 供啟動測試使用）
+set "ORIG_QPA=%QT_QPA_PLATFORM%"
 if "%RUN_TESTS%"=="1" (
     echo === 1/5 執行測試 ===
     set "QT_QPA_PLATFORM=offscreen"
     "%PY%" -m pytest -q
     if errorlevel 1 goto fail
-    set "QT_QPA_PLATFORM="
+    set "QT_QPA_PLATFORM=%ORIG_QPA%"
 )
 
 if "%BUNDLE_FFMPEG%"=="1" (

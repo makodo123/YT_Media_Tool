@@ -1,0 +1,63 @@
+name: FFmpeg 來源驗證
+
+# 驗證 packaging/ffmpeg_manifest.json 的下載網址與 SHA256：
+# 下載檔的雜湊必須與 GitHub 於上傳時計算的 release asset digest（及 gyan.dev 公布值，若有）一致，
+# 且與 manifest 中固定的 sha256 相同。
+on:
+  push:
+    branches: [main]
+    paths:
+      - packaging/ffmpeg_manifest.json
+      - scripts/fetch_ffmpeg.ps1
+      - .github/workflows/ffmpeg-verify.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 下載並交叉比對 SHA256
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 比對雜湊
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $m = Get-Content packaging/ffmpeg_manifest.json -Raw -Encoding UTF8 | ConvertFrom-Json
+          $name = [IO.Path]::GetFileName($m.url)
+          Invoke-WebRequest -Uri $m.url -OutFile $name -UseBasicParsing
+          $hash = (Get-FileHash $name -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Output "::notice title=下載檔 SHA256（$name）::$hash"
+
+          $independent = @()
+          if ($m.url -match '^https://github\.com/([^/]+/[^/]+)/releases/download/([^/]+)/') {
+            $rel = gh api "repos/$($Matches[1])/releases/tags/$($Matches[2])" | ConvertFrom-Json
+            $digest = ($rel.assets | Where-Object { $_.name -eq $name }).digest
+            Write-Output "::notice title=GitHub release asset digest::$digest"
+            if ($digest) { $independent += ($digest -replace '^sha256:', '').ToLowerInvariant() }
+          }
+          try {
+            $published = (Invoke-WebRequest -Uri "$($m.alternate_url).sha256" -UseBasicParsing).Content
+            if ($published -is [byte[]]) { $published = [Text.Encoding]::ASCII.GetString($published) }
+            $published = ($published.Trim() -split '\s+')[0].ToLowerInvariant()
+            if ($published -match '^[0-9a-f]{64}$') {
+              Write-Output "::notice title=gyan.dev 公布的 SHA256::$published"
+              $independent += $published
+            }
+          } catch {
+            Write-Output "::notice title=gyan.dev 公布的 SHA256::無法取得（$($_.Exception.Message)）"
+          }
+
+          if ($independent.Count -eq 0) { Write-Output "::error::沒有可供比對的獨立雜湊來源"; exit 1 }
+          foreach ($h in $independent) {
+            if ($h -ne $hash) { Write-Output "::error::下載檔雜湊 $hash 與獨立來源 $h 不符"; exit 1 }
+          }
+          if (-not $m.sha256) { Write-Output "::error::manifest 尚未填入 sha256；已交叉驗證的值為 $hash"; exit 1 }
+          if ($m.sha256.ToLowerInvariant() -ne $hash) { Write-Output "::error::manifest sha256 與下載檔不符"; exit 1 }
+          Write-Output "::notice title=驗證通過::$hash"

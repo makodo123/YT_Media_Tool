@@ -11,6 +11,15 @@ Windows 11 桌面 YouTube 影音下載工具（繁體中文介面、深色主題
 
 ---
 
+## 下載即用（一般使用者）
+
+1. 到 [Releases](https://github.com/makodo123/YT_Media_Tool/releases) 下載最新的 `YT_Media_Tool-版本-win64.zip`
+2. 解壓縮到任意資料夾（例如 `D:\YT_Media_Tool`）
+3. 執行 `YT_Media_Tool\YT_Media_Tool.exe`
+
+不需要安裝 Python 或 FFmpeg（已隨附）。首次執行若出現 SmartScreen 警告（程式未經數位簽章），
+請按「其他資訊」→「仍要執行」。以下「原始碼安裝」與「打包 EXE」段落僅開發者需要。
+
 ## 功能
 
 | 類別 | 內容 |
@@ -94,6 +103,18 @@ scripts\build_exe.bat
 步驟：執行 pytest → 依 `packaging\ffmpeg_manifest.json` 下載並**驗證 SHA256** 的 FFmpeg → PyInstaller one-folder 建置
 → `scripts\verify_dist.py` 檢查發行結構 → 以 `--smoke-test` 實際啟動 EXE → 產生 zip 與 `.sha256`。
 
+### 發佈新版本到 GitHub Releases
+
+更新 `src/yt_media_tool/__init__.py` 與 `scripts/build_exe.bat` 中的版本號後推送標籤，
+`.github/workflows/release.yml` 會在 Windows 上自動測試、打包（隨附 FFmpeg 與 Deno）並建立 Release：
+
+```bat
+git tag v2.0.0
+git push origin v2.0.0
+```
+
+標籤含 `-`（例如 `v2.0.0-beta.1`）時會發佈為「預先發行版本」。
+
 選項：
 
 | 參數 | 說明 |
@@ -125,7 +146,7 @@ dist/
 - 版本、下載網址、SHA256 與授權資訊集中在 `packaging/ffmpeg_manifest.json`。
 - `scripts/fetch_ffmpeg.ps1` 下載後比對 SHA256，不符即中止；manifest 未填 SHA256 時預設拒絕建置
   （`-AllowUnpinned` 會顯示計算出的雜湊，請與官方公布值比對後寫回 manifest 並提交）。
-- 離線建置：`scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-7.1.1-essentials_build.zip`
+- 離線建置：`scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-9.0.2-essentials_build.zip`
 - 預設來源為 gyan.dev essentials build（GPLv3），授權與原始碼取得方式見 `THIRD_PARTY_NOTICES.md`；
   如需 LGPL 版本，改用 BtbN 的 `win64-lgpl` 版本化 release 並更新 manifest。
 

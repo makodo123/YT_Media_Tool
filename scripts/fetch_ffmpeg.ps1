@@ -11,7 +11,7 @@
 
 .EXAMPLE
   powershell -ExecutionPolicy Bypass -File scripts\fetch_ffmpeg.ps1
-  powershell -ExecutionPolicy Bypass -File scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-7.1.1-essentials_build.zip
+  powershell -ExecutionPolicy Bypass -File scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-9.0.2-essentials_build.zip
 #>
 [CmdletBinding()]
 param(
@@ -20,6 +20,7 @@ param(
     [switch]$Force
 )
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"  # Windows PowerShell 5.1 顯示進度列時下載大型檔案會非常慢
 $Root = Split-Path -Parent $PSScriptRoot
 $Manifest = Get-Content (Join-Path $Root "packaging\ffmpeg_manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 $Vendor = Join-Path $Root "vendor\ffmpeg"

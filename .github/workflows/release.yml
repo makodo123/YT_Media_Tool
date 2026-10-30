@@ -1,0 +1,71 @@
+name: Release
+
+# 推送版本標籤（例如 v2.0.0 或 v2.0.0-beta.1）時：
+# 在 Windows 上執行完整測試 → 打包隨附 FFmpeg 與 Deno 的 EXE → 實際啟動檢查 → 建立 GitHub Release。
+# 標籤含「-」（例如 -beta.1）時發佈為「預先發行版本」。
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  PYTHONUTF8: "1"
+  QT_QPA_PLATFORM: offscreen
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  release:
+    name: 打包並發佈 Windows 版本
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: 檢查標籤與程式版本一致
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = (Select-String -Path src/yt_media_tool/__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
+          $bat = (Select-String -Path scripts/build_exe.bat -Pattern 'set "VERSION=(.+)"').Matches[0].Groups[1].Value
+          if ($ver -ne $bat) { Write-Output "::error::__init__.py ($ver) 與 build_exe.bat ($bat) 版本不一致"; exit 1 }
+          if ($tag -ne "v$ver" -and -not $tag.StartsWith("v$ver-")) {
+            Write-Output "::error::標籤 $tag 與程式版本 v$ver 不一致"; exit 1
+          }
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+
+      - name: 建立 .venv 並安裝相依套件
+        run: |
+          python -m venv .venv
+          .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+
+      - name: 安裝 FFmpeg（測試使用；打包則使用 manifest 固定並驗證 SHA256 的版本）
+        run: choco install ffmpeg -y --no-progress
+
+      - name: 測試、打包（隨附 FFmpeg 與 Deno）、結構檢查與啟動測試
+        shell: cmd
+        run: scripts\build_exe.bat
+
+      - name: 建立 GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $files = Get-ChildItem dist -File | Where-Object { $_.Name -like "YT_Media_Tool-*-win64.zip*" } | ForEach-Object FullName
+          if ($files.Count -lt 2) { Write-Output "::error::找不到發行檔"; exit 1 }
+          $notes = Get-Content docs/RELEASE_NOTES.md -Raw -Encoding UTF8
+          $extra = @()
+          if ($tag.Contains("-")) {
+            $notes = "> ⚠ **預先發行版本**：已通過自動化測試與 Windows 打包啟動檢查，尚未完成實機 YouTube 下載驗證。`n`n" + $notes
+            $extra += "--prerelease"
+          }
+          $notes = "## 下載`n`n下載下方的 ``YT_Media_Tool-*-win64.zip``，解壓縮後執行 ``YT_Media_Tool\YT_Media_Tool.exe``。`n`n" + $notes
+          Set-Content -Path release_notes.md -Value $notes -Encoding UTF8
+          gh release create $tag @files --title "YT Media Tool $tag" --notes-file release_notes.md @extra
