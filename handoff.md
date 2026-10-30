@@ -19,9 +19,10 @@
 
 ### 目前階段：已完成，沒有進行中的工作
 
-- **最新正式版 `v2.1.0`**（標示為 Latest），提供安裝版（`-setup.exe`）與免安裝版（zip）：
-  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.0
-- 使用者已在 Windows 實機測試並確認無誤：下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝。
+- **最新正式版 `v2.1.1`**（標示為 Latest），提供安裝版（`-setup.exe`）與免安裝版（zip）：
+  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.1
+- 使用者已在 Windows 實機測試 v2.1.0 並確認無誤：下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝。
+  v2.1.1 只修正品質欄顯示，尚待使用者實測。
 - 之後若有新需求或問題回報，以新版本號修正並發布（流程見第 4 節）。
 
 ---
@@ -39,13 +40,17 @@
 | v2.0.0-beta.5 | eb5d61d | 已發布；批次移除、總進度修正；使用者實測無誤 |
 | v2.0.0 | ab7e980 | 正式版；程式碼同 eb5d61d（僅更新文件）；zip 144.1 MB |
 | v2.1.0-beta.1 | 68afd24 | 已發布（預先發行）；新增安裝程式；使用者實測無誤 |
-| **v2.1.0** | f77af01 | **正式版（Latest），使用者實測無誤**；程式碼同 68afd24；setup.exe 106.1 MB（`462e36e0…31fe97`）、zip 144.1 MB（`d7e4c9a5…58454c`），sha256 已核對 |
+| v2.1.0 | f77af01 | 正式版，使用者實測無誤；程式碼同 68afd24；setup.exe 106.1 MB（`462e36e0…31fe97`）、zip 144.1 MB（`d7e4c9a5…58454c`），sha256 已核對 |
+| **v2.1.1** | 1e6b4b0 | **正式版（Latest）**；品質欄修正；setup.exe 106.1 MB（`dd66c142…ff5f72`）、zip 144.1 MB（`f3f529b5…9687a`），sha256 已核對；待使用者實測 |
 
 各版重點：
 
 - beta.4：發行資料夾 412.4 MB → **333.4 MB**；FFmpeg 改 BtbN LGPL shared；確認對話框按鈕改中文。
 - beta.5：佇列可批次移除（「移除所選」按鈕、多選右鍵選單、Delete 鍵）；總進度不計入失敗與取消的任務。
 - v2.1.0：新增 Inno Setup 安裝程式；EXE 版本資訊改為自動取用程式版本號。
+- v2.1.1：品質欄不再顯示「720p → 720p」：實際與目標相同只顯示一次；低於目標「1080p → 720p ⚠」；
+  最高可用解析度「最高可用解析度 → 2160p」；MP3 高於原始音源「320 kbps ⚠」（`gui/queue_table.py` 的 `quality_text()`，
+  以數字比較解析度；完整說明在儲存格提示）。發布流程同時改為自動去除 tag 前後空白。
 
 **使用者決定保留所有 beta 版本，不刪除**（正式版為 Latest，一般使用者不會下載到 beta）。
 
@@ -75,7 +80,7 @@ src/yt_media_tool/
   utils/paths.py                AppData、隨附檔位置、安全檔名、FileNameReserver
   utils/win_job.py              Job Object（結束時終止子程序）、具名 mutex（供安裝程式偵測）
   utils/system_open.py / logging_utils.py
-tests/                          186 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
+tests/                          196 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
 scripts/
   setup_windows.bat / run_dev.bat / build_exe.bat   Windows 開發與打包
   build_installer.py / .bat     以 Inno Setup 建立 setup.exe 與 .sha256
@@ -217,7 +222,9 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ### 本雲端環境的限制
 - 使用者按 Run workflow 時曾把 tag 打成 `v2.0.0beta.5`（少了 `-`），會在「決定版本標籤」被擋下；請提醒格式 `vX.Y.Z` 或 `vX.Y.Z-beta.N`，
-  且要從 workflow 頁面重新 Run，**不要 Re-run 失敗的那次**（會沿用錯誤的輸入）。
+  且要從 workflow 頁面重新 Run，**不要 Re-run 失敗的那次**（會沿用錯誤的輸入與舊 commit）。
+  v2.1.1 第一次 Run 時 tag 前多了空白（「 v2.1.1」）而失敗；`release.yml` 現在會先 `Trim()`，錯誤訊息也以「」標示 tag。
+  使用者回報時常貼上舊的失敗 run 連結：先用 API 確認是否真的有新 run。
 - **不能推送 git tag**（代理 403）；**不能建立 / 刪除 GitHub Release**（屬公開動作，需使用者觸發；推 `release/v*` 分支也被拒）。發布一律請使用者按 Run workflow。
 - 連不到 YouTube（代理擋）；`gh` CLI 的 token 無效。GitHub 公開 API（未驗證）可讀 runs / jobs / annotations / releases，**讀不到完整日誌**——所以失敗原因要靠 `ci_run.ps1` / `junit_annotations.py` 轉成註解。
 - `windows-ci.yml` 設有 `cancel-in-progress`：CI 跑到一半時再 push 會取消正在跑的那一輪；只改 `.md` / `docs/**` 不會觸發 CI。
