@@ -59,7 +59,7 @@ jobs:
           retention-days: 14
 
   build:
-    name: 打包 EXE（不隨附 FFmpeg）
+    name: 打包 EXE（隨附 FFmpeg 與 Deno）
     needs: test
     runs-on: windows-latest
     timeout-minutes: 30
@@ -77,16 +77,19 @@ jobs:
           python -m venv .venv
           .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 
-      # 隨附 FFmpeg 的版本需先在 packaging/ffmpeg_manifest.json 填入經官方比對的 SHA256，
-      # 因此 CI 先建置不隨附 FFmpeg 的版本（仍隨附 Deno），並以 --smoke-test 實際啟動 EXE。
-      - name: PyInstaller 建置、結構檢查與啟動測試
-        shell: cmd
-        run: scripts\build_exe.bat --no-ffmpeg --skip-tests
+      # 與 release.yml 相同的打包流程（只差不發佈），確保每次推送都驗證完整的發行路徑
+      - name: 下載並驗證 FFmpeg（依 manifest 的 SHA256）
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "fetch_ffmpeg" -Command "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fetch_ffmpeg.ps1"
+
+      - name: 打包（隨附 FFmpeg 與 Deno）、結構檢查與啟動測試
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "build_exe" -Command "scripts\build_exe.bat --skip-tests"
 
       - name: 上傳發行檔
         uses: actions/upload-artifact@v5
         with:
-          name: YT_Media_Tool-win64-no-ffmpeg
+          name: YT_Media_Tool-win64
           path: |
             dist/YT_Media_Tool-*-win64.zip
             dist/YT_Media_Tool-*-win64.zip.sha256

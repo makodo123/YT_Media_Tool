@@ -68,9 +68,22 @@ jobs:
       - name: 安裝 FFmpeg（測試使用；打包則使用 manifest 固定並驗證 SHA256 的版本）
         run: choco install ffmpeg -y --no-progress
 
-      - name: 測試、打包（隨附 FFmpeg 與 Deno）、結構檢查與啟動測試
-        shell: cmd
-        run: scripts\build_exe.bat
+      - name: 執行 pytest
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "pytest" -Command ".venv\Scripts\python.exe -m pytest -q -ra --junitxml=test-results.xml"
+
+      - name: 將失敗測試轉為註解
+        if: failure()
+        shell: pwsh
+        run: .venv\Scripts\python.exe scripts/junit_annotations.py test-results.xml
+
+      - name: 下載並驗證 FFmpeg（依 manifest 的 SHA256）
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "fetch_ffmpeg" -Command "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\fetch_ffmpeg.ps1"
+
+      - name: 打包（隨附 FFmpeg 與 Deno）、結構檢查與啟動測試
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "build_exe" -Command "scripts\build_exe.bat --skip-tests"
 
       - name: 建立 GitHub Release
         shell: pwsh
