@@ -34,3 +34,17 @@ def test_size_report_lists_largest_files(tmp_path):
     (dist / "YT_Media_Tool.exe").write_bytes(b"0" * 1024)
     report = verify_dist.size_report(dist)
     assert "總計" in report and "ffmpeg" in report and "_internal/ffmpeg/avcodec.dll" in report
+
+
+def test_duplicated_ffmpeg_dll_detected(tmp_path, monkeypatch, capsys):
+    dist = tmp_path / "YT_Media_Tool"
+    internal = dist / "_internal"
+    (internal / "ffmpeg").mkdir(parents=True)
+    monkeypatch.setattr(verify_dist, "ffmpeg_functional_checks", lambda d, s: [])
+
+    verify_dist.main([str(dist), "--expect-ffmpeg"])
+    assert "[OK] FFmpeg DLL 未重複打包" in capsys.readouterr().out
+
+    (internal / "avcodec-63.dll").write_bytes(b"0")
+    verify_dist.main([str(dist), "--expect-ffmpeg"])
+    assert "[FAIL] FFmpeg DLL 未重複打包（重複：avcodec-63.dll）" in capsys.readouterr().out

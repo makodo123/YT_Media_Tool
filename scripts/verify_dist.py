@@ -13,6 +13,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+FFMPEG_LIBS = {"avcodec", "avdevice", "avfilter", "avformat", "avutil", "postproc", "swresample", "swscale"}
 
 
 def _mb(size: int) -> str:
@@ -102,6 +103,10 @@ def main(argv: list[str]) -> int:
             ("隨附 ffprobe", (internal / "ffmpeg" / f"ffprobe{suffix}").is_file()),
             ("FFmpeg 版本與來源資訊", (internal / "ffmpeg" / "VERSION.json").is_file()),
         ]
+        # FFmpeg 的 DLL 只能在 _internal/ffmpeg，最上層若有一份即為重複打包
+        duplicated = [p.name for p in internal.glob("*.dll") if p.name.split("-")[0] in FFMPEG_LIBS]
+        checks.append(("FFmpeg DLL 未重複打包" + (f"（重複：{', '.join(duplicated)}）" if duplicated else ""),
+                       not duplicated))
         if (internal / "ffmpeg" / f"ffmpeg{suffix}").is_file():
             checks += ffmpeg_functional_checks(internal / "ffmpeg", suffix)
         version_file = internal / "ffmpeg" / "VERSION.json"

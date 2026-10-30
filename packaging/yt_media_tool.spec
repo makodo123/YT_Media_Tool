@@ -16,6 +16,7 @@
 
 import json
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -35,7 +36,10 @@ datas = [
 datas += collect_data_files("yt_dlp_ejs")
 datas += copy_metadata("yt-dlp")
 
-# ---- FFmpeg / FFprobe 與其 DLL（以 datas 原樣複製，不經 PyInstaller 的 strip / 相依分析）----
+# ---- FFmpeg / FFprobe 與其 DLL ----
+# 不交給 PyInstaller 處理：若以 datas 加入，PyInstaller 會分析 DLL 相依並在 _internal 最上層
+# 另外放一份 avcodec 等 DLL（約 140 MB 重複）。改為在 COLLECT 完成後原樣複製到 _internal/ffmpeg。
+FFMPEG_FILES = []
 if BUNDLE_FFMPEG:
     ffmpeg_root = ROOT / "vendor" / "ffmpeg"
     for name in ("ffmpeg", "ffprobe"):
@@ -44,16 +48,12 @@ if BUNDLE_FFMPEG:
             raise SystemExit(
                 f"找不到 {exe}。\n請先執行 scripts\\fetch_ffmpeg.ps1 下載並驗證 FFmpeg，"
                 "或設定 YTMT_BUNDLE_FFMPEG=0 建置不隨附 FFmpeg 的版本。")
-        datas.append((str(exe), "ffmpeg"))
-    # 共用函式庫建置需要同資料夾的 DLL（Windows）；靜態建置則沒有
-    for dll in sorted((ffmpeg_root / "bin").glob("*.dll")):
-        datas.append((str(dll), "ffmpeg"))
     manifest = ffmpeg_root / "VERSION.json"
     if not manifest.is_file():
         raise SystemExit(f"找不到 {manifest}（由 fetch_ffmpeg.ps1 產生，記錄版本、來源與 SHA256）")
-    datas.append((str(manifest), "ffmpeg"))
-    for extra in sorted(ffmpeg_root.glob("LICENSE*")) + sorted(ffmpeg_root.glob("README*")):
-        datas.append((str(extra), "ffmpeg"))
+    # bin 中的執行檔與共用函式庫 DLL（靜態建置則沒有 DLL），以及版本、授權資訊
+    FFMPEG_FILES = sorted(p for p in (ffmpeg_root / "bin").iterdir() if p.is_file())
+    FFMPEG_FILES += [manifest] + sorted(ffmpeg_root.glob("LICENSE*")) + sorted(ffmpeg_root.glob("README*"))
     print("隨附 FFmpeg：", json.loads(manifest.read_text(encoding="utf-8-sig")).get("version"))
 
 # ---- Deno（由 requirements.txt 固定版本的 deno 套件提供）----
@@ -129,3 +129,11 @@ coll = COLLECT(
     upx=False,
     name="YT_Media_Tool",
 )
+
+# COLLECT 完成後原樣複製 FFmpeg（見上方說明）
+if FFMPEG_FILES:
+    ffmpeg_target = Path(coll.name) / "_internal" / "ffmpeg"
+    ffmpeg_target.mkdir(parents=True, exist_ok=True)
+    for source in FFMPEG_FILES:
+        shutil.copy2(source, ffmpeg_target / source.name)
+    print(f"已複製 {len(FFMPEG_FILES)} 個 FFmpeg 檔案到 {ffmpeg_target}")
