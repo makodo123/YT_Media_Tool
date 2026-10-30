@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,7 +8,8 @@ version = "2.0.0"
 description = "YT Media Tool V2.0 — Windows 11 桌面 YouTube 影音下載工具（PySide6 + yt-dlp + FFmpeg）"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-license = { text = "Proprietary" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 # 完整的固定版本清單見 requirements.txt
 dependencies = [
     "PySide6-Essentials==6.12.0",

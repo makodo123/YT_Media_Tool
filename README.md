@@ -185,6 +185,10 @@ set QT_QPA_PLATFORM=offscreen
   （需要 FFmpeg；找不到時自動略過）。
 - Windows 實機整合測試清單：[`docs/WINDOWS_INTEGRATION_TESTS.md`](docs/WINDOWS_INTEGRATION_TESTS.md)
 
+## 授權
+
+本專案以 [Apache License 2.0](LICENSE) 授權。隨附的第三方元件（FFmpeg、Qt、Deno 等）依其各自授權散布，詳見 [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)。
+
 ## 已知限制
 
 - 取消發生在 FFmpeg 合併 / 轉檔進行中時，會等該 FFmpeg 步驟結束（通常數秒）後才停止並清除暫存檔；狀態會顯示「取消中…」。

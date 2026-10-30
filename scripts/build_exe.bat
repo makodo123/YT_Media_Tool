@@ -44,6 +44,7 @@ set "YTMT_BUNDLE_DENO=%BUNDLE_DENO%"
 if errorlevel 1 goto fail
 copy /y README.md "%DIST%\README.md" >nul
 copy /y THIRD_PARTY_NOTICES.md "%DIST%\THIRD_PARTY_NOTICES.md" >nul
+copy /y LICENSE "%DIST%\LICENSE.txt" >nul
 copy /y docs\RELEASE_NOTES.md "%DIST%\RELEASE_NOTES.md" >nul
 
 echo === 4/5 檢查發行資料夾 ===
