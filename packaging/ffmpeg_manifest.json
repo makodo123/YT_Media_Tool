@@ -1,0 +1,12 @@
+{
+  "_comment": "FFmpeg 隨附版本的唯一來源設定。更新版本時同時更新 url 與 sha256，並將變更提交至版本控制。",
+  "version": "7.1.1",
+  "build": "gyan.dev essentials build (GitHub mirror GyanD/codexffmpeg)",
+  "url": "https://github.com/GyanD/codexffmpeg/releases/download/7.1.1/ffmpeg-7.1.1-essentials_build.zip",
+  "alternate_url": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.1.1-essentials_build.zip",
+  "sha256": "",
+  "license": "GPL-3.0-or-later（essentials build 含 GPL 元件，例如 libx264）",
+  "license_url": "https://www.ffmpeg.org/legal.html",
+  "source_code": "https://ffmpeg.org/releases/ffmpeg-7.1.1.tar.xz",
+  "build_info": "https://www.gyan.dev/ffmpeg/builds/"
+}

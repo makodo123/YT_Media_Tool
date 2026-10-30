@@ -1,0 +1,20 @@
+# 執行期相依套件：全部固定版本，確保 Windows 建置可重現。
+# 更新時：先在乾淨的 venv 安裝後執行完整測試，再更新本檔與 pyproject.toml。
+PySide6-Essentials==6.12.0
+shiboken6==6.12.0
+
+# yt-dlp 及其建議（[default]）相依套件
+yt-dlp[default]==2026.10.26
+yt-dlp-ejs==0.8.0
+brotli==1.2.1
+certifi==2026.10.23
+mutagen==1.48.1
+pycryptodomex==3.24.1
+requests==2.34.2
+urllib3==2.8.0
+websockets==17.3
+charset-normalizer==3.5.2
+idna==3.20
+
+# yt-dlp 處理 YouTube 所需的 JavaScript 執行環境（MIT 授權，打包時隨附 deno.exe）
+deno==2.9.8

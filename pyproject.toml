@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yt-media-tool"
+version = "2.0.0"
+description = "YT Media Tool V2.0 — Windows 11 桌面 YouTube 影音下載工具（PySide6 + yt-dlp + FFmpeg）"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+license = { text = "Proprietary" }
+# 完整的固定版本清單見 requirements.txt
+dependencies = [
+    "PySide6-Essentials==6.12.0",
+    "yt-dlp[default]==2026.10.26",
+    "yt-dlp-ejs==0.8.0",
+    "deno==2.9.8",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.2.0", "pytest-qt==4.5.0", "ruff==0.17.3", "pyinstaller==6.22.3"]
+
+[project.gui-scripts]
+yt-media-tool = "yt_media_tool.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+qt_api = "pyside6"
+addopts = "-ra"
+markers = [
+    "integration: 使用真實 yt-dlp 與 FFmpeg（透過本機 HTTP 伺服器，不連線 YouTube）",
+]
+filterwarnings = ["ignore::DeprecationWarning:yt_dlp.*"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "B", "UP", "S", "BLE", "RUF"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # 繁體中文全形標點
+    "S101",                        # 測試中的 assert
+    "S603",                        # subprocess 以參數清單呼叫，未使用 shell
+    "UP042",                       # 保留 (str, Enum) 以維持與資料庫字串值的相容
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S", "BLE", "B"]
