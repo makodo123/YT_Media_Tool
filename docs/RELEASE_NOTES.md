@@ -14,12 +14,14 @@
 - YouTube 影片、Shorts、播放清單（需確認）下載；多網址批次加入並自動去除重複
 - MP4 720p / 1080p / 最高可用解析度；MP3 128 / 192 / 320 kbps；原始素材不足時明確顯示實際品質
 - 下載佇列：並行 1–3 筆、單筆 / 全部取消、失敗重試、清除已完成、重新開啟時恢復未完成任務
-- 即時進度、速度、剩餘時間、合併與轉檔階段、詳細錯誤訊息
-- 同名檔案自動編號，不覆蓋既有檔案
+- 批次操作：Ctrl / Shift 多選（Ctrl+A 全選）後「移除所選」、Delete 鍵或右鍵批次取消 / 重試 / 移除（不刪除檔案）
+- 即時進度、速度、剩餘時間、合併與轉檔階段、詳細錯誤訊息；整體進度不計入失敗與取消的任務
+- YouTube 登入資訊（選用）：遇到「登入以確認不是機器人」時，可在設定使用 Firefox 或 cookies.txt
+- 同名檔案自動編號，不覆蓋既有檔案；下載過程只在任務專屬暫存資料夾中進行
 
 ## 隨附元件
 
-- FFmpeg / FFprobe（版本、來源與 SHA256 見 `_internal\ffmpeg\VERSION.json`）
+- FFmpeg / FFprobe 9.0.2（LGPL 共用函式庫版本；版本、來源與 SHA256 見 `_internal\ffmpeg\VERSION.json`）
 - Deno（yt-dlp 處理 YouTube 所需的 JavaScript 執行環境）
 - 授權資訊見 `THIRD_PARTY_NOTICES.md`
 
