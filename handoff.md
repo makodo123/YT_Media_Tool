@@ -17,13 +17,13 @@
   資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中，README.md 的「功能」表已涵蓋全部要求。
 
-**目前階段：v2.0.0 正式版已完成；正在進行「安裝程式」（v2.1.0），`v2.1.0-beta.1` 已發布，等待使用者實測安裝流程。**
+**目前階段：已完成，沒有進行中的工作。最新正式版為 `v2.1.0`（含安裝程式），標示為 Latest。**
 
 - **正式版 `v2.0.0` 已發布**並標示為 Latest：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0
 - 使用者已在 Windows 實機測試 beta.2～beta.5 與正式版內容：下載、cookies、MP4 / MP3、批次移除、總進度皆正常。
 - 發布後另外完成：`docs/RELEASE_NOTES.md` 補齊功能說明；README 全文校稿（語句、用詞、過時內容）。
 - **安裝程式（v2.1.0）**：Inno Setup 安裝檔已完成，CI 一次通過（實際靜默安裝、啟動、轉檔、解除安裝皆驗證），
-  `v2.1.0-beta.1` 已發布：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.0-beta.1
+  使用者實測 `v2.1.0-beta.1` 無誤後，**正式版 `v2.1.0` 已發布**：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.0
 - 之後若有新需求或問題回報，以新版本號修正並發布（流程見第 4 節）。
 
 ---
@@ -39,8 +39,9 @@
 | v2.0.0-beta.3 | 99fcf7d | 已發布，**使用者實測下載正常** |
 | v2.0.0-beta.4 | 90af50e | 已發布（程式碼同 b122bf8）；縮小發行檔、FFmpeg 改 LGPL |
 | v2.0.0-beta.5 | eb5d61d | 已發布；zip 144.1 MB，sha256 `033f37d6…ea87e7` 已核對；**使用者實測無誤** |
-| **v2.0.0** | ab7e980 | **正式版已發布（Latest）**；程式碼同 eb5d61d（僅更新文件）；zip 144.1 MB，sha256 `15cdf062…c026ef` 已核對 |
-| v2.1.0-beta.1 | 68afd24 | 已發布（預先發行）；新增安裝程式。setup.exe 106.0 MB（`ddbee981…5148`）、zip 144.1 MB（`d1a1692d…1cacd`），sha256 已核對；**等待使用者實測** |
+| v2.0.0 | ab7e980 | 正式版；程式碼同 eb5d61d（僅更新文件）；zip 144.1 MB，sha256 `15cdf062…c026ef` 已核對 |
+| v2.1.0-beta.1 | 68afd24 | 已發布（預先發行）；新增安裝程式；使用者實測無誤 |
+| **v2.1.0** | f77af01 | **正式版已發布（Latest）**；程式碼同 68afd24；setup.exe 106.1 MB（`462e36e0…31fe97`）、zip 144.1 MB（`d7e4c9a5…58454c`），sha256 已核對 |
 
 beta.4 相對 beta.3：發行資料夾 412.4 MB → **333.4 MB**；FFmpeg 改 BtbN LGPL shared；確認對話框按鈕改中文。
 beta.5 相對 beta.4：佇列可批次移除（「移除所選」按鈕、多選右鍵選單、Delete 鍵）；總進度不計入失敗與取消的任務。
@@ -136,10 +137,16 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-1. **請使用者實測 `v2.1.0-beta.1` 的安裝程式**（`docs/WINDOWS_INTEGRATION_TESTS.md` 的 I 段）：
-   預設安裝、桌面捷徑、為所有使用者安裝、程式開啟中升級、從 v2.0.0 免安裝版改用安裝版、解除安裝時選「否 / 是」。
-2. 實測無誤後發布正式版 **`v2.1.0`**（程式碼不需變更；若只改文件可直接發）。
-3. 可選：依實機清單完整測試；`actions/upload-artifact@v5` 的 Node.js 20 淘汰警告可評估升級。
+目前沒有待辦的必要工作。以下為之後可能的方向（皆需使用者決定）：
+
+- **多線程下載**（使用者詢問過，尚未決定）：
+  - 已支援「同時下載多個影片」1–3 筆（原始規格上限 3）。
+  - 選項 A：設定新增「單一影片分段同時下載數」（yt-dlp `concurrent_fragment_downloads`，建議 1–8、預設 4）；
+    只對分段格式（直播錄影、HLS、部分 DASH）有加速效果，一般 YouTube 影片無差別。
+  - 選項 B：把同時下載數量上限從 3 提高（例如 5），需註明可能觸發 YouTube 機器人驗證。
+  - 不建議外接 aria2c 多連線（需多附程式，且易被 YouTube 限速或要求驗證）。
+- 依 `docs/WINDOWS_INTEGRATION_TESTS.md` 完整跑一次實機清單。
+- `actions/upload-artifact@v5` 的 Node.js 20 淘汰警告可評估升級。
 
 ### 發布新版本的流程（例如修正問題後發 v2.0.1）
 
