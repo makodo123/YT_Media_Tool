@@ -25,7 +25,7 @@ class AppSettings:
     keep_history: bool = True
     ffmpeg_dir: str = ""  # 自訂 FFmpeg 位置（空白表示自動偵測）
     playlist_confirm_threshold: int = 1  # 播放清單展開時一律提示確認
-    cookies_source: str = "none"  # YouTube 登入資訊來源：none / firefox / chrome / edge / file
+    cookies_source: str = "none"  # YouTube 登入資訊來源：none / firefox / file
     cookies_file: str = ""  # cookies_source 為 file 時的 cookies.txt 路徑
 
     def validated(self) -> AppSettings:

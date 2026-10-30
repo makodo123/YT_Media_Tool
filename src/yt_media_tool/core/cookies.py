@@ -21,11 +21,11 @@ from typing import Any
 COOKIE_SOURCES: dict[str, str] = {
     "none": "不使用",
     "firefox": "Firefox",
-    "chrome": "Google Chrome",
-    "edge": "Microsoft Edge",
     "file": "cookies.txt 檔案",
 }
-BROWSER_SOURCES = ("firefox", "chrome", "edge")
+# 不提供 Chrome / Edge：Chrome 127 起的 app-bound encryption 讓 yt-dlp 在 Windows 上讀不到其 cookies，
+# 選了也只會失敗。這兩種瀏覽器請以擴充功能匯出 cookies.txt。舊設定中的 chrome / edge 載入時會改回「不使用」。
+BROWSER_SOURCES = ("firefox",)
 
 
 class CookieFileError(RuntimeError):

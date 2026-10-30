@@ -134,7 +134,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 | 執行緒（非多程序）＋ `CancelToken`；Windows Job Object（`utils/win_job.py`） | yt-dlp hook 可即時中斷下載；程式結束時 Job Object 一併終止 ffmpeg / deno 子程序。代價：FFmpeg 轉檔中取消要等該步驟結束。 |
 | 隨附 **Deno**（pip 套件 `deno==2.9.8`）＋ `yt-dlp-ejs` | yt-dlp 2025.11 起 YouTube 需要 JS 執行環境，缺少時格式不完整。Deno 93.5 MB 無法省。 |
 | **cookies 功能**（設定 → YouTube 登入資訊，預設不使用） | 使用者實測遇到「Sign in to confirm you're not a bot」，yt-dlp 官方解法即提供使用者自己帳號的 cookies，屬正當驗證、非規避；經使用者同意後加入。cookies.txt 只用暫存副本（yt-dlp 會寫回檔案、並行會互相覆寫）。 |
-| Chrome / Edge 建議改用 **cookies.txt**（擴充功能「Get cookies.txt LOCALLY」，無痕視窗匯出） | Chrome 127+ 的 app-bound encryption 讓 yt-dlp 在 Windows 上通常讀不到 cookies。使用者以此方式實測成功。 |
+| cookies 來源**移除 Chrome / Edge**（v2.1.1 之後；只剩不使用 / Firefox / cookies.txt），Chrome / Edge 改用 **cookies.txt**（擴充功能「Get cookies.txt LOCALLY」，無痕視窗匯出） | Chrome 127+ 的 app-bound encryption 讓 yt-dlp 在 Windows 上讀不到 cookies，使用者回報「選了也沒用」。舊設定的 chrome / edge 載入時自動改回「不使用」（`SettingsStore.load` 驗證）。cookies.txt 方式使用者實測成功。 |
 | **FFmpeg 改用 BtbN win64-lgpl-shared 9.0.2**（使用者選擇） | CI 實測比較：需要的大小 gyan essentials 200.9 MB → lgpl-shared 約 144–167 MB，且改為 LGPL、不含 GPL 元件；MP3（libmp3lame）與 stream copy 皆具備。代價：BtbN 每日建置不保證長期保留。 |
 | FFmpeg **不交給 PyInstaller**，在 spec 的 COLLECT 之後原樣複製到 `_internal/ffmpeg` | 以 datas 加入時 PyInstaller 分析 DLL 相依，在 `_internal` 最上層多放一份（+142 MB）。 |
 | FFmpeg SHA256 一律**交叉驗證**後才寫入 manifest | 下載檔、GitHub release asset digest、建置者公布的 checksums 三者一致才採用。 |

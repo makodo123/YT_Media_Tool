@@ -5,7 +5,7 @@ import pytest
 from tests.fakes import FakeYDL
 from tests.test_downloader import INFO, TOOLS, fake_probe, make_task
 from yt_media_tool.core.converter import JsRuntimeInfo
-from yt_media_tool.core.cookies import CookieConfig, CookieFileError, ydl_cookie_options
+from yt_media_tool.core.cookies import COOKIE_SOURCES, CookieConfig, CookieFileError, ydl_cookie_options
 from yt_media_tool.core.downloader import TEMP_ROOT_NAME, CancelToken, Downloader
 from yt_media_tool.core.errors import explain_error
 from yt_media_tool.storage.settings import AppSettings, SettingsStore
@@ -18,9 +18,18 @@ def test_no_cookies_by_default(tmp_path):
     assert not CookieConfig().enabled
 
 
-@pytest.mark.parametrize("browser", ["firefox", "chrome", "edge"])
-def test_browser_cookies(tmp_path, browser):
-    assert ydl_cookie_options(CookieConfig(browser), tmp_path) == {"cookiesfrombrowser": (browser,)}
+def test_browser_cookies(tmp_path):
+    assert ydl_cookie_options(CookieConfig("firefox"), tmp_path) == {"cookiesfrombrowser": ("firefox",)}
+
+
+@pytest.mark.parametrize("browser", ["chrome", "edge"])
+def test_chrome_and_edge_are_not_offered(tmp_path, db, browser):
+    """Chrome / Edge 新版加密讓 cookies 讀不到，不提供選項；舊設定載入時改回「不使用」。"""
+    assert browser not in COOKIE_SOURCES
+    assert ydl_cookie_options(CookieConfig(browser), tmp_path) == {}
+    store = SettingsStore(db)
+    db.set_setting("settings.cookies_source", browser)
+    assert store.load().cookies_source == "none"
 
 
 def test_cookie_file_is_copied_not_used_directly(tmp_path):

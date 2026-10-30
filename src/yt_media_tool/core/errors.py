@@ -33,8 +33,8 @@ _COOKIE_ERROR = re.compile(
     r"DPAPI|cookie database|cookies database|Failed to (decrypt|load) cookies|could not find .{0,40}cookies|"
     r"Unsupported browser|CookieLoadError", re.IGNORECASE)
 _COOKIE_MESSAGE = (
-    "無法讀取瀏覽器的登入資訊（cookies）。Chrome / Edge 請先完全關閉瀏覽器再試；新版 Chrome / Edge 的加密方式"
-    "可能使 cookies 無法讀取，建議改用 Firefox，或匯出 cookies.txt 後在「設定 → YouTube 登入資訊」指定。")
+    "無法讀取瀏覽器的登入資訊（cookies）。請確認 Firefox 已登入 YouTube 後完全關閉再試，"
+    "或以瀏覽器擴充功能匯出 cookies.txt 後在「設定 → YouTube 登入資訊」指定。")
 
 # (正規表示式, 說明)。依序比對 yt-dlp 的錯誤訊息。
 _YTDLP_PATTERNS: list[tuple[str, str]] = [

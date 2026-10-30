@@ -230,8 +230,9 @@ scripts\build_installer.bat
 | 來源 | 說明 |
 |---|---|
 | Firefox | 先在 Firefox 登入 YouTube；程式會直接讀取，最穩定 |
-| Chrome / Edge | 需先**完全關閉**瀏覽器；新版 Chrome / Edge 的加密方式常使 cookies 無法讀取，建議改用 cookies.txt |
-| cookies.txt 檔案 | 用瀏覽器擴充功能（例如「Get cookies.txt LOCALLY」）在無痕視窗登入 YouTube 後匯出，再於設定中指定；程式只使用副本，不會修改原檔 |
+| cookies.txt 檔案 | 用瀏覽器擴充功能（例如「Get cookies.txt LOCALLY」）在無痕視窗登入 YouTube 後匯出，再於設定中指定；程式只使用副本，不會修改原檔。**使用 Chrome / Edge 請用這個方式** |
+
+不提供直接讀取 Chrome / Edge：新版 Chrome / Edge 的加密方式讓程式無法讀取其 cookies。
 
 注意事項：
 

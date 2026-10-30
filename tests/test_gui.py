@@ -273,10 +273,12 @@ def test_settings_dialog_cookie_options(qtbot, window, tmp_path, monkeypatch):
 
     cookie_file = tmp_path / "cookies.txt"
     cookie_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
-    window.ctx.settings.cookies_source = "chrome"
+    window.ctx.settings.cookies_source = "firefox"
     dialog = SettingsDialog(window.ctx.settings, window)
     qtbot.addWidget(dialog)
-    assert dialog.cookies_source.currentData() == "chrome"
+    assert dialog.cookies_source.currentData() == "firefox"
+    assert [dialog.cookies_source.itemText(i) for i in range(dialog.cookies_source.count())] == \
+        ["不使用", "Firefox", "cookies.txt 檔案"]
     # 即使來源是瀏覽器，檔案欄與「瀏覽…」也必須可用
     assert dialog.cookies_file_row.isEnabled()
 
@@ -295,7 +297,7 @@ def test_settings_dialog_cookie_options(qtbot, window, tmp_path, monkeypatch):
 def test_typing_cookie_path_switches_source(qtbot, window):
     dialog = SettingsDialog(window.ctx.settings, window)
     qtbot.addWidget(dialog)
-    dialog.cookies_source.setCurrentIndex(dialog.cookies_source.findData("edge"))
+    dialog.cookies_source.setCurrentIndex(dialog.cookies_source.findData("firefox"))
     qtbot.keyClicks(dialog.cookies_file, "D:/cookies.txt")
     assert dialog.cookies_source.currentData() == "file"
 

@@ -101,8 +101,8 @@ class SettingsDialog(QDialog):
             "僅在 YouTube 要求「登入以確認不是機器人」時才需要開啟。會使用你在該瀏覽器中 YouTube 帳號的登入狀態；"
             "yt-dlp 官方提醒帳號可能因此被 YouTube 限制，建議使用次要帳號。\n"
             "• Firefox：直接讀取，最穩定。\n"
-            "• Chrome / Edge：需先完全關閉瀏覽器；新版的加密方式可能讓 cookies 無法讀取。\n"
-            "• cookies.txt：以瀏覽器擴充功能匯出後指定，程式只使用副本，不會修改原檔。\n"
+            "• cookies.txt：以瀏覽器擴充功能匯出後指定（Chrome / Edge 請用此方式，新版的加密讓程式無法直接讀取），"
+            "程式只使用副本，不會修改原檔。\n"
             "本程式不會另外保存、記錄或傳送 cookies 內容。")
         cookies_note.setObjectName("hintLabel")
         cookies_note.setWordWrap(True)

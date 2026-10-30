@@ -98,8 +98,8 @@
 |---|---|---|
 | H1 | 在會出現「確認不是機器人」的網路下，cookies 設為「不使用」並下載 | 失敗；錯誤訊息提示到「設定 → YouTube 登入資訊」 |
 | H2 | Firefox 登入 YouTube，設定來源為 Firefox 後重試 H1 | 下載成功 |
-| H3 | 設定來源為 Chrome，Chrome 開啟中下載 | 失敗並提示「請先完全關閉瀏覽器」或建議改用 Firefox / cookies.txt；記錄實際訊息 |
-| H4 | 完全關閉 Chrome 後重試 H3 | 記錄成功或失敗（新版 Chrome 加密可能無法讀取） |
+| H3 | 開啟「設定 → YouTube 登入資訊 → 來源」下拉選單 | 只有「不使用」「Firefox」「cookies.txt 檔案」；說明文字提示 Chrome / Edge 改用 cookies.txt |
+| H4 | 以 v2.1.1 以前設定為 Chrome / Edge 的資料升級後開啟設定 | 來源顯示「不使用」，程式正常啟動 |
 | H5 | 匯出 cookies.txt，設定來源為檔案後下載 | 下載成功；記錄原始 cookies.txt 的修改時間，下載後不變 |
 | H6 | 下載中檢查 `<下載資料夾>\.ytmt_tmp\task_*\cookies.txt` | 存在副本；任務結束後連同暫存資料夾刪除 |
 | H7 | 刪除 H5 指定的 cookies.txt 後下載 | 失敗並提示「找不到 cookies 檔案」與設定位置 |
