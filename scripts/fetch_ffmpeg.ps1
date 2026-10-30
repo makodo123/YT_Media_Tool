@@ -21,6 +21,20 @@ param(
 )
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"  # Windows PowerShell 5.1 顯示進度列時下載大型檔案會非常慢
+
+# 雜湊與解壓縮直接使用 .NET，不依賴 Get-FileHash / Expand-Archive：
+# 從 PowerShell 7 啟動 Windows PowerShell 5.1 時，繼承的 PSModulePath 可能使這些 cmdlet 無法載入。
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+function Get-Sha256([string]$Path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        return ([System.BitConverter]::ToString($sha.ComputeHash($stream)) -replace "-", "").ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
 $Root = Split-Path -Parent $PSScriptRoot
 $Manifest = Get-Content (Join-Path $Root "packaging\ffmpeg_manifest.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 $Vendor = Join-Path $Root "vendor\ffmpeg"
@@ -42,7 +56,7 @@ if (-not $ZipPath) {
     }
 }
 
-$Hash = (Get-FileHash -Algorithm SHA256 -Path $ZipPath).Hash.ToLowerInvariant()
+$Hash = Get-Sha256 $ZipPath
 if ($Manifest.sha256) {
     if ($Hash -ne $Manifest.sha256.ToLowerInvariant()) {
         Remove-Item $ZipPath -ErrorAction SilentlyContinue
@@ -58,7 +72,7 @@ if ($Manifest.sha256) {
 
 $Extract = Join-Path $Downloads "extract"
 if (Test-Path $Extract) { Remove-Item -Recurse -Force $Extract }
-Expand-Archive -Path $ZipPath -DestinationPath $Extract
+[System.IO.Compression.ZipFile]::ExtractToDirectory((Resolve-Path $ZipPath).Path, $Extract)
 $Ffmpeg = Get-ChildItem -Path $Extract -Recurse -Filter "ffmpeg.exe" | Select-Object -First 1
 $Ffprobe = Get-ChildItem -Path $Extract -Recurse -Filter "ffprobe.exe" | Select-Object -First 1
 if (-not $Ffmpeg -or -not $Ffprobe) { throw "壓縮檔中找不到 ffmpeg.exe 或 ffprobe.exe" }

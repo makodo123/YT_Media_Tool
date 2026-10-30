@@ -11,6 +11,8 @@ param(
     [Parameter(Mandatory = $true)][string]$Command
 )
 $ErrorActionPreference = "Continue"
+# 避免子程序中的 Windows PowerShell 5.1 繼承 PowerShell 7 的模組路徑而載入不相容的模組
+Remove-Item Env:PSModulePath -ErrorAction SilentlyContinue
 $lines = New-Object System.Collections.Generic.List[string]
 cmd /d /c "$Command 2>&1" | ForEach-Object {
     $text = "$_"

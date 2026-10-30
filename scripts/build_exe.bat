@@ -64,10 +64,9 @@ if errorlevel 1 goto fail
 set "YTMT_DATA_DIR="
 
 echo === 5/5 壓縮發行檔 ===
-set "ZIP=dist\YT_Media_Tool-%VERSION%-win64.zip"
-powershell -NoProfile -Command "Compress-Archive -Path '%DIST%' -DestinationPath '%ZIP%' -Force"
+"%PY%" scripts\make_release_zip.py "%DIST%" "dist\YT_Media_Tool-%VERSION%-win64.zip"
 if errorlevel 1 goto fail
-powershell -NoProfile -Command "(Get-FileHash '%ZIP%' -Algorithm SHA256).Hash.ToLower() + '  YT_Media_Tool-%VERSION%-win64.zip' | Set-Content -Encoding ascii '%ZIP%.sha256'"
+set "ZIP=dist\YT_Media_Tool-%VERSION%-win64.zip"
 
 echo.
 echo 建置完成：%DIST%\YT_Media_Tool.exe
