@@ -18,7 +18,7 @@
 - 原始需求規格的完整內容在第一次對話中，README.md 的「功能」表已涵蓋全部要求。
 
 **目前階段**：功能完成、beta 測試中。使用者已實機測過 beta.2 / beta.3 下載成功（含 cookies）。
-「縮小發行檔」已完成並發布為 **beta.4**，**等待使用者實測 beta.4**。
+「縮小發行檔」已於 beta.4 完成；使用者回報的「無法批次刪除佇列」與「總進度條包含失敗任務」已於 **beta.5** 修正並發布，**等待使用者實測 beta.5**。
 
 ---
 
@@ -31,9 +31,11 @@
 | v2.0.0-beta.1 | 3a381b7 | 已發布（舊，建議使用者刪除） |
 | v2.0.0-beta.2 | 66f0cf5 | 已發布（新增 cookies） |
 | v2.0.0-beta.3 | 99fcf7d | 已發布，**使用者實測下載正常** |
-| v2.0.0-beta.4 | 90af50e | **已發布**（程式碼同 b122bf8，另加 handoff.md）；zip 144.1 MB，sha256 `8eb375cf…a8114e` 已核對；**等待使用者實測** |
+| v2.0.0-beta.4 | 90af50e | 已發布（程式碼同 b122bf8）；縮小發行檔、FFmpeg 改 LGPL |
+| v2.0.0-beta.5 | eb5d61d | **已發布**；zip 144.1 MB，sha256 `033f37d6…ea87e7` 已核對；**等待使用者實測** |
 
 beta.4 相對 beta.3：發行資料夾 412.4 MB → **333.4 MB**；FFmpeg 改 BtbN LGPL shared；確認對話框按鈕改中文。
+beta.5 相對 beta.4：佇列可批次移除（「移除所選」按鈕、多選右鍵選單、Delete 鍵）；總進度不計入失敗與取消的任務。
 
 ### 專案結構（主要檔案）
 
@@ -59,7 +61,7 @@ src/yt_media_tool/
   gui/history_dialog.py / qt_bridge.py / workers.py / theme.py / i18n.py
   utils/paths.py                AppData、隨附檔位置、安全檔名、FileNameReserver
   utils/system_open.py / logging_utils.py / win_job.py
-tests/                          175 個測試（單元、GUI、本機 HTTP 整合測試；不連線 YouTube）
+tests/                          180 個測試（單元、GUI、本機 HTTP 整合測試；不連線 YouTube）
 scripts/
   setup_windows.bat / run_dev.bat / build_exe.bat   Windows 開發與打包
   fetch_ffmpeg.ps1              依 manifest 下載並驗證 FFmpeg 到 vendor/ffmpeg
@@ -89,6 +91,9 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 修正：Windows 暫存資料夾「等待刪除」競爭（`downloader._make_task_dir` 重試）、「全部取消」競爭（先取消等待中再中斷執行中）
 - 縮小：移除 `opengl32sw.dll` 與非中文 Qt 翻譯；FFmpeg 改 BtbN lgpl-shared；修正 FFmpeg DLL 重複打包
 - 載入 Qt 繁中翻譯（`gui/i18n.py`），標準按鈕顯示「是 / 否 / 確定 / 取消」
+- 批次移除：`main_window.remove_selected()`、`build_context_menu()` / `_build_batch_menu()`（多選右鍵選單），
+  只移除佇列紀錄、不刪檔案、略過進行中任務，2 筆以上先確認
+- 總進度（`queue_manager.progress().percent`）只計算完成 / 下載中 / 等待中；失敗與取消不計入（使用者要求）
 
 ---
 
@@ -115,14 +120,18 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-1. ~~發布 beta.4~~（已完成：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0-beta.4 ）
-2. **請使用者實測 beta.4**：重點是換了 FFmpeg 之後的 MP4（含 1080p 合併）與 MP3（128/192/320）是否正常，
-   以及確認對話框按鈕是否為中文。
+1. ~~發布 beta.4、beta.5~~（已完成：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0-beta.5 ）
+2. **請使用者實測 beta.5**：
+   - 換 FFmpeg（beta.4 起）後的 MP4（含 1080p 合併）與 MP3（128/192/320）是否正常；確認對話框按鈕是否為中文
+   - 批次移除（多選 → 「移除所選」/ 右鍵 / Delete）與總進度條（有失敗任務時不再虛高）
 3. 實測無誤後發布**正式版 `v2.0.0`**（tag 不含 `-`，非預先發行）。
 4. 可選：
    - 使用者可自行刪除舊的 beta.1（Releases 頁刪 Release，再到 Tags 頁刪 tag；本環境無權限刪除）。
    - 安裝程式（Inno Setup：Program Files、開始功能表、解除安裝）——先前提過，使用者尚未決定。
    - `actions/upload-artifact@v5` 仍有 Node.js 20 淘汰警告，可評估升級。
+   - 小問題（未修）：Release 在測試之前就失敗時（例如標籤格式錯誤），「將失敗測試轉為註解」步驟也會因找不到
+     `test-results.xml` 而顯示失敗；可讓 `scripts/junit_annotations.py` 在檔案不存在時直接結束，或在 workflow 加上
+     `hashFiles('test-results.xml') != ''` 條件。只影響顯示，不影響發布。
    - 依 `docs/WINDOWS_INTEGRATION_TESTS.md` 完整跑實機清單。
 
 ---
@@ -150,6 +159,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 版本號在兩處：`src/yt_media_tool/__init__.py` 的 `__version__` 與 `scripts/build_exe.bat` 的 `VERSION`；`release.yml` 會檢查兩者與 tag 一致（tag 可為 `vX.Y.Z` 或 `vX.Y.Z-後綴`）。
 
 ### 本雲端環境的限制
+- 使用者按 Run workflow 時曾把 tag 打成 `v2.0.0beta.5`（少了 `-`），會在「決定版本標籤」被擋下；請提醒格式 `vX.Y.Z` 或 `vX.Y.Z-beta.N`，
+  且要從 workflow 頁面重新 Run，**不要 Re-run 失敗的那次**（會沿用錯誤的輸入）。
 - **不能推送 git tag**（代理 403）；**不能建立 / 刪除 GitHub Release**（屬公開動作，需使用者觸發；推 `release/v*` 分支也被拒）。發布一律請使用者按 Run workflow。
 - 連不到 YouTube（代理擋）；`gh` CLI 的 token 無效。GitHub 公開 API（未驗證）可讀 runs / jobs / annotations / releases，**讀不到完整日誌**——所以失敗原因要靠 `ci_run.ps1` / `junit_annotations.py` 轉成註解。
 - `windows-ci.yml` 設有 `cancel-in-progress`：CI 跑到一半時再 push 會取消正在跑的那一輪；只改 `.md` / `docs/**` 不會觸發 CI。
