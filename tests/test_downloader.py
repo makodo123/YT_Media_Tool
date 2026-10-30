@@ -201,3 +201,36 @@ def test_extract_playlist_builds_watch_urls():
     assert result.title == "我的清單"
     assert [e.url for e in result.entries] == ["https://www.youtube.com/watch?v=aaaaaaaaaaa"]
     assert result.truncated
+
+
+def test_task_dir_creation_retries_on_pending_delete(tmp_path, monkeypatch):
+    """Windows 上 .ytmt_tmp 處於「等待刪除」時建立子資料夾會暫時得到存取被拒，須重試而非讓任務失敗。"""
+    from yt_media_tool.core import downloader as mod
+
+    denied = []
+    real_mkdir = Path.mkdir
+
+    def flaky_mkdir(self, *args, **kwargs):
+        if len(denied) < 2:
+            denied.append(self)
+            raise PermissionError(13, "Access is denied", str(self))
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(mod.time, "sleep", lambda s: None)
+    monkeypatch.setattr(Path, "mkdir", flaky_mkdir)
+    target = tmp_path / TEMP_ROOT_NAME / "task_1_abc"
+    mod._make_task_dir(target)
+    monkeypatch.undo()
+    assert target.is_dir() and len(denied) == 2  # 前兩次存取被拒，之後重試成功
+
+
+def test_task_dir_creation_gives_up_eventually(tmp_path, monkeypatch):
+    from yt_media_tool.core import downloader as mod
+
+    def always_denied(self, *args, **kwargs):
+        raise PermissionError(13, "Access is denied", str(self))
+
+    monkeypatch.setattr(mod.time, "sleep", lambda s: None)
+    monkeypatch.setattr(Path, "mkdir", always_denied)
+    with pytest.raises(PermissionError):
+        mod._make_task_dir(tmp_path / "x", attempts=3)

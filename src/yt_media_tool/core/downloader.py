@@ -267,7 +267,7 @@ class Downloader:
         logger = _YdlLogger(task.id)
         success = False
         try:
-            temp_dir.mkdir(parents=True, exist_ok=False)
+            _make_task_dir(temp_dir)
             _hide_on_windows(temp_root)
             on_progress(ProgressUpdate(TaskStatus.DOWNLOADING, progress=0.0, stage="取得影片資訊中"))
             # cookies.txt 副本放在本任務暫存資料夾，任務結束時隨資料夾刪除
@@ -481,6 +481,22 @@ def describe_result(media: MediaInfo, media_format: MediaFormat, quality: str, s
             text += selection[selection.index("（"):] if "（" in selection else f"（原始素材無 {quality}p）"
         return text
     return selection
+
+
+def _make_task_dir(path: Path, attempts: int = 15) -> None:
+    """建立任務暫存資料夾。
+
+    Windows 上剛被其他任務刪除的 .ytmt_tmp 若仍被防毒軟體或索引服務開啟，會暫時處於「等待刪除」狀態，
+    此時在其中建立資料夾會得到「存取被拒」；稍候重試即可。
+    """
+    for attempt in range(attempts):
+        try:
+            path.mkdir(parents=True, exist_ok=False)
+            return
+        except PermissionError:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(0.2)
 
 
 def move_no_overwrite(src: Path, dst: Path) -> bool:

@@ -145,7 +145,8 @@ def test_queue_with_real_engine(media_server, real_downloader, db, tmp_path):
     while time.monotonic() < deadline and (queue.has_active_tasks() or queue.pending_count()):
         time.sleep(0.1)
     statuses = [t.status for t in queue.tasks()]
-    assert statuses == [TaskStatus.COMPLETED, TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.COMPLETED]
+    details = [(t.status.value, t.error_message) for t in queue.tasks()]
+    assert statuses == [TaskStatus.COMPLETED, TaskStatus.COMPLETED, TaskStatus.FAILED, TaskStatus.COMPLETED], details
     names = sorted(p.name for p in tmp_path.iterdir())
     assert names == ["sample (1).mp4", "sample.mp3", "sample.mp4"]
     assert "404" in queue.tasks()[2].error_message
