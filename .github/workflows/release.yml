@@ -40,7 +40,8 @@ jobs:
           if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") { $tag = $env:INPUT_TAG }
           elseif ($env:GITHUB_REF -like "refs/heads/release/*") { $tag = $env:GITHUB_REF_NAME -replace "^release/", "" }
           else { $tag = $env:GITHUB_REF_NAME }
-          if ($tag -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { Write-Output "::error::標籤格式不正確：$tag"; exit 1 }
+          $tag = "$tag".Trim()  # 手動輸入時常夾帶前後空白
+          if ($tag -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { Write-Output "::error::標籤格式不正確：「$tag」（格式例如 v2.1.1 或 v2.2.0-beta.1）"; exit 1 }
           "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: 檢查標籤與程式版本一致
