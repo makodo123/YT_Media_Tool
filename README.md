@@ -1,5 +1,7 @@
 # YT Media Tool V2.0
 
+[![Windows CI](https://github.com/makodo123/YT_Media_Tool/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/makodo123/YT_Media_Tool/actions/workflows/windows-ci.yml)
+
 Windows 11 桌面 YouTube 影音下載工具（繁體中文介面、深色主題）。
 以 **PySide6** 建置 GUI、**yt-dlp** 取得與下載影片、**FFmpeg / FFprobe** 合併影音、轉換 MP3 並檢查輸出檔，
 **SQLite** 保存佇列、歷史紀錄與設定，**PyInstaller** 打包為 one-folder EXE。
@@ -183,6 +185,8 @@ set QT_QPA_PLATFORM=offscreen
 
 - 測試完全不連線 YouTube。`tests/integration/` 以本機 HTTP 伺服器提供測試影片，實際執行 yt-dlp 與 FFmpeg
   （需要 FFmpeg；找不到時自動略過）。
+- GitHub Actions（`.github/workflows/windows-ci.yml`）在 `windows-latest` 上執行 ruff 與完整 pytest（含 FFmpeg 整合測試），
+  再以 `build_exe.bat --no-ffmpeg` 打包並實際啟動 EXE；發行 zip 可在該次執行的 Artifacts 下載。
 - Windows 實機整合測試清單：[`docs/WINDOWS_INTEGRATION_TESTS.md`](docs/WINDOWS_INTEGRATION_TESTS.md)
 
 ## 授權

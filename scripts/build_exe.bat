@@ -16,6 +16,8 @@ shift
 goto parse
 :parsed
 
+rem 輸出重新導向（例如 CI）時，確保 Python 以 UTF-8 輸出繁體中文
+set "PYTHONUTF8=1"
 set "PY=.venv\Scripts\python.exe"
 if not exist "%PY%" goto novenv
 set "VERSION=2.0.0"
