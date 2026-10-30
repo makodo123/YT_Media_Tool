@@ -1,6 +1,6 @@
 # YT Media Tool V2.0 交接文件
 
-> 更新時間：2026-10-30｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit `b122bf8`）
+> 更新時間：2026-10-30｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆。
 
 ---
@@ -18,7 +18,7 @@
 - 原始需求規格的完整內容在第一次對話中，README.md 的「功能」表已涵蓋全部要求。
 
 **目前階段**：功能完成、beta 測試中。使用者已實機測過 beta.2 / beta.3 下載成功（含 cookies）。
-正在做「縮小發行檔」，已完成並通過 CI，**等待使用者發布 beta.4**。
+「縮小發行檔」已完成並發布為 **beta.4**，**等待使用者實測 beta.4**。
 
 ---
 
@@ -31,7 +31,7 @@
 | v2.0.0-beta.1 | 3a381b7 | 已發布（舊，建議使用者刪除） |
 | v2.0.0-beta.2 | 66f0cf5 | 已發布（新增 cookies） |
 | v2.0.0-beta.3 | 99fcf7d | 已發布，**使用者實測下載正常** |
-| v2.0.0-beta.4 | b122bf8 | **CI 已通過，尚未發布**：等使用者到 Actions → Release → Run workflow，tag 填 `v2.0.0-beta.4` |
+| v2.0.0-beta.4 | 90af50e | **已發布**（程式碼同 b122bf8，另加 handoff.md）；zip 144.1 MB，sha256 `8eb375cf…a8114e` 已核對；**等待使用者實測** |
 
 beta.4 相對 beta.3：發行資料夾 412.4 MB → **333.4 MB**；FFmpeg 改 BtbN LGPL shared；確認對話框按鈕改中文。
 
@@ -115,8 +115,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-1. **發布 beta.4**：請使用者到 https://github.com/makodo123/YT_Media_Tool/actions → Release → Run workflow，
-   tag 填 `v2.0.0-beta.4`。發布後用 API 確認 Release 與 `.sha256` 內容（見第 6 節指令）。
+1. ~~發布 beta.4~~（已完成：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0-beta.4 ）
 2. **請使用者實測 beta.4**：重點是換了 FFmpeg 之後的 MP4（含 1080p 合併）與 MP3（128/192/320）是否正常，
    以及確認對話框按鈕是否為中文。
 3. 實測無誤後發布**正式版 `v2.0.0`**（tag 不含 `-`，非預先發行）。
