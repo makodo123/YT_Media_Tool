@@ -105,13 +105,16 @@ scripts\build_exe.bat
 
 ### 發佈新版本到 GitHub Releases
 
-更新 `src/yt_media_tool/__init__.py` 與 `scripts/build_exe.bat` 中的版本號後推送標籤，
-`.github/workflows/release.yml` 會在 Windows 上自動測試、打包（隨附 FFmpeg 與 Deno）並建立 Release：
+先更新 `src/yt_media_tool/__init__.py` 與 `scripts/build_exe.bat` 中的版本號並推送，再用下列任一方式觸發
+`.github/workflows/release.yml`，它會在 Windows 上自動測試、打包（隨附 FFmpeg 與 Deno）並建立 Release：
 
-```bat
-git tag v2.0.0
-git push origin v2.0.0
-```
+- **GitHub 網頁**：Actions → Release → Run workflow，輸入標籤（例如 `v2.0.0`）
+- **推送標籤**：
+
+  ```bat
+  git tag v2.0.0
+  git push origin v2.0.0
+  ```
 
 標籤含 `-`（例如 `v2.0.0-beta.1`）時會發佈為「預先發行版本」。
 

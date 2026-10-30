@@ -1,11 +1,20 @@
 name: Release
 
-# 推送版本標籤（例如 v2.0.0 或 v2.0.0-beta.1）時：
-# 在 Windows 上執行完整測試 → 打包隨附 FFmpeg 與 Deno 的 EXE → 實際啟動檢查 → 建立 GitHub Release。
-# 標籤含「-」（例如 -beta.1）時發佈為「預先發行版本」。
+# 觸發方式（三擇一）：
+#   1. GitHub 網頁：Actions → Release → Run workflow，輸入版本標籤（例如 v2.0.0）
+#   2. 推送版本標籤：git tag v2.0.0 && git push origin v2.0.0
+#   3. 推送 release/<標籤> 分支：git push origin HEAD:release/v2.0.0
+# 流程：Windows 上執行完整測試 → 打包隨附 FFmpeg 與 Deno 的 EXE → 實際啟動檢查 → 建立 GitHub Release
+#（標籤不存在時由 GitHub 於本次 commit 建立）。標籤含「-」（例如 -beta.1）時發佈為「預先發行版本」。
 on:
   push:
     tags: ["v*"]
+    branches: ["release/v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "版本標籤（例如 v2.0.0 或 v2.0.0-beta.1）"
+        required: true
 
 permissions:
   contents: write
@@ -23,10 +32,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: 決定版本標籤
+        shell: pwsh
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+        run: |
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") { $tag = $env:INPUT_TAG }
+          elseif ($env:GITHUB_REF -like "refs/heads/release/*") { $tag = $env:GITHUB_REF_NAME -replace "^release/", "" }
+          else { $tag = $env:GITHUB_REF_NAME }
+          if ($tag -notmatch '^v\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$') { Write-Output "::error::標籤格式不正確：$tag"; exit 1 }
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
       - name: 檢查標籤與程式版本一致
         shell: pwsh
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:RELEASE_TAG
           $ver = (Select-String -Path src/yt_media_tool/__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
           $bat = (Select-String -Path scripts/build_exe.bat -Pattern 'set "VERSION=(.+)"').Matches[0].Groups[1].Value
           if ($ver -ne $bat) { Write-Output "::error::__init__.py ($ver) 與 build_exe.bat ($bat) 版本不一致"; exit 1 }
@@ -57,7 +77,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "${{ github.ref_name }}"
+          $tag = $env:RELEASE_TAG
           $files = Get-ChildItem dist -File | Where-Object { $_.Name -like "YT_Media_Tool-*-win64.zip*" } | ForEach-Object FullName
           if ($files.Count -lt 2) { Write-Output "::error::找不到發行檔"; exit 1 }
           $notes = Get-Content docs/RELEASE_NOTES.md -Raw -Encoding UTF8
@@ -68,4 +88,4 @@ jobs:
           }
           $notes = "## 下載`n`n下載下方的 ``YT_Media_Tool-*-win64.zip``，解壓縮後執行 ``YT_Media_Tool\YT_Media_Tool.exe``。`n`n" + $notes
           Set-Content -Path release_notes.md -Value $notes -Encoding UTF8
-          gh release create $tag @files --title "YT Media Tool $tag" --notes-file release_notes.md @extra
+          gh release create $tag @files --title "YT Media Tool $tag" --notes-file release_notes.md --target $env:GITHUB_SHA @extra
