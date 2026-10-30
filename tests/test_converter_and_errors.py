@@ -74,7 +74,7 @@ def test_format_selectors():
 
 def test_js_runtime_option():
     info = converter.JsRuntimeInfo("deno", Path("/x/deno"))
-    assert info.ydl_option() == {"js_runtimes": {"deno": {"path": "/x/deno"}}}
+    assert info.ydl_option() == {"js_runtimes": {"deno": {"path": str(Path("/x/deno"))}}}
     assert converter.JsRuntimeInfo().ydl_option() == {}
 
 

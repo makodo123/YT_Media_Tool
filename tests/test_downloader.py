@@ -167,7 +167,7 @@ def test_ydl_options_are_safe(tmp_path):
     assert dl_opts["noplaylist"] is True
     assert dl_opts["overwrites"] is False
     assert dl_opts["ffmpeg_location"] == str(TOOLS.ffmpeg.parent)
-    assert dl_opts["js_runtimes"] == {"deno": {"path": "/d"}}
+    assert dl_opts["js_runtimes"] == {"deno": {"path": str(Path("/d"))}}
     assert Path(dl_opts["paths"]["home"]).parent.name == TEMP_ROOT_NAME
     assert dl_opts["merge_output_format"] == "mp4"
 

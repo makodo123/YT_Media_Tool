@@ -24,9 +24,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -44,9 +44,13 @@ jobs:
       - name: 執行 pytest（含本機 HTTP 整合測試，不連線 YouTube）
         run: python -m pytest -ra --junitxml=test-results.xml
 
+      - name: 將失敗測試轉為註解
+        if: failure()
+        run: python scripts/junit_annotations.py test-results.xml
+
       - name: 上傳測試結果
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-results
           path: test-results.xml
@@ -58,9 +62,9 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
           cache: pip
@@ -78,7 +82,7 @@ jobs:
         run: scripts\build_exe.bat --no-ffmpeg --skip-tests
 
       - name: 上傳發行檔
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: YT_Media_Tool-win64-no-ffmpeg
           path: |
