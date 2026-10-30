@@ -124,16 +124,25 @@ def test_all_invalid_shows_warning_and_adds_nothing(window, dialogs):
     assert "頻道" in dialogs.text()
 
 
-def test_playlist_requires_opt_in(window, dialogs):
+def test_playlist_url_expands_without_checkbox(window, qtbot, monkeypatch):
     window.expand_playlist.setChecked(False)
+    asked = []
+    monkeypatch.setattr(window, "confirm_playlist", lambda count, summary: asked.append(count) or True)
     window.url_input.setPlainText(PLAYLIST)
     window.add_from_input()
-    assert rows(window) == 0
-    assert "展開播放清單" in dialogs.text()
+    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
+    assert asked == [3]
+
+
+def test_video_in_playlist_with_checkbox_adds_whole_list(window, qtbot, monkeypatch):
+    window.expand_playlist.setChecked(True)
+    monkeypatch.setattr(window, "confirm_playlist", lambda count, summary: True)
+    window.url_input.setPlainText("https://www.youtube.com/watch?v=aaaaaaaaaaa&list=PLabcdefghij123456")
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
 
 
 def test_playlist_expansion_asks_before_adding(window, qtbot, monkeypatch):
-    window.expand_playlist.setChecked(True)
     asked = []
     monkeypatch.setattr(window, "confirm_playlist", lambda count, summary: asked.append(count) or False)
     window.url_input.setPlainText(PLAYLIST)

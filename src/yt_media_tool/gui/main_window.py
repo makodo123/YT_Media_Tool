@@ -134,7 +134,10 @@ class MainWindow(QMainWindow):
         paste_button.clicked.connect(self._paste_clipboard)
         clear_button = QPushButton("清空")
         clear_button.clicked.connect(self.url_input.clear)
-        self.expand_playlist = QCheckBox("展開播放清單（加入前會顯示影片數量並確認）")
+        self.expand_playlist = QCheckBox("影片網址含播放清單時，下載整個清單")
+        self.expand_playlist.setToolTip(
+            "例如 watch?v=…&list=… 這類網址：勾選時下載整個播放清單，未勾選時只下載這一支影片。\n"
+            "播放清單網址（playlist?list=…）一律讀取整個清單。加入前都會顯示影片數量並請您確認。")
         self.detection_label = QLabel()
         self.detection_label.setObjectName("hintLabel")
         row.addWidget(paste_button)
@@ -380,10 +383,7 @@ class MainWindow(QMainWindow):
         playlists: list[ParsedUrl] = []
         for item in result.valid:
             if item.kind is UrlKind.PLAYLIST:
-                if self.expand_playlist.isChecked():
-                    playlists.append(item)
-                else:
-                    notes.append(f"• {item.original}\n   為播放清單網址，請勾選「展開播放清單」後再加入。")
+                playlists.append(item)  # 加入前會顯示影片數量並確認
             elif item.kind is UrlKind.VIDEO_IN_PLAYLIST and self.expand_playlist.isChecked():
                 playlists.append(item)
             else:
@@ -460,7 +460,7 @@ class MainWindow(QMainWindow):
     def confirm_playlist(self, count: int, summary: list[str]) -> bool:
         box = QMessageBox(self)
         box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("展開播放清單")
+        box.setWindowTitle("加入播放清單")
         box.setText(f"播放清單共有 {count} 部影片，確定要全部加入下載佇列嗎？")
         box.setInformativeText("\n".join(summary))
         add = box.addButton(f"加入 {count} 部", QMessageBox.ButtonRole.AcceptRole)

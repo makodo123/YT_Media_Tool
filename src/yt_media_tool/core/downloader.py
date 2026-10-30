@@ -283,7 +283,7 @@ class Downloader:
             if not info:
                 raise RuntimeError("無法取得影片資訊")
             if info.get("_type") == "playlist":
-                raise RuntimeError("此任務為播放清單，請以「展開播放清單」方式加入")
+                raise RuntimeError("此任務為播放清單，請重新貼上播放清單網址加入佇列")
 
             title = str(info.get("title") or info.get("id") or "untitled")
             actual = describe_selection(info, task.media_format, task.quality)
