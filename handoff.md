@@ -19,10 +19,10 @@
 
 ### 目前階段：已完成，沒有進行中的工作
 
-- **最新正式版 `v2.1.1`**（標示為 Latest），提供安裝版（`-setup.exe`）與免安裝版（zip）：
-  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.1
+- **最新正式版 `v2.1.2`**（標示為 Latest），提供安裝版（`-setup.exe`）與免安裝版（zip）：
+  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.2
 - 使用者已在 Windows 實機測試 v2.1.0 並確認無誤：下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝。
-  v2.1.1 只修正品質欄顯示，尚待使用者實測。
+  v2.1.1 / v2.1.2 只改品質欄顯示與 cookies 選項，尚待使用者實測。
 - 之後若有新需求或問題回報，以新版本號修正並發布（流程見第 4 節）。
 
 ---
@@ -41,7 +41,8 @@
 | v2.0.0 | ab7e980 | 正式版；程式碼同 eb5d61d（僅更新文件）；zip 144.1 MB |
 | v2.1.0-beta.1 | 68afd24 | 已發布（預先發行）；新增安裝程式；使用者實測無誤 |
 | v2.1.0 | f77af01 | 正式版，使用者實測無誤；程式碼同 68afd24；setup.exe 106.1 MB（`462e36e0…31fe97`）、zip 144.1 MB（`d7e4c9a5…58454c`），sha256 已核對 |
-| **v2.1.1** | 1e6b4b0 | **正式版（Latest）**；品質欄修正；setup.exe 106.1 MB（`dd66c142…ff5f72`）、zip 144.1 MB（`f3f529b5…9687a`），sha256 已核對；待使用者實測 |
+| v2.1.1 | 1e6b4b0 | 正式版；品質欄修正；setup.exe 106.1 MB（`dd66c142…ff5f72`）、zip 144.1 MB（`f3f529b5…9687a`），sha256 已核對；待使用者實測 |
+| **v2.1.2** | 230496f | **正式版（Latest）**；品質欄標示最高解析度、移除 Chrome / Edge；setup.exe 106.1 MB（`a6d6e99e…9bd21f`）、zip 144.1 MB（`53c8481c…dadc14`），sha256 已核對；待使用者實測 |
 
 各版重點：
 
@@ -51,6 +52,9 @@
 - v2.1.1：品質欄不再顯示「720p → 720p」：實際與目標相同只顯示一次；低於目標「1080p → 720p ⚠」；
   最高可用解析度「最高可用解析度 → 2160p」；MP3 高於原始音源「320 kbps ⚠」（`gui/queue_table.py` 的 `quality_text()`，
   以數字比較解析度；完整說明在儲存格提示）。發布流程同時改為自動去除 tag 前後空白。
+- v2.1.2：影片有更高解析度時品質欄顯示「720p（最高 1080p）」（`describe_selection` 附「最高 Np，可用解析度：…」，
+  `describe_result` 保留附註；使用者原本以為選 720p 應顯示「1080p → 720p」，但那會與 ⚠ 降級警告混淆，故改用此格式）；
+  cookies 來源移除 Chrome / Edge。
 
 **使用者決定保留所有 beta 版本，不刪除**（正式版為 Latest，一般使用者不會下載到 beta）。
 
@@ -80,7 +84,7 @@ src/yt_media_tool/
   utils/paths.py                AppData、隨附檔位置、安全檔名、FileNameReserver
   utils/win_job.py              Job Object（結束時終止子程序）、具名 mutex（供安裝程式偵測）
   utils/system_open.py / logging_utils.py
-tests/                          196 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
+tests/                          198 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
 scripts/
   setup_windows.bat / run_dev.bat / build_exe.bat   Windows 開發與打包
   build_installer.py / .bat     以 Inno Setup 建立 setup.exe 與 .sha256
