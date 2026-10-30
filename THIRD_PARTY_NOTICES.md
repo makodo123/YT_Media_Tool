@@ -10,20 +10,22 @@ YT Media Tool V2.0 本身以 Apache License 2.0 授權（見專案根目錄 `LIC
 | yt-dlp | 2026.10.26 | 影片資訊取得與下載 | Unlicense | https://github.com/yt-dlp/yt-dlp |
 | yt-dlp-ejs | 0.8.0 | yt-dlp 處理 YouTube 所需的 JavaScript 元件 | Unlicense（詳見套件內授權檔） | https://github.com/yt-dlp/ejs |
 | Deno | 2.9.8 | yt-dlp 使用的 JavaScript 執行環境 | MIT | https://github.com/denoland/deno |
-| FFmpeg / FFprobe | 9.0.2（essentials build） | 影音合併、MP3 轉檔、輸出檢查 | GPL-3.0-or-later（本建置含 GPL 元件） | 見下方 |
+| FFmpeg / FFprobe | 9.0.2（BtbN win64-lgpl-shared） | 影音合併、MP3 轉檔、輸出檢查 | LGPL-2.1-or-later（不含 GPL 元件） | 見下方 |
 | PyInstaller bootloader | 6.22.3 | EXE 啟動程式 | GPL-2.0 with bootloader exception | https://pyinstaller.org/ |
 
 ## FFmpeg
 
 - 隨附版本、下載網址與 SHA256 記錄於 `packaging/ffmpeg_manifest.json`，發行版本中另存於
   `_internal/ffmpeg/VERSION.json`。
-- 預設建置來源：gyan.dev essentials build（GitHub 鏡像 `GyanD/codexffmpeg` 的版本化 release）。
-- FFmpeg 為獨立執行檔，本程式以子程序方式呼叫，未與其連結。
-- 授權：https://www.ffmpeg.org/legal.html ；GPL 授權全文隨附於 `_internal/ffmpeg/LICENSE*`。
-- 對應原始碼：https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz ，建置設定見 https://www.gyan.dev/ffmpeg/builds/ 。
-  依 GPL 要求，散布者應能在散布後三年內依請求提供對應原始碼。
-- 若需避免 GPL 元件，可在 `packaging/ffmpeg_manifest.json` 改用 LGPL 建置
-  （例如 BtbN/FFmpeg-Builds 的 `win64-lgpl` 版本化 release），並更新 sha256 與本文件。
+- 建置來源：BtbN/FFmpeg-Builds 的 `win64-lgpl-shared` 建置（FFmpeg n9.0.2-37-gae19868753，
+  release `autobuild-2026-10-29-19-17`）。SHA256 已與 GitHub release asset digest 及建置者公布的
+  `checksums.sha256` 交叉驗證。
+- 授權：LGPL-2.1-or-later（LGPL 建置，未啟用 GPL 或 nonfree 元件）。授權全文隨附於 `_internal/ffmpeg/LICENSE*`；
+  說明：https://www.ffmpeg.org/legal.html 。
+- FFmpeg 以共用函式庫（`_internal/ffmpeg/*.dll`）形式散布，本程式以子程序方式呼叫 `ffmpeg.exe` / `ffprobe.exe`，
+  使用者可自行以相容版本替換這些 DLL 或執行檔。
+- 對應原始碼：https://github.com/FFmpeg/FFmpeg/tree/ae19868753 ；建置腳本與設定：https://github.com/BtbN/FFmpeg-Builds 。
+- 注意：BtbN 的每日建置不保證長期保留。若日後該 release 被移除，需在 manifest 改用新的版本並重新驗證 SHA256。
 - 也可使用 `scripts\build_exe.bat --no-ffmpeg` 建置不隨附 FFmpeg 的版本，由使用者自行安裝。
 
 ## 使用聲明

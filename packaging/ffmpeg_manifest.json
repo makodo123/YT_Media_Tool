@@ -1,12 +1,12 @@
 {
-  "_comment": "FFmpeg 隨附版本的唯一來源設定。更新版本時同時更新 url 與 sha256，推送後由 .github/workflows/ffmpeg-verify.yml 與 GitHub release digest 交叉驗證。",
+  "_comment": "FFmpeg 隨附版本的唯一來源設定。更新版本時同時更新 url、checksum_url 與 sha256，推送後由 .github/workflows/ffmpeg-verify.yml 與 GitHub release digest、checksum_url 交叉驗證。",
   "version": "9.0.2",
-  "build": "gyan.dev essentials build (GitHub mirror GyanD/codexffmpeg)",
-  "url": "https://github.com/GyanD/codexffmpeg/releases/download/9.0.2/ffmpeg-9.0.2-essentials_build.zip",
-  "alternate_url": "https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-9.0.2-essentials_build.zip",
-  "sha256": "60f467265b1e312373dbcd92200c2618a74850f98d3d078e94296bb3fa2047ba",
-  "license": "GPL-3.0-or-later（essentials build 含 GPL 元件，例如 libx264）",
+  "build": "BtbN/FFmpeg-Builds win64-lgpl-shared n9.0.2-37-gae19868753（autobuild-2026-10-29-19-17）",
+  "url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-29-19-17/ffmpeg-n9.0.2-37-gae19868753-win64-lgpl-shared-9.0.zip",
+  "checksum_url": "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-10-29-19-17/checksums.sha256",
+  "sha256": "44280849ca9ad4cffa466e1f244b8eaf3c4f28c3b1bef00801fadba9ec4f676b",
+  "license": "LGPL-2.1-or-later（LGPL 建置，不含 GPL 元件；以共用函式庫 DLL 形式散布，可自行替換）",
   "license_url": "https://www.ffmpeg.org/legal.html",
-  "source_code": "https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz",
-  "build_info": "https://www.gyan.dev/ffmpeg/builds/"
+  "source_code": "https://github.com/FFmpeg/FFmpeg/tree/ae19868753",
+  "build_info": "https://github.com/BtbN/FFmpeg-Builds"
 }

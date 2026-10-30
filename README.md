@@ -147,11 +147,16 @@ dist/
 ### FFmpeg 部署方式（可重現）
 
 - 版本、下載網址、SHA256 與授權資訊集中在 `packaging/ffmpeg_manifest.json`。
-- `scripts/fetch_ffmpeg.ps1` 下載後比對 SHA256，不符即中止；manifest 未填 SHA256 時預設拒絕建置
-  （`-AllowUnpinned` 會顯示計算出的雜湊，請與官方公布值比對後寫回 manifest 並提交）。
-- 離線建置：`scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-9.0.2-essentials_build.zip`
-- 預設來源為 gyan.dev essentials build（GPLv3），授權與原始碼取得方式見 `THIRD_PARTY_NOTICES.md`；
-  如需 LGPL 版本，改用 BtbN 的 `win64-lgpl` 版本化 release 並更新 manifest。
+- 目前使用 BtbN 的 **LGPL 共用函式庫（win64-lgpl-shared）** 建置：ffmpeg.exe 與 ffprobe.exe 共用同一組 DLL，
+  比靜態建置小約 40–55 MB，且不含 GPL 元件。下載、合併與 MP3 轉檔所需功能（libmp3lame、stream copy）皆具備。
+- `scripts/fetch_ffmpeg.ps1` 下載後比對 SHA256，不符即中止；manifest 未填 SHA256 時預設拒絕建置。
+  本機已有的 `vendor\ffmpeg` 版本與 manifest 不同時會自動重新下載。
+- `.github/workflows/ffmpeg-verify.yml` 會把 manifest 的 SHA256 與 GitHub release digest、建置者公布的
+  `checksums.sha256` 交叉比對；`scripts/verify_dist.py` 會用發行資料夾中的 FFmpeg 實際轉出 MP3 並轉封裝 MP4。
+- BtbN 的每日建置不保證長期保留；若來源被移除，可用 `.github/workflows/ffmpeg-candidates.yml` 比較新的候選版本，
+  更新 manifest 後重新驗證。
+- 離線建置：`scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-n9.0.2-37-gae19868753-win64-lgpl-shared-9.0.zip`
+- 授權與原始碼取得方式見 `THIRD_PARTY_NOTICES.md`。
 
 ### FFmpeg 尋找順序
 

@@ -41,9 +41,15 @@ $Vendor = Join-Path $Root "vendor\ffmpeg"
 $BinDir = Join-Path $Vendor "bin"
 $Downloads = Join-Path $Root "vendor\downloads"
 
-if ((Test-Path (Join-Path $BinDir "ffmpeg.exe")) -and (Test-Path (Join-Path $BinDir "ffprobe.exe")) -and -not $Force) {
-    Write-Host "vendor\ffmpeg 已存在，略過（使用 -Force 重新下載）。"
-    exit 0
+$ExistingVersion = Join-Path $Vendor "VERSION.json"
+if ((Test-Path (Join-Path $BinDir "ffmpeg.exe")) -and (Test-Path (Join-Path $BinDir "ffprobe.exe")) -and
+    (Test-Path $ExistingVersion) -and -not $Force) {
+    $existing = Get-Content $ExistingVersion -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($existing.sha256 -and $Manifest.sha256 -and $existing.sha256 -eq $Manifest.sha256) {
+        Write-Host "vendor\ffmpeg 已是 manifest 指定的版本，略過（使用 -Force 重新下載）。"
+        exit 0
+    }
+    Write-Host "vendor\ffmpeg 與 manifest 指定的版本不同，重新下載。"
 }
 
 New-Item -ItemType Directory -Force -Path $Downloads | Out-Null
@@ -79,8 +85,11 @@ if (-not $Ffmpeg -or -not $Ffprobe) { throw "壓縮檔中找不到 ffmpeg.exe �
 
 if (Test-Path $Vendor) { Remove-Item -Recurse -Force $Vendor }
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-Copy-Item $Ffmpeg.FullName $BinDir
-Copy-Item $Ffprobe.FullName $BinDir
+# 複製 bin 中除了播放器 ffplay 以外的所有檔案：
+# 共用函式庫（shared）建置的 ffmpeg.exe / ffprobe.exe 需要同資料夾中的 DLL 才能執行
+if ($Ffmpeg.Directory.FullName -ne $Ffprobe.Directory.FullName) { throw "ffmpeg.exe 與 ffprobe.exe 不在同一資料夾" }
+Get-ChildItem -Path $Ffmpeg.Directory.FullName -File | Where-Object { $_.Name -notlike "ffplay*" } |
+    ForEach-Object { Copy-Item $_.FullName $BinDir }
 $PackageRoot = Split-Path -Parent $Ffmpeg.Directory.FullName
 Get-ChildItem -Path $PackageRoot -File | Where-Object { $_.Name -match '^(LICENSE|README)' } |
     ForEach-Object { Copy-Item $_.FullName $Vendor }
@@ -88,6 +97,7 @@ Get-ChildItem -Path $PackageRoot -File | Where-Object { $_.Name -match '^(LICENS
 $VersionLine = (& (Join-Path $BinDir "ffmpeg.exe") -hide_banner -version | Select-Object -First 1)
 $Info = [ordered]@{
     version        = $Manifest.version
+    build          = $Manifest.build
     version_output = $VersionLine
     url            = $Manifest.url
     sha256         = $Hash

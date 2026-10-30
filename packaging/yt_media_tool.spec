@@ -35,7 +35,7 @@ datas = [
 datas += collect_data_files("yt_dlp_ejs")
 datas += copy_metadata("yt-dlp")
 
-# ---- FFmpeg / FFprobe（以 datas 原樣複製，不經 PyInstaller 的 strip / 相依分析）----
+# ---- FFmpeg / FFprobe 與其 DLL（以 datas 原樣複製，不經 PyInstaller 的 strip / 相依分析）----
 if BUNDLE_FFMPEG:
     ffmpeg_root = ROOT / "vendor" / "ffmpeg"
     for name in ("ffmpeg", "ffprobe"):
@@ -45,6 +45,9 @@ if BUNDLE_FFMPEG:
                 f"找不到 {exe}。\n請先執行 scripts\\fetch_ffmpeg.ps1 下載並驗證 FFmpeg，"
                 "或設定 YTMT_BUNDLE_FFMPEG=0 建置不隨附 FFmpeg 的版本。")
         datas.append((str(exe), "ffmpeg"))
+    # 共用函式庫建置需要同資料夾的 DLL（Windows）；靜態建置則沒有
+    for dll in sorted((ffmpeg_root / "bin").glob("*.dll")):
+        datas.append((str(dll), "ffmpeg"))
     manifest = ffmpeg_root / "VERSION.json"
     if not manifest.is_file():
         raise SystemExit(f"找不到 {manifest}（由 fetch_ffmpeg.ps1 產生，記錄版本、來源與 SHA256）")

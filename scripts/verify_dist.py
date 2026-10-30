@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,6 +40,44 @@ def size_report(dist: Path, top: int = 20) -> str:
     return "\n".join(lines)
 
 
+def _run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess:
+    return subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, encoding="utf-8", errors="replace",
+                          timeout=120, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+
+
+def ffmpeg_functional_checks(ffmpeg_dir: Path, suffix: str) -> list[tuple[str, bool]]:
+    """以發行資料夾中的 FFmpeg 實際轉檔，確認 DLL 齊全且本程式需要的功能可用。"""
+    ffmpeg, ffprobe = str(ffmpeg_dir / f"ffmpeg{suffix}"), str(ffmpeg_dir / f"ffprobe{suffix}")
+    checks: list[tuple[str, bool]] = []
+    with tempfile.TemporaryDirectory() as tmp:
+        work = Path(tmp)
+        try:
+            version = _run([ffmpeg, "-hide_banner", "-version"], work)
+            checks.append(("FFmpeg 可執行（DLL 齊全）", version.returncode == 0))
+            probe_version = _run([ffprobe, "-hide_banner", "-version"], work)
+            checks.append(("FFprobe 可執行（DLL 齊全）", probe_version.returncode == 0))
+            encoders = _run([ffmpeg, "-hide_banner", "-encoders"], work).stdout
+            checks.append(("FFmpeg 含 MP3 編碼器（libmp3lame）", "libmp3lame" in encoders))
+
+            mp3 = _run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1",
+                        "-c:a", "libmp3lame", "-b:a", "192k", "tone.mp3"], work)
+            codec = _run([ffprobe, "-v", "error", "-show_entries", "stream=codec_name", "-of", "csv=p=0",
+                          "tone.mp3"], work).stdout.split()
+            checks.append(("實際轉出 MP3", mp3.returncode == 0 and codec == ["mp3"]))
+
+            source = _run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=25",
+                           "-f", "lavfi", "-i", "sine=duration=1", "-c:v", "mpeg4", "-c:a", "aac", "-shortest",
+                           "source.mp4"], work)
+            remux = _run([ffmpeg, "-v", "error", "-i", "source.mp4", "-c", "copy", "remux.mp4"], work)
+            kinds = _run([ffprobe, "-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0",
+                          "remux.mp4"], work).stdout.split()
+            checks.append(("實際合併 / 轉封裝 MP4（影像＋音訊）",
+                           source.returncode == 0 and remux.returncode == 0 and sorted(kinds) == ["audio", "video"]))
+        except (OSError, subprocess.SubprocessError) as exc:
+            checks.append((f"FFmpeg 功能檢查（{exc}）", False))
+    return checks
+
+
 def main(argv: list[str]) -> int:
     args = [a for a in argv if not a.startswith("--")]
     dist = Path(args[0]) if args else ROOT / "dist" / "YT_Media_Tool"
@@ -62,6 +102,8 @@ def main(argv: list[str]) -> int:
             ("隨附 ffprobe", (internal / "ffmpeg" / f"ffprobe{suffix}").is_file()),
             ("FFmpeg 版本與來源資訊", (internal / "ffmpeg" / "VERSION.json").is_file()),
         ]
+        if (internal / "ffmpeg" / f"ffmpeg{suffix}").is_file():
+            checks += ffmpeg_functional_checks(internal / "ffmpeg", suffix)
         version_file = internal / "ffmpeg" / "VERSION.json"
         if version_file.is_file():
             info = json.loads(version_file.read_text(encoding="utf-8-sig"))
