@@ -15,6 +15,14 @@ from yt_media_tool.core.task_models import MediaFormat
 EXE = ".exe" if os.name == "nt" else ""
 
 
+@pytest.fixture
+def fake_version(monkeypatch):
+    """假執行檔不能真的執行：在有桌面的 Windows 上會跳出「不支援的 16 位元應用程式」視窗並卡住測試。"""
+    calls = []
+    monkeypatch.setattr(converter, "_version_of", lambda exe: calls.append(exe) or "7.1-test")
+    return calls
+
+
 def make_fake_tools(directory: Path, names=("ffmpeg", "ffprobe")) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     for name in names:
@@ -23,14 +31,15 @@ def make_fake_tools(directory: Path, names=("ffmpeg", "ffprobe")) -> None:
         exe.chmod(0o755)
 
 
-def test_custom_dir_takes_priority(tmp_path):
+def test_custom_dir_takes_priority(tmp_path, fake_version):
     make_fake_tools(tmp_path / "custom")
     info = find_ffmpeg(tmp_path / "custom")
     assert info.available and info.source == "設定指定"
+    assert info.ffmpeg_version == "7.1-test"  # 版本偵測被替換，未實際執行假執行檔
     assert info.location == str(tmp_path / "custom")
 
 
-def test_bundled_dir_found_without_path(tmp_path, monkeypatch):
+def test_bundled_dir_found_without_path(tmp_path, monkeypatch, fake_version):
     make_fake_tools(tmp_path / "bundle" / "ffmpeg")
     monkeypatch.setattr(converter.paths, "bundle_dir", lambda: tmp_path / "bundle")
     monkeypatch.setattr(converter.paths, "executable_dir", lambda: tmp_path / "bundle")
@@ -39,7 +48,7 @@ def test_bundled_dir_found_without_path(tmp_path, monkeypatch):
     assert info.available and info.source == "隨附"
 
 
-def test_missing_ffmpeg_detected_with_guide(tmp_path, monkeypatch):
+def test_missing_ffmpeg_detected_with_guide(tmp_path, monkeypatch, fake_version):
     monkeypatch.setattr(converter.paths, "bundle_dir", lambda: tmp_path / "empty")
     monkeypatch.setattr(converter.paths, "executable_dir", lambda: tmp_path / "empty")
     monkeypatch.delenv("YTMT_FFMPEG_DIR", raising=False)
@@ -53,7 +62,7 @@ def test_missing_ffmpeg_detected_with_guide(tmp_path, monkeypatch):
     assert "FFmpeg" in explain_error(exc.value)
 
 
-def test_only_ffprobe_missing_is_reported(tmp_path, monkeypatch):
+def test_only_ffprobe_missing_is_reported(tmp_path, monkeypatch, fake_version):
     make_fake_tools(tmp_path / "half", names=("ffmpeg",))
     monkeypatch.setenv("PATH", "")
     monkeypatch.setattr(converter.paths, "bundle_dir", lambda: tmp_path / "empty")
