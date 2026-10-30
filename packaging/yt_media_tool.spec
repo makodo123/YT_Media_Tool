@@ -83,6 +83,24 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+# ---- 移除用不到的 Qt 檔案（依 CI 大小報告）----
+# opengl32sw.dll：軟體 OpenGL 繪圖（約 20 MB），本程式只使用標準 Widgets，不需要
+# Qt 翻譯檔：只保留繁體中文（標準對話框按鈕使用），其餘語言約 6.5 MB
+KEEP_QT_TRANSLATIONS = {"qtbase_zh_TW.qm", "qt_zh_TW.qm"}
+EXCLUDED_FILES = {"opengl32sw.dll"}
+
+
+def _keep(entry):
+    dest = entry[0].replace("\\", "/")
+    name = dest.rsplit("/", 1)[-1]
+    if "/translations/" in f"/{dest}" and name.endswith(".qm"):
+        return name in KEEP_QT_TRANSLATIONS
+    return name.lower() not in EXCLUDED_FILES
+
+
+a.datas = [entry for entry in a.datas if _keep(entry)]
+a.binaries = [entry for entry in a.binaries if _keep(entry)]
+
 pyz = PYZ(a.pure)
 
 exe = EXE(

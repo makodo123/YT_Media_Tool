@@ -1,0 +1,70 @@
+name: FFmpeg 候選版本比較
+
+# 比較可隨附的 FFmpeg Windows 建置：解壓後 bin 資料夾大小、是否含 MP3 編碼器（libmp3lame）、
+# 版本與 GitHub release asset digest，供縮小發行檔時選擇。只讀取公開 release，不影響建置。
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/ffmpeg-candidates.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    name: 下載並比較候選版本
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - name: 比較
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ProgressPreference = 'SilentlyContinue'
+          $candidates = @()
+
+          # gyan.dev（GitHub 鏡像）9.0.2：目前使用的 essentials 與 shared 版本
+          $gyan = gh api repos/GyanD/codexffmpeg/releases/tags/9.0.2 | ConvertFrom-Json
+          foreach ($a in $gyan.assets) {
+            if ($a.name -match '\.zip$') {
+              $candidates += [pscustomobject]@{ source = "GyanD/codexffmpeg@9.0.2"; asset = $a }
+            }
+          }
+
+          # BtbN：最新一個有日期標記的 autobuild release 中，最新穩定分支（nX.Y）的 win64 建置
+          $releases = gh api "repos/BtbN/FFmpeg-Builds/releases?per_page=10" | ConvertFrom-Json
+          $release = $releases | Where-Object { $_.tag_name -like 'autobuild-*' } | Select-Object -First 1
+          $win = $release.assets | Where-Object { $_.name -match '^ffmpeg-n(\d+\.\d+).*-win64-(gpl|lgpl)(-shared)?-\d+\.\d+\.zip$' }
+          $newest = ($win | ForEach-Object { [version]([regex]::Match($_.name, '^ffmpeg-n(\d+\.\d+)').Groups[1].Value) } |
+                     Sort-Object -Descending | Select-Object -First 1).ToString()
+          foreach ($a in $win | Where-Object { $_.name -like "ffmpeg-n$newest*" }) {
+            $candidates += [pscustomobject]@{ source = "BtbN/FFmpeg-Builds@$($release.tag_name)"; asset = $a }
+          }
+
+          $summary = @()
+          foreach ($c in $candidates) {
+            $a = $c.asset
+            $dir = Join-Path $env:RUNNER_TEMP ([IO.Path]::GetFileNameWithoutExtension($a.name))
+            try {
+              Invoke-WebRequest -Uri $a.browser_download_url -OutFile "$dir.zip" -UseBasicParsing
+              Expand-Archive "$dir.zip" -DestinationPath $dir -Force
+              $exe = Get-ChildItem $dir -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+              $bin = $exe.Directory.FullName
+              $binMB = [math]::Round(((Get-ChildItem $bin -File | Measure-Object Length -Sum).Sum) / 1MB, 1)
+              $needed = Get-ChildItem $bin -File | Where-Object { $_.Name -ne 'ffplay.exe' -and $_.Name -notlike 'avdevice*' }
+              $neededMB = [math]::Round((($needed | Measure-Object Length -Sum).Sum) / 1MB, 1)
+              $mp3 = [bool](& $exe.FullName -hide_banner -encoders 2>$null | Select-String 'libmp3lame')
+              $probe = Test-Path (Join-Path $bin 'ffprobe.exe')
+              $version = (& $exe.FullName -hide_banner -version | Select-Object -First 1)
+              $line = "{0}  bin={1} MB（不含 ffplay={2} MB）  mp3lame={3}  ffprobe={4}  zip={5} MB" -f $a.name, $binMB, $neededMB, $mp3, $probe, [math]::Round($a.size / 1MB, 1)
+              Write-Output "::notice title=$($a.name)::來源 $($c.source)%0A$line%0A$version%0Adigest $($a.digest)%0A$($a.browser_download_url)"
+              $summary += $line
+            } catch {
+              Write-Output "::warning title=$($a.name)::無法測試：$($_.Exception.Message)"
+            } finally {
+              Remove-Item -Recurse -Force $dir, "$dir.zip" -ErrorAction SilentlyContinue
+            }
+          }
+          Write-Output "::notice title=比較摘要::$($summary -join '%0A')"

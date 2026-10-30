@@ -31,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     from PySide6.QtWidgets import QApplication, QMessageBox
 
     from yt_media_tool.app_context import create_context
+    from yt_media_tool.gui.i18n import install_qt_translations
     from yt_media_tool.gui.main_window import MainWindow
     from yt_media_tool.gui.theme import apply_dark_theme
     from yt_media_tool.storage.database import DatabaseError
@@ -43,6 +44,7 @@ def main(argv: list[str] | None = None) -> int:
     if icon_path.is_file():
         app.setWindowIcon(QIcon(str(icon_path)))
     apply_dark_theme(app)
+    install_qt_translations(app)
 
     # 避免兩個執行個體同時操作同一個佇列資料庫
     lock = QLockFile(str(paths.app_data_dir() / "instance.lock"))

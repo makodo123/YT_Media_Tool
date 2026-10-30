@@ -49,6 +49,10 @@ def main(argv: list[str]) -> int:
         ("圖示 assets/app.ico", (internal / "assets" / "app.ico").is_file()),
         ("第三方授權說明", (internal / "THIRD_PARTY_NOTICES.md").is_file()),
         ("yt-dlp-ejs JavaScript 元件", (internal / "yt_dlp_ejs").is_dir()),
+        ("Qt 繁體中文翻譯", any(internal.rglob("qtbase_zh_TW.qm"))),
+        ("未包含其他語言的 Qt 翻譯", not any(p.name != "qtbase_zh_TW.qm" and p.name != "qt_zh_TW.qm"
+                                    for p in internal.rglob("*.qm"))),
+        ("未包含 opengl32sw.dll", not any(internal.rglob("opengl32sw.dll"))),
         ("未包含 SQLite 資料庫", not list(dist.rglob("*.sqlite3"))),
         ("未包含日誌檔", not list(dist.rglob("*.log"))),
     ]

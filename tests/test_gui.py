@@ -298,3 +298,15 @@ def test_typing_cookie_path_switches_source(qtbot, window):
     dialog.cookies_source.setCurrentIndex(dialog.cookies_source.findData("edge"))
     qtbot.keyClicks(dialog.cookies_file, "D:/cookies.txt")
     assert dialog.cookies_source.currentData() == "file"
+
+
+def test_qt_standard_buttons_are_translated(qtbot):
+    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtWidgets import QApplication
+
+    from yt_media_tool.gui.i18n import install_qt_translations
+
+    app = QApplication.instance()
+    assert install_qt_translations(app)
+    # QMessageBox 的「是 / 否」按鈕文字來自 QPlatformTheme 翻譯
+    assert QCoreApplication.translate("QPlatformTheme", "&Yes") != "&Yes"
