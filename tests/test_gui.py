@@ -310,3 +310,63 @@ def test_qt_standard_buttons_are_translated(qtbot):
     assert install_qt_translations(app)
     # QMessageBox 的「是 / 否」按鈕文字來自 QPlatformTheme 翻譯
     assert QCoreApplication.translate("QPlatformTheme", "&Yes") != "&Yes"
+
+
+def _add_waiting(window, count):
+    urls = [f"https://www.youtube.com/watch?v=batch{i:06d}" for i in range(count)]
+    window.ctx.queue.add_tasks([TaskSpec(u, MediaFormat.MP4, "720", window.folder_edit.text()) for u in urls])
+    return urls
+
+
+def test_remove_selected_batch(window, dialogs, qtbot):
+    _add_waiting(window, 3)  # 佇列暫停中，三筆皆為等待
+    assert rows(window) == 3
+    assert not window.remove_button.isEnabled()
+    window.table.selectAll()
+    assert window.remove_button.isEnabled() and window.remove_button.text() == "移除所選（3）"
+
+    dialogs.answer = QMessageBox.StandardButton.No
+    assert window.remove_selected() == 0
+    assert rows(window) == 3
+
+    dialogs.answer = QMessageBox.StandardButton.Yes
+    assert window.remove_selected() == 3
+    assert rows(window) == 0
+    assert "不會刪除已下載的檔案" in dialogs.text()
+
+
+def test_remove_selected_skips_running(window, dialogs, qtbot, fake):
+    queue = window.ctx.queue
+    queue.add_tasks([TaskSpec(BLOCK, MediaFormat.MP4, "720", window.folder_edit.text())])
+    _add_waiting(window, 2)
+    queue.resume()  # 同時下載數為 1：BLOCK 執行中，其餘兩筆維持等待
+    qtbot.waitUntil(lambda: fake.running == 1, timeout=5000)
+    window.table.selectAll()
+    assert window.remove_button.text() == "移除所選（2）"
+    assert window.remove_selected() == 2
+    assert [t.url for t in queue.tasks()] == [BLOCK]
+    assert "1 筆進行中未移除" in window.statusBar().currentMessage()
+    assert "另有 1 筆進行中的任務不會移除" in dialogs.text()
+
+
+def test_batch_context_menu_applies_to_selection(window, dialogs, qtbot):
+    _add_waiting(window, 3)
+    window.table.selectAll()
+    task = window.table.queue_model.task_at(0)
+    labels = [a.text() for a in window.build_context_menu(task).actions() if a.text()]
+    assert "取消所選（3 筆）" in labels
+    assert "從佇列移除所選（3 筆，不刪除檔案）" in labels
+
+    # 取消所選後，可對所選任務重試
+    next(a for a in window.build_context_menu(task).actions() if a.text() == "取消所選（3 筆）").trigger()
+    assert all(t.status is TaskStatus.CANCELLED for t in window.ctx.queue.tasks())
+    window.table.selectAll()
+    labels = [a.text() for a in window.build_context_menu(task).actions() if a.text()]
+    assert "重試所選（3 筆）" in labels
+
+
+def test_single_selection_context_menu_unchanged(window, qtbot):
+    _add_waiting(window, 2)
+    window.table.selectRow(0)
+    labels = [a.text() for a in window.build_context_menu(window.table.queue_model.task_at(0)).actions() if a.text()]
+    assert "取消" in labels and "從佇列移除（不刪除檔案）" in labels

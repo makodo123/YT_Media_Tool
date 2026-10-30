@@ -130,8 +130,10 @@ class QueueManager:
         completed, failed = count(TaskStatus.COMPLETED), count(TaskStatus.FAILED)
         cancelled = count(TaskStatus.CANCELLED)
         active = sum(1 for t in tasks if t.status.is_active)
-        # 失敗與取消的任務視為「已結束」，計入整體進度
-        percent = (sum(100.0 if t.status.is_finished else t.progress for t in tasks) / total) if total else 0.0
+        # 失敗與取消的任務不會被下載，不計入整體進度（否則會被當成 100% 而讓進度虛高）
+        counted = [t for t in tasks if t.status not in (TaskStatus.FAILED, TaskStatus.CANCELLED)]
+        percent = (sum(100.0 if t.status is TaskStatus.COMPLETED else t.progress for t in counted)
+                   / len(counted)) if counted else 0.0
         return QueueProgress(total, completed + failed + cancelled, completed, failed, cancelled, active, percent)
 
     # ---- 恢復 ----

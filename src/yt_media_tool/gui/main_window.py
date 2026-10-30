@@ -179,9 +179,11 @@ class MainWindow(QMainWindow):
         self.table.actionTriggered.connect(self._on_row_action)
         self.table.customContextMenuRequested.connect(self._show_context_menu)
         self.table.selectionModel().currentRowChanged.connect(lambda *_: self._update_details())
+        self.table.selectionModel().selectionChanged.connect(lambda *_: self._update_queue_controls())
         delete = QAction(self.table)
         delete.setShortcut(QKeySequence.StandardKey.Delete)
-        delete.triggered.connect(self._remove_selected)
+        delete.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        delete.triggered.connect(self.remove_selected)
         self.table.addAction(delete)
 
         self.details = QTextEdit()
@@ -205,12 +207,18 @@ class MainWindow(QMainWindow):
         self.retry_button.clicked.connect(self._retry_failed)
         self.clear_button = QPushButton("清除已完成")
         self.clear_button.clicked.connect(self._clear_completed)
+        self.remove_button = QPushButton("移除所選")
+        self.remove_button.setToolTip("按住 Ctrl / Shift 可多選，Ctrl+A 全選；快捷鍵 Delete。\n"
+                                      "只從佇列移除紀錄，不會刪除已下載的檔案；進行中的任務需先取消。")
+        self.remove_button.clicked.connect(self.remove_selected)
         self.overall_label = QLabel()
         self.overall_bar = QProgressBar()
         self.overall_bar.setRange(0, 1000)
         self.overall_bar.setFixedWidth(260)
         self.overall_bar.setFormat("整體 %p%")
-        for w in (self.pause_button, self.cancel_all_button, self.retry_button, self.clear_button):
+        self.overall_bar.setToolTip("完成、下載中與等待中任務的整體進度（不含失敗與取消的任務）")
+        for w in (self.pause_button, self.cancel_all_button, self.retry_button, self.clear_button,
+                  self.remove_button):
             controls.addWidget(w)
         controls.addStretch(1)
         controls.addWidget(self.overall_label)
@@ -515,9 +523,38 @@ class MainWindow(QMainWindow):
         count = self.ctx.queue.clear_completed()
         self.statusBar().showMessage(f"已清除 {count} 筆已完成任務（檔案不受影響）", 5000)
 
-    def _remove_selected(self) -> None:
-        for task_id in self.table.selected_task_ids():
-            self.ctx.queue.remove(task_id)
+    def _selected_tasks(self) -> list[DownloadTask]:
+        return [t for tid in self.table.selected_task_ids() if (t := self.ctx.queue.get(tid)) is not None]
+
+    def remove_selected(self) -> int:
+        """從佇列移除所有選取的任務（不刪除檔案）；進行中的任務略過。回傳移除筆數。"""
+        selected = self._selected_tasks()
+        removable = [t for t in selected if not t.status.is_active]
+        skipped = len(selected) - len(removable)
+        if not removable:
+            if skipped:
+                self.statusBar().showMessage("選取的任務都在進行中，請先取消再移除", 6000)
+            return 0
+        if len(removable) > 1:
+            note = f"\n（另有 {skipped} 筆進行中的任務不會移除）" if skipped else ""
+            answer = QMessageBox.question(
+                self, "移除任務", f"確定要從佇列移除 {len(removable)} 筆任務嗎？\n不會刪除已下載的檔案。{note}")
+            if answer != QMessageBox.StandardButton.Yes:
+                return 0
+        removed = sum(1 for t in removable if self.ctx.queue.remove(t.id))  # type: ignore[arg-type]
+        message = f"已從佇列移除 {removed} 筆任務（檔案不受影響）"
+        if skipped:
+            message += f"；{skipped} 筆進行中未移除"
+        self.statusBar().showMessage(message, 6000)
+        return removed
+
+    def _cancel_tasks(self, tasks: list[DownloadTask]) -> None:
+        count = sum(1 for t in tasks if self.ctx.queue.cancel(t.id))  # type: ignore[arg-type]
+        self.statusBar().showMessage(f"已取消 {count} 筆任務", 5000)
+
+    def _retry_tasks(self, tasks: list[DownloadTask]) -> None:
+        count = sum(1 for t in tasks if self.ctx.queue.retry(t.id))  # type: ignore[arg-type]
+        self.statusBar().showMessage(f"已重新排入 {count} 筆任務", 5000)
 
     def _toggle_pause(self) -> None:
         if self.ctx.queue.is_paused:
@@ -529,6 +566,13 @@ class MainWindow(QMainWindow):
         task = self.table.queue_model.task_at(self.table.indexAt(pos).row())
         if task is None:
             return
+        menu = self.build_context_menu(task)
+        menu.exec(self.table.viewport().mapToGlobal(pos))
+
+    def build_context_menu(self, task: DownloadTask) -> QMenu:
+        selected = self._selected_tasks()
+        if len(selected) > 1 and task.id in {t.id for t in selected}:
+            return self._build_batch_menu(selected)
         menu = QMenu(self)
         queue = self.ctx.queue
         if not task.status.is_finished:
@@ -544,7 +588,26 @@ class MainWindow(QMainWindow):
         if not task.status.is_active:
             menu.addSeparator()
             menu.addAction("從佇列移除（不刪除檔案）", lambda: queue.remove(task.id))
-        menu.exec(self.table.viewport().mapToGlobal(pos))
+        menu.addSeparator()
+        menu.addAction("全選（Ctrl+A）", self.table.selectAll)
+        return menu
+
+    def _build_batch_menu(self, selected: list[DownloadTask]) -> QMenu:
+        """多選時的右鍵選單：動作套用到所有選取的任務。"""
+        menu = QMenu(self)
+        cancellable = [t for t in selected if not t.status.is_finished]
+        retryable = [t for t in selected if t.status in (TaskStatus.FAILED, TaskStatus.CANCELLED)]
+        removable = [t for t in selected if not t.status.is_active]
+        if cancellable:
+            menu.addAction(f"取消所選（{len(cancellable)} 筆）", lambda: self._cancel_tasks(cancellable))
+        if retryable:
+            menu.addAction(f"重試所選（{len(retryable)} 筆）", lambda: self._retry_tasks(retryable))
+        if removable:
+            menu.addSeparator()
+            menu.addAction(f"從佇列移除所選（{len(removable)} 筆，不刪除檔案）", self.remove_selected)
+        menu.addSeparator()
+        menu.addAction("全選（Ctrl+A）", self.table.selectAll)
+        return menu
 
     # ================= 佇列事件（主執行緒） =================
     def _on_queue_event(self, event: str, payload) -> None:
@@ -589,6 +652,10 @@ class MainWindow(QMainWindow):
         self.speed_label.setText(f"總下載速度：{format_speed(total_speed)}" if total_speed else "")
         self.retry_button.setEnabled(progress.failed > 0)
         self.clear_button.setEnabled(progress.completed > 0)
+        selected = self.table.selected_task_ids()
+        removable = sum(1 for tid in selected if (t := queue.get(tid)) is not None and not t.status.is_active)
+        self.remove_button.setEnabled(removable > 0)
+        self.remove_button.setText(f"移除所選（{removable}）" if removable > 1 else "移除所選")
         self.cancel_all_button.setEnabled(progress.total - progress.finished > 0)
 
     def _update_details(self) -> None:

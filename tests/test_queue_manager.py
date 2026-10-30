@@ -224,13 +224,26 @@ def test_events_emitted_and_listener_errors_isolated(queue_factory, spec_factory
     assert queue.progress().completed == 1
 
 
-def test_overall_progress(queue_factory, spec_factory):
+def test_overall_progress_excludes_failed_and_cancelled(queue_factory, spec_factory):
     queue = queue_factory()
     queue.add_tasks([spec_factory(URL_A), spec_factory(FAIL)])
     assert wait_until(idle(queue))
     progress = queue.progress()
     assert progress.total == 2 and progress.completed == 1 and progress.failed == 1
-    assert progress.percent == 100.0
+    assert progress.percent == 100.0  # 唯一要下載的任務已完成
+
+    queue.pause()
+    _waiting, cancelled = queue.add_tasks([spec_factory(URL_B), spec_factory(URL_C)])
+    queue.cancel(cancelled.id)
+    # 計入：完成 100% + 等待 0% → 50%；失敗與取消不計入（舊算法會是 (100+100+0+100)/4 = 75%）
+    assert queue.progress().percent == 50.0
+
+
+def test_overall_progress_all_failed_is_zero(queue_factory, spec_factory):
+    queue = queue_factory()
+    queue.add_task(spec_factory(FAIL))
+    assert wait_until(idle(queue))
+    assert queue.progress().percent == 0.0
 
 
 def test_remove_only_non_running(queue_factory, spec_factory, fake_downloader):
