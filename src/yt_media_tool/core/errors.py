@@ -6,6 +6,7 @@ import errno
 import re
 
 from yt_media_tool.core.converter import FFmpegNotFoundError, MediaProbeError
+from yt_media_tool.core.cookies import CookieFileError
 
 
 class DownloadCancelledError(Exception):
@@ -27,6 +28,14 @@ _WIN_DISK_FULL = {112, 39}  # ERROR_DISK_FULL, ERROR_HANDLE_DISK_FULL
 _WIN_ACCESS = {5, 32, 33}  # ACCESS_DENIED, SHARING_VIOLATION, LOCK_VIOLATION
 _WIN_PATH = {3, 206}  # PATH_NOT_FOUND, FILENAME_EXCED_RANGE
 
+# 讀取瀏覽器 cookies 失敗：yt-dlp 會包著 FileNotFoundError 等底層例外，因此須在一般檔案錯誤之前判斷
+_COOKIE_ERROR = re.compile(
+    r"DPAPI|cookie database|cookies database|Failed to (decrypt|load) cookies|could not find .{0,40}cookies|"
+    r"Unsupported browser|CookieLoadError", re.IGNORECASE)
+_COOKIE_MESSAGE = (
+    "無法讀取瀏覽器的登入資訊（cookies）。Chrome / Edge 請先完全關閉瀏覽器再試；新版 Chrome / Edge 的加密方式"
+    "可能使 cookies 無法讀取，建議改用 Firefox，或匯出 cookies.txt 後在「設定 → YouTube 登入資訊」指定。")
+
 # (正規表示式, 說明)。依序比對 yt-dlp 的錯誤訊息。
 _YTDLP_PATTERNS: list[tuple[str, str]] = [
     (r"DRM", "此內容受 DRM 數位版權保護，本工具不支援下載。"),
@@ -34,7 +43,10 @@ _YTDLP_PATTERNS: list[tuple[str, str]] = [
     (r"members[- ]only|Join this channel", "這是頻道會員專屬內容，無法下載。"),
     (r"Sign in to confirm your age|age[- ]restricted|inappropriate for some users",
      "此影片有年齡限制，需要登入才能觀看，本工具無法下載。"),
-    (r"Sign in to confirm you.?re not a bot", "YouTube 要求驗證（疑似機器人流量），請稍後再試或更換網路。"),
+    (r"Sign in to confirm you.?re not a bot",
+     "YouTube 要求登入以確認不是機器人。可到「設定 → YouTube 登入資訊」選擇已登入 YouTube 的瀏覽器"
+     "或 cookies.txt 後重試；若已設定，cookies 可能已過期，請在瀏覽器重新登入 YouTube 或重新匯出。"
+     "也可更換網路（例如關閉 VPN）後再試。"),
     (r"not available in your country|geo.?restrict|blocked it in your country",
      "此影片在您所在的地區無法觀看。"),
     (r"Premieres? in|This live event will begin", "影片尚未首播或直播尚未開始，無法下載。"),
@@ -76,10 +88,14 @@ def explain_error(exc: BaseException) -> str:
     """回傳適合顯示給使用者的錯誤說明，並附上原始訊息以利排查。"""
     if isinstance(exc, DownloadCancelledError):
         return str(exc)
-    if isinstance(exc, FFmpegNotFoundError):
+    if isinstance(exc, (FFmpegNotFoundError, CookieFileError)):
         return str(exc)
     if isinstance(exc, MediaProbeError):
         return f"輸出檔案檢查失敗：{exc}"
+
+    raw = _clean(str(exc))
+    if _COOKIE_ERROR.search(raw):
+        return f"{_COOKIE_MESSAGE}\n詳細資訊：{raw}"
 
     # yt-dlp 會把底層例外包在 DownloadError.exc_info 中
     chain: list[BaseException] = []
@@ -95,7 +111,6 @@ def explain_error(exc: BaseException) -> str:
             if message:
                 return message
 
-    raw = _clean(str(exc))
     for pattern, message in _YTDLP_PATTERNS:
         if re.search(pattern, raw, re.IGNORECASE):
             return f"{message}\n詳細資訊：{raw}" if raw else message

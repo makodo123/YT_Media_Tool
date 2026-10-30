@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 import os
 import shutil
+import tempfile
 import threading
 import time
 import uuid
@@ -29,6 +30,7 @@ from yt_dlp.utils import DownloadCancelled as _YtdlpDownloadCancelled
 
 from yt_media_tool.core import converter
 from yt_media_tool.core.converter import JsRuntimeInfo, MediaInfo, ToolInfo
+from yt_media_tool.core.cookies import CookieConfig, ydl_cookie_options
 from yt_media_tool.core.errors import DownloadCancelledError, InsufficientDiskSpaceError
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus
 from yt_media_tool.utils.paths import FileNameReserver, sanitize_filename
@@ -192,6 +194,7 @@ class Downloader:
         ydl_factory: Callable[[dict[str, Any]], Any] = yt_dlp.YoutubeDL,
         extra_options: dict[str, Any] | None = None,
         probe: Callable[[Path, MediaFormat, Path], MediaInfo] = converter.verify_output,
+        cookies_provider: Callable[[], CookieConfig] | None = None,
     ) -> None:
         self._tools_provider = tools_provider
         self._js_runtime_provider = js_runtime_provider or converter.find_js_runtime
@@ -199,9 +202,11 @@ class Downloader:
         self._ydl_factory = ydl_factory
         self._extra_options = dict(extra_options or {})
         self._probe = probe
+        self._cookies_provider = cookies_provider or CookieConfig
 
     # ---- 共用設定 ----
-    def _base_options(self, logger: _YdlLogger, tools: ToolInfo | None) -> dict[str, Any]:
+    def _base_options(self, logger: _YdlLogger, tools: ToolInfo | None,
+                      cookie_options: dict[str, Any] | None = None) -> dict[str, Any]:
         opts: dict[str, Any] = {
             "quiet": True,
             "no_warnings": False,
@@ -219,16 +224,20 @@ class Downloader:
         if tools and tools.location:
             opts["ffmpeg_location"] = tools.location
         opts.update(self._js_runtime_provider().ydl_option())
+        opts.update(cookie_options or {})
         opts.update(self._extra_options)
         return opts
 
     # ---- 播放清單展開 ----
     def extract_playlist(self, url: str, limit: int = 500) -> PlaylistInfo:
         logger = _YdlLogger(None)
-        opts = self._base_options(logger, None)
-        opts.update({"noplaylist": False, "extract_flat": "in_playlist", "playlistend": limit + 1})
-        with self._ydl_factory(opts) as ydl:
-            info = ydl.extract_info(url, download=False)
+        # cookies.txt 副本放在用完即刪的暫存資料夾
+        with tempfile.TemporaryDirectory(prefix="ytmt_playlist_") as work_dir:
+            cookie_options = ydl_cookie_options(self._cookies_provider(), Path(work_dir))
+            opts = self._base_options(logger, None, cookie_options)
+            opts.update({"noplaylist": False, "extract_flat": "in_playlist", "playlistend": limit + 1})
+            with self._ydl_factory(opts) as ydl:
+                info = ydl.extract_info(url, download=False)
         entries_raw = list(info.get("entries") or []) if info else []
         entries: list[PlaylistEntry] = []
         for entry in entries_raw:
@@ -261,8 +270,10 @@ class Downloader:
             temp_dir.mkdir(parents=True, exist_ok=False)
             _hide_on_windows(temp_root)
             on_progress(ProgressUpdate(TaskStatus.DOWNLOADING, progress=0.0, stage="取得影片資訊中"))
+            # cookies.txt 副本放在本任務暫存資料夾，任務結束時隨資料夾刪除
+            cookie_options = ydl_cookie_options(self._cookies_provider(), temp_dir)
 
-            info_opts = self._base_options(logger, tools)
+            info_opts = self._base_options(logger, tools, cookie_options)
             info_opts["format"] = converter.format_selector(task.media_format, task.quality)
             if task.media_format is MediaFormat.MP4:
                 info_opts["merge_output_format"] = "mp4"
@@ -280,7 +291,8 @@ class Downloader:
                                        title=title, actual_quality=actual))
             self._check_disk_space(info, task, output_dir)
 
-            produced, source_kbps = self._run_download(task, info, tools, logger, token, on_progress, temp_dir)
+            produced, source_kbps = self._run_download(task, info, tools, logger, token, on_progress, temp_dir,
+                                                       cookie_options)
             token.raise_if_cancelled()
             if task.media_format is MediaFormat.MP3 and source_kbps and "未知" in actual:
                 actual = describe_mp3(task.quality, source_kbps)
@@ -321,8 +333,8 @@ class Downloader:
             if not success:
                 log.info("任務 %s 未成功，已清除暫存資料夾 %s", task.id, temp_dir)
 
-    def _run_download(self, task, info, tools, logger, token, on_progress,
-                      temp_dir: Path) -> tuple[Path, float | None]:
+    def _run_download(self, task, info, tools, logger, token, on_progress, temp_dir: Path,
+                      cookie_options: dict[str, Any] | None = None) -> tuple[Path, float | None]:
         """在暫存資料夾內完成下載與 FFmpeg 後處理，回傳（暫存資料夾中的成品路徑, 原始音訊 kbps）。
 
         yt-dlp 的 home 路徑設為任務專屬暫存資料夾，因此 yt-dlp 不會讀取、覆蓋或刪除
@@ -362,7 +374,7 @@ class Downloader:
                 on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=DOWNLOAD_PROGRESS_SHARE,
                                            speed=None, eta=None, stage=stage))
 
-        opts = self._base_options(logger, tools)
+        opts = self._base_options(logger, tools, cookie_options)
         opts.update({
             "format": converter.format_selector(task.media_format, task.quality),
             # 固定的 ASCII 暫存檔名：避免標題中的特殊字元與過長路徑問題

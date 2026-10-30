@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 
+from yt_media_tool.core.cookies import COOKIE_SOURCES, CookieConfig
 from yt_media_tool.core.task_models import MP3_QUALITIES, MP4_QUALITIES, MediaFormat
 from yt_media_tool.storage.database import Database
 from yt_media_tool.utils import paths
@@ -24,6 +25,8 @@ class AppSettings:
     keep_history: bool = True
     ffmpeg_dir: str = ""  # 自訂 FFmpeg 位置（空白表示自動偵測）
     playlist_confirm_threshold: int = 1  # 播放清單展開時一律提示確認
+    cookies_source: str = "none"  # YouTube 登入資訊來源：none / firefox / chrome / edge / file
+    cookies_file: str = ""  # cookies_source 為 file 時的 cookies.txt 路徑
 
     def validated(self) -> AppSettings:
         defaults = AppSettings()
@@ -43,7 +46,13 @@ class AppSettings:
         s.open_folder_on_complete = bool(s.open_folder_on_complete)
         s.keep_history = bool(s.keep_history)
         s.ffmpeg_dir = s.ffmpeg_dir if isinstance(s.ffmpeg_dir, str) else ""
+        if s.cookies_source not in COOKIE_SOURCES:
+            s.cookies_source = defaults.cookies_source
+        s.cookies_file = s.cookies_file if isinstance(s.cookies_file, str) else ""
         return s
+
+    def cookie_config(self) -> CookieConfig:
+        return CookieConfig(self.cookies_source, self.cookies_file)
 
     def default_quality_for(self, media_format: MediaFormat) -> str:
         return self.default_mp4_quality if media_format is MediaFormat.MP4 else self.default_mp3_quality

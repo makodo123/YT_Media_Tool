@@ -91,3 +91,16 @@
 | # | 步驟 | 預期結果 |
 |---|---|---|
 | G1 | 保留 `%LOCALAPPDATA%\YT_Media_Tool`，以新版覆蓋安裝後啟動 | 資料庫自動 migration，佇列與設定保留 |
+
+## H. YouTube 登入資訊（cookies）
+
+| # | 步驟 | 預期結果 |
+|---|---|---|
+| H1 | 在會出現「確認不是機器人」的網路下，cookies 設為「不使用」並下載 | 失敗；錯誤訊息提示到「設定 → YouTube 登入資訊」 |
+| H2 | Firefox 登入 YouTube，設定來源為 Firefox 後重試 H1 | 下載成功 |
+| H3 | 設定來源為 Chrome，Chrome 開啟中下載 | 失敗並提示「請先完全關閉瀏覽器」或建議改用 Firefox / cookies.txt；記錄實際訊息 |
+| H4 | 完全關閉 Chrome 後重試 H3 | 記錄成功或失敗（新版 Chrome 加密可能無法讀取） |
+| H5 | 匯出 cookies.txt，設定來源為檔案後下載 | 下載成功；記錄原始 cookies.txt 的修改時間，下載後不變 |
+| H6 | 下載中檢查 `<下載資料夾>\.ytmt_tmp\task_*\cookies.txt` | 存在副本；任務結束後連同暫存資料夾刪除 |
+| H7 | 刪除 H5 指定的 cookies.txt 後下載 | 失敗並提示「找不到 cookies 檔案」與設定位置 |
+| H8 | 檢查 `%LOCALAPPDATA%\YT_Media_Tool\logs\yt_media_tool.log` | 日誌中沒有 cookies 內容（例如 SID 值） |

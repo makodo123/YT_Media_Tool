@@ -282,6 +282,7 @@ class MainWindow(QMainWindow):
             lines.append(f"✔ JavaScript 執行環境：{js.name}（{js.source}）\n   {js.path or ''}")
         else:
             lines.append("✘ " + converter.JS_RUNTIME_GUIDE)
+        lines.append(f"YouTube 登入資訊（cookies）：{self.ctx.settings.cookie_config().describe()}")
         try:
             import yt_dlp.version
 

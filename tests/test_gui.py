@@ -266,3 +266,19 @@ def test_settings_dialog_returns_validated_settings(qtbot, window):
     window.ctx.apply_settings(result)
     assert window.ctx.queue.max_concurrent == 3
     assert window.ctx.queue.keep_history is False
+
+
+def test_settings_dialog_cookie_options(qtbot, window, tmp_path):
+    cookie_file = tmp_path / "cookies.txt"
+    cookie_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    dialog = SettingsDialog(window.ctx.settings, window)
+    qtbot.addWidget(dialog)
+    assert dialog.cookies_source.currentData() == "none"
+    assert not dialog.cookies_file_row.isEnabled()
+    dialog.cookies_source.setCurrentIndex(dialog.cookies_source.findData("file"))
+    assert dialog.cookies_file_row.isEnabled()
+    dialog.cookies_file.setText(str(cookie_file))
+    result = dialog.result_settings()
+    assert result.cookies_source == "file" and result.cookies_file == str(cookie_file)
+    window.ctx.apply_settings(result)
+    assert "cookies.txt" in window.dependency_report()
