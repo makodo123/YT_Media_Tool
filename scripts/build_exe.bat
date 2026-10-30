@@ -20,7 +20,7 @@ rem 輸出重新導向（例如 CI）時，確保 Python 以 UTF-8 輸出繁體�
 set "PYTHONUTF8=1"
 set "PY=.venv\Scripts\python.exe"
 if not exist "%PY%" goto novenv
-set "VERSION=2.1.1"
+set "VERSION=2.1.2"
 set "DIST=dist\YT_Media_Tool"
 
 rem 測試使用 offscreen；結束後還原原本的設定（CI 會預先設定 offscreen 供啟動測試使用）

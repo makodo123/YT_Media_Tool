@@ -9,7 +9,7 @@ from tests.fakes import FakeYDL
 from yt_media_tool.core import downloader as downloader_mod
 from yt_media_tool.core.converter import FFmpegNotFoundError, JsRuntimeInfo, MediaInfo, ToolInfo
 from yt_media_tool.core.downloader import (
-    TEMP_ROOT_NAME, CancelToken, Downloader, describe_selection, move_no_overwrite,
+    TEMP_ROOT_NAME, CancelToken, Downloader, describe_result, describe_selection, move_no_overwrite,
 )
 from yt_media_tool.core.errors import DownloadCancelledError, InsufficientDiskSpaceError, MediaProbeError
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus
@@ -188,6 +188,15 @@ def test_describe_selection_lists_available_resolutions():
     text = describe_selection(INFO, MediaFormat.MP4, "1080")
     assert text.startswith("720p") and "360p、720p" in text
     assert describe_selection(INFO, MediaFormat.MP4, "720") == "720p"
+    # 素材有更高解析度時附上最高解析度
+    info_1080 = {**INFO, "formats": INFO["formats"] + [{"format_id": "137", "height": 1080, "vcodec": "avc1"}]}
+    assert describe_selection(info_1080, MediaFormat.MP4, "720") == "720p（最高 1080p，可用解析度：360p、720p、1080p）"
+    # FFprobe 實測後保留最高解析度附註
+    media = MediaInfo(duration=10, has_video=True, has_audio=True, height=720, video_codec="h264", audio_codec="aac")
+    assert describe_result(media, MediaFormat.MP4, "720", "720p（最高 1080p，可用解析度：360p、720p、1080p）") == \
+        "720p h264/aac（最高 1080p，可用解析度：360p、720p、1080p）"
+    assert describe_result(media, MediaFormat.MP4, "720", "720p") == "720p h264/aac"
+    assert describe_result(media, MediaFormat.MP4, "1080", "720p") == "720p h264/aac（原始素材無 1080p）"
     assert "未知" in describe_selection({"requested_formats": [{}]}, MediaFormat.MP3, "128")
     assert "不會提升" not in describe_selection(INFO, MediaFormat.MP3, "128")
 

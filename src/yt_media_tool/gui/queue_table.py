@@ -44,7 +44,8 @@ def status_text(task: DownloadTask) -> str:
 
 
 def quality_text(task: DownloadTask) -> str:
-    """品質欄文字：實際品質與目標相同時只顯示一次，低於目標或高於原始音源時加上 ⚠。
+    """品質欄文字：實際品質與目標相同時只顯示一次，低於目標或高於原始音源時加上 ⚠；
+    影片還有更高解析度時附上「（最高 1080p）」。
 
     完整說明（編碼、可用解析度、原始音源位元率）見儲存格提示。
     """
@@ -61,6 +62,9 @@ def quality_text(task: DownloadTask) -> str:
         return f"{task.quality_text} → {height}p"
     if height != int(task.quality):
         return f"{task.quality_text} → {height}p" + (" ⚠" if height < int(task.quality) else "")
+    highest = re.search(r"最高 (\d+)p", actual)
+    if highest and int(highest.group(1)) > height:
+        return f"{task.quality_text}（最高 {highest.group(1)}p）"
     return task.quality_text
 
 

@@ -444,7 +444,8 @@ class Downloader:
 
 
 def describe_selection(info: dict, media_format: MediaFormat, quality: str) -> str:
-    """依 yt-dlp 選定的格式說明實際可取得的品質，原始素材不足時明確標示。"""
+    """依 yt-dlp 選定的格式說明實際可取得的品質，原始素材不足時明確標示；
+    素材有更高解析度時附上最高解析度，讓使用者知道還有更高畫質可選。"""
     formats = info.get("formats") or []
     requested = info.get("requested_formats") or [info]
     if media_format is MediaFormat.MP4:
@@ -454,9 +455,11 @@ def describe_selection(info: dict, media_format: MediaFormat, quality: str) -> s
         if not chosen:
             return "解析度未知"
         text = f"{int(chosen)}p"
+        available = "、".join(f"{h}p" for h in heights) if heights else "未知"
         if quality != "best" and int(chosen) < int(quality):
-            available = "、".join(f"{h}p" for h in heights) if heights else "未知"
             text += f"（原始素材無 {quality}p，可用解析度：{available}）"
+        elif heights and heights[-1] > int(chosen):
+            text += f"（最高 {heights[-1]}p，可用解析度：{available}）"
         return text
     abr = next((f.get("abr") for f in requested if f.get("abr")), None) or info.get("abr")
     return describe_mp3(quality, abr)
@@ -473,12 +476,14 @@ def describe_mp3(quality: str, source_kbps: float | None) -> str:
 
 
 def describe_result(media: MediaInfo, media_format: MediaFormat, quality: str, selection: str) -> str:
-    """以 FFprobe 實測結果更新品質說明，原始素材低於目標時保留或補上附註。"""
+    """以 FFprobe 實測結果更新品質說明，保留選擇格式時的附註（原始素材不足、最高解析度）。"""
     if media_format is MediaFormat.MP4 and media.height:
         codecs = "/".join(c for c in (media.video_codec, media.audio_codec) if c)
         text = f"{media.height}p" + (f" {codecs}" if codecs else "")
-        if quality != "best" and media.height < int(quality):
-            text += selection[selection.index("（"):] if "（" in selection else f"（原始素材無 {quality}p）"
+        if "（" in selection:
+            text += selection[selection.index("（"):]
+        elif quality != "best" and media.height < int(quality):
+            text += f"（原始素材無 {quality}p）"
         return text
     return selection
 

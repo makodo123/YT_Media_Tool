@@ -380,6 +380,8 @@ def test_single_selection_context_menu_unchanged(window, qtbot):
     (MediaFormat.MP4, "720", "720p h264/aac", "720p"),
     (MediaFormat.MP4, "1080", "1080p vp9/opus", "1080p"),
     (MediaFormat.MP4, "1080", "720p h264/aac（原始素材無 1080p，可用解析度：360p、720p）", "1080p → 720p ⚠"),
+    (MediaFormat.MP4, "720", "720p h264/aac（最高 1080p，可用解析度：360p、720p、1080p）", "720p（最高 1080p）"),
+    (MediaFormat.MP4, "720", "720p（最高 1080p，可用解析度：360p、720p、1080p）", "720p（最高 1080p）"),
     (MediaFormat.MP4, "best", "2160p vp9/opus", "最高可用解析度 → 2160p"),
     (MediaFormat.MP4, "1080", "解析度未知", "1080p → 解析度未知"),
     (MediaFormat.MP3, "192", "MP3 192 kbps（原始音源約 130 kbps，輸出位元率高於原始音源，實際音質不會提升）",
