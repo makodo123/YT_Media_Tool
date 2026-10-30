@@ -210,9 +210,12 @@ class QueueManager:
         return True
 
     def cancel_all(self) -> int:
+        # 先取消等待中的任務，再中斷執行中的任務：否則執行中的任務一結束，
+        # 排程器就可能在輪到它之前啟動下一個等待中的任務
         with self._lock:
-            ids = [t.id for t in self._tasks.values() if not t.status.is_finished]
-        return sum(1 for task_id in ids if self.cancel(task_id))  # type: ignore[arg-type]
+            pending = [t.id for t in self._tasks.values() if t.status is TaskStatus.WAITING]
+            running = [t.id for t in self._tasks.values() if t.status.is_active]
+        return sum(1 for task_id in pending + running if self.cancel(task_id))  # type: ignore[arg-type]
 
     def retry(self, task_id: int) -> bool:
         with self._lock:

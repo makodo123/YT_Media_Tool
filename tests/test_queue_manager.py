@@ -1,3 +1,5 @@
+import time
+
 from yt_media_tool.core.queue_manager import TASK_FINISHED, QueueManager
 from yt_media_tool.core.task_models import MediaFormat, TaskStatus
 
@@ -238,3 +240,21 @@ def test_remove_only_non_running(queue_factory, spec_factory, fake_downloader):
     assert not queue.remove(running.id)
     assert queue.remove(waiting.id)
     fake_downloader.release(BLOCK_1)
+
+
+def test_cancel_all_does_not_start_waiting_tasks(queue_factory, spec_factory, fake_downloader, monkeypatch):
+    """取消執行中的任務後，排程器不得在「全部取消」處理完之前啟動等待中的任務。"""
+    queue = queue_factory(max_concurrent=1)
+    queue.add_tasks([spec_factory(BLOCK_1), spec_factory(URL_A), spec_factory(URL_B)])
+    assert wait_until(lambda: fake_downloader.running == 1)
+    real_cancel = queue.cancel
+
+    def slow_cancel(task_id):
+        result = real_cancel(task_id)
+        time.sleep(0.05)  # 放大競爭視窗：讓執行中任務有時間結束並觸發排程
+        return result
+
+    monkeypatch.setattr(queue, "cancel", slow_cancel)
+    assert queue.cancel_all() == 3
+    assert wait_until(lambda: all(s is TaskStatus.CANCELLED for s in statuses(queue)))
+    assert fake_downloader.started == [BLOCK_1]
