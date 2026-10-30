@@ -6,10 +6,36 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def _mb(size: int) -> str:
+    return f"{size / 1024 / 1024:7.1f} MB"
+
+
+def size_report(dist: Path, top: int = 20) -> str:
+    """列出發行資料夾總大小、_internal 各子項目大小與最大的檔案，供縮小體積時參考。"""
+    files = [p for p in dist.rglob("*") if p.is_file()]
+    total = sum(p.stat().st_size for p in files)
+    internal = dist / "_internal"
+    groups: dict[str, int] = {}
+    for p in files:
+        rel = p.relative_to(internal) if internal in p.parents else p.relative_to(dist)
+        key = rel.parts[0] if internal in p.parents and len(rel.parts) > 1 else str(rel)
+        if internal in p.parents and len(rel.parts) > 2 and rel.parts[0] == "PySide6":
+            key = "/".join(rel.parts[:3]) if rel.parts[1] == "plugins" else "/".join(rel.parts[:2])
+        groups[key] = groups.get(key, 0) + p.stat().st_size
+    lines = [f"總計 {_mb(total)}（{len(files)} 個檔案）", "", "各項目："]
+    for key, size in sorted(groups.items(), key=lambda kv: -kv[1])[:top]:
+        lines.append(f"{_mb(size)}  {key}")
+    lines += ["", "最大的檔案："]
+    for p in sorted(files, key=lambda f: -f.stat().st_size)[:top]:
+        lines.append(f"{_mb(p.stat().st_size)}  {p.relative_to(dist).as_posix()}")
+    return "\n".join(lines)
 
 
 def main(argv: list[str]) -> int:
@@ -38,6 +64,13 @@ def main(argv: list[str]) -> int:
             checks.append(("FFmpeg SHA256 已記錄", bool(info.get("sha256"))))
     if "--expect-deno" in argv:
         checks.append(("隨附 deno", (internal / "deno" / f"deno{suffix}").is_file()))
+
+    if dist.is_dir():
+        report = size_report(dist)
+        print(report)
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            message = report.replace("%", "%25").replace("\n", "%0A")
+            print(f"::notice title=發行資料夾大小::{message}")
 
     ok = True
     for name, passed in checks:
