@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from PySide6.QtCore import QAbstractTableModel, QEvent, QModelIndex, QPersistentModelIndex, QRect, Qt, Signal
 from PySide6.QtGui import QColor, QMouseEvent
 from PySide6.QtWidgets import (
@@ -9,7 +11,7 @@ from PySide6.QtWidgets import (
     QStyleOptionProgressBar, QStyleOptionViewItem, QTableView,
 )
 
-from yt_media_tool.core.task_models import DownloadTask, TaskStatus, format_eta, format_speed
+from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus, format_eta, format_speed
 from yt_media_tool.gui.theme import STATUS_COLORS
 
 COLUMNS = ["編號", "影片名稱", "格式", "品質", "進度", "速度", "剩餘時間", "狀態", "操作"]
@@ -42,11 +44,23 @@ def status_text(task: DownloadTask) -> str:
 
 
 def quality_text(task: DownloadTask) -> str:
-    if task.actual_quality:
-        actual = task.actual_quality.split("（")[0].strip()
-        downgraded = "原始素材無" in task.actual_quality or "高於原始音源" in task.actual_quality
-        marker = " ⚠" if downgraded else ""
-        return f"{task.quality_text} → {actual}{marker}"
+    """品質欄文字：實際品質與目標相同時只顯示一次，低於目標或高於原始音源時加上 ⚠。
+
+    完整說明（編碼、可用解析度、原始音源位元率）見儲存格提示。
+    """
+    actual = task.actual_quality
+    if not actual:
+        return task.quality_text
+    if task.media_format is MediaFormat.MP3:
+        return task.quality_text + (" ⚠" if "高於原始音源" in actual else "")
+    match = re.match(r"(\d+)p", actual)
+    if not match:
+        return f"{task.quality_text} → {actual.split('（')[0].strip()}"
+    height = int(match.group(1))
+    if task.quality == "best":
+        return f"{task.quality_text} → {height}p"
+    if height != int(task.quality):
+        return f"{task.quality_text} → {height}p" + (" ⚠" if height < int(task.quality) else "")
     return task.quality_text
 
 

@@ -176,7 +176,7 @@ def test_progress_updates_reach_table_without_blocking(window, qtbot, fake):
     fake.release(BLOCK)
     qtbot.waitUntil(lambda: model.task_at(0).status is TaskStatus.COMPLETED, timeout=5000)
     assert model.task_at(0).progress == 100
-    assert "720p" in model.data(model.index(0, COL_QUALITY))
+    assert model.data(model.index(0, COL_QUALITY)) == "1080p → 720p ⚠"
     assert "完成 1" in window.overall_label.text()
 
 
@@ -370,3 +370,25 @@ def test_single_selection_context_menu_unchanged(window, qtbot):
     window.table.selectRow(0)
     labels = [a.text() for a in window.build_context_menu(window.table.queue_model.task_at(0)).actions() if a.text()]
     assert "取消" in labels and "從佇列移除（不刪除檔案）" in labels
+
+
+@pytest.mark.parametrize("fmt,quality,actual,expected", [
+    (MediaFormat.MP4, "720", "", "720p"),
+    (MediaFormat.MP4, "720", "720p", "720p"),
+    (MediaFormat.MP4, "720", "720p h264/aac", "720p"),
+    (MediaFormat.MP4, "1080", "1080p vp9/opus", "1080p"),
+    (MediaFormat.MP4, "1080", "720p h264/aac（原始素材無 1080p，可用解析度：360p、720p）", "1080p → 720p ⚠"),
+    (MediaFormat.MP4, "best", "2160p vp9/opus", "最高可用解析度 → 2160p"),
+    (MediaFormat.MP4, "1080", "解析度未知", "1080p → 解析度未知"),
+    (MediaFormat.MP3, "192", "MP3 192 kbps（原始音源約 130 kbps，輸出位元率高於原始音源，實際音質不會提升）",
+     "192 kbps ⚠"),
+    (MediaFormat.MP3, "128", "MP3 128 kbps（原始音源約 130 kbps）", "128 kbps"),
+    (MediaFormat.MP3, "320", "MP3 320 kbps（原始音源位元率未知）", "320 kbps"),
+])
+def test_quality_text_shows_target_once_unless_different(fmt, quality, actual, expected):
+    from yt_media_tool.core.task_models import DownloadTask
+    from yt_media_tool.gui.queue_table import quality_text
+
+    task = DownloadTask(url="https://youtu.be/aaaaaaaaaaa", media_format=fmt, quality=quality,
+                        output_dir="/tmp", actual_quality=actual)
+    assert quality_text(task) == expected
