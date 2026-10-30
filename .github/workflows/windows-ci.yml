@@ -3,7 +3,9 @@ name: Windows CI
 on:
   push:
     branches: [main]
+    paths-ignore: ["**.md", "docs/**"]  # 只修改文件時不重跑
   pull_request:
+    paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
 
 permissions:

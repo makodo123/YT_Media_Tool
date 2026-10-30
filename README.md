@@ -36,19 +36,53 @@ Windows 11 桌面 YouTube 影音下載工具（繁體中文介面、深色主題
 
 ## Windows 安裝與啟動（原始碼）
 
+### 步驟 1：安裝必要工具（只需做一次）
+
+開啟「命令提示字元」或「PowerShell」，執行：
+
 ```bat
-git clone <repository-url> YT_Media_Tool
-cd YT_Media_Tool
+winget install -e --id Python.Python.3.12
+winget install -e --id Git.Git
+```
+
+安裝完成後，**關閉並重新開啟**命令提示字元，讓新安裝的程式生效。
+
+### 步驟 2：下載原始碼
+
+擇一即可：
+
+- **方法 A：使用 Git**（之後可用 `git pull` 取得更新）
+
+  ```bat
+  cd %USERPROFILE%\Documents
+  git clone https://github.com/makodo123/YT_Media_Tool.git
+  cd YT_Media_Tool
+  ```
+
+- **方法 B：不使用 Git**
+  1. 開啟 https://github.com/makodo123/YT_Media_Tool
+  2. 按綠色「Code」按鈕 →「Download ZIP」
+  3. 解壓縮後，在命令提示字元中用 `cd` 切換到解壓縮出來的 `YT_Media_Tool-main` 資料夾
+
+### 步驟 3：建立執行環境（只需做一次）
+
+```bat
 scripts\setup_windows.bat
+```
+
+會建立 `.venv` 虛擬環境並安裝 `requirements-dev.txt` 中的套件（全部固定版本），需要網路，約數分鐘。
+
+### 步驟 4：啟動程式
+
+```bat
 scripts\run_dev.bat
 ```
 
-`setup_windows.bat` 會以 `py -3.12` 建立 `.venv` 並安裝 `requirements-dev.txt`（全部固定版本）。
-若尚未安裝 Python 3.12：`winget install -e --id Python.Python.3.12`。
+### 若程式提示找不到 FFmpeg
 
-開發時若系統沒有 FFmpeg，可擇一：
-- 執行 `powershell -ExecutionPolicy Bypass -File scripts\fetch_ffmpeg.ps1`（放到 `vendor\ffmpeg\bin`，程式會自動找到）
-- `winget install --id Gyan.FFmpeg -e`
+擇一：
+- 執行 `powershell -ExecutionPolicy Bypass -File scripts\fetch_ffmpeg.ps1`（放到 `vendor\ffmpeg\bin`，程式會自動找到；需先在 `packaging\ffmpeg_manifest.json` 填入 SHA256，詳見下方「FFmpeg 部署方式」）
+- `winget install -e --id Gyan.FFmpeg`，安裝後重新啟動程式
 - 在程式「工具 → 設定 → FFmpeg 資料夾」指定含 `ffmpeg.exe`、`ffprobe.exe` 的資料夾
 
 ## 打包 EXE
