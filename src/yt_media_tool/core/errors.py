@@ -40,12 +40,13 @@ _COOKIE_MESSAGE = (
 _YTDLP_PATTERNS: list[tuple[str, str]] = [
     (r"DRM", "此內容受 DRM 數位版權保護，本工具不支援下載。"),
     (r"Private video", "這是私人影片，無法下載。"),
-    (r"members[- ]only|Join this channel", "這是頻道會員專屬內容，無法下載。"),
+    (r"members[- ]only|Join this channel",
+     "這是頻道會員專屬內容。若您是該頻道會員，可到「設定 → YouTube 登入資訊」使用該帳號的登入資訊後重試。"),
     (r"Sign in to confirm your age|age[- ]restricted|inappropriate for some users",
-     "此影片有年齡限制，需要登入才能觀看，本工具無法下載。"),
+     "此影片有年齡限制，需要登入才能觀看。可到「設定 → YouTube 登入資訊」使用已登入 YouTube 的帳號後重試。"),
     (r"Sign in to confirm you.?re not a bot",
-     "YouTube 要求登入以確認不是機器人。可到「設定 → YouTube 登入資訊」選擇已登入 YouTube 的瀏覽器"
-     "或 cookies.txt 後重試；若已設定，cookies 可能已過期，請在瀏覽器重新登入 YouTube 或重新匯出。"
+     "YouTube 要求登入以確認不是機器人。可到「設定 → YouTube 登入資訊」選擇已登入 YouTube 的 Firefox"
+     "或 cookies.txt 後重試；若已設定，登入資訊可能已過期，請重新登入 YouTube 或重新匯出 cookies.txt。"
      "也可更換網路（例如關閉 VPN）後再試。"),
     (r"not available in your country|geo.?restrict|blocked it in your country",
      "此影片在您所在的地區無法觀看。"),

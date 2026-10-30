@@ -36,10 +36,8 @@ def actions_for(task: DownloadTask) -> list[str]:
 def status_text(task: DownloadTask) -> str:
     if task.cancel_requested and not task.status.is_finished:
         return "取消中…"
-    if task.status is TaskStatus.PROCESSING and task.stage:
-        return f"轉檔中（{task.stage}）"
-    if task.status is TaskStatus.DOWNLOADING and task.stage and task.stage != "下載中":
-        return f"下載中（{task.stage}）"
+    if task.status.is_active and task.stage:
+        return task.stage  # 例如「取得影片資訊中」「影音合併中」「MP3 轉檔中」
     return task.status.label
 
 

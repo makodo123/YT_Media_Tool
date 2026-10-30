@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +32,7 @@ from yt_media_tool.gui.qt_bridge import QueueEventBridge
 from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RETRY, QueueTableView
 from yt_media_tool.gui.settings_dialog import SettingsDialog
 from yt_media_tool.gui.workers import BackgroundJob
+from yt_media_tool.storage.settings import AppSettings
 from yt_media_tool.utils import system_open
 
 log = logging.getLogger(__name__)
@@ -231,11 +233,17 @@ class MainWindow(QMainWindow):
         self._update_queue_controls()
 
     # ================= 設定 =================
-    def _apply_settings_to_ui(self) -> None:
+    def _apply_settings_to_ui(self, previous: AppSettings | None = None) -> None:
+        """套用設定到主視窗；有 previous 時只更新有變更的項目，保留使用者在主視窗目前的選擇。"""
         s = self.ctx.settings
-        (self.mp3_radio if s.default_format == MediaFormat.MP3.value else self.mp4_radio).setChecked(True)
-        self._refresh_quality_combo()
-        self.folder_edit.setText(s.download_dir)
+        format_changed = previous is None or s.default_format != previous.default_format
+        if format_changed:
+            (self.mp3_radio if s.default_format == MediaFormat.MP3.value else self.mp4_radio).setChecked(True)
+        fmt = self.selected_format()
+        if format_changed or s.default_quality_for(fmt) != previous.default_quality_for(fmt):  # type: ignore[union-attr]
+            self._refresh_quality_combo()
+        if previous is None or s.download_dir != previous.download_dir:
+            self.folder_edit.setText(s.download_dir)
 
     def selected_format(self) -> MediaFormat:
         return MediaFormat.MP3 if self.mp3_radio.isChecked() else MediaFormat.MP4
@@ -255,8 +263,9 @@ class MainWindow(QMainWindow):
     def open_settings(self) -> None:
         dialog = SettingsDialog(self.ctx.settings, self)
         if dialog.exec():
+            previous = self.ctx.settings
             self.ctx.apply_settings(dialog.result_settings())
-            self._apply_settings_to_ui()
+            self._apply_settings_to_ui(previous)
             self._refresh_dependency_banner()
             self.statusBar().showMessage("設定已儲存", 4000)
 
@@ -340,7 +349,11 @@ class MainWindow(QMainWindow):
         except OSError as exc:
             QMessageBox.warning(self, "下載資料夾", f"無法使用此資料夾：\n{folder}\n\n{explain_error(exc)}")
             return None
-        return str(Path(folder))
+        folder = str(Path(folder))
+        if folder != self.ctx.settings.download_dir:
+            # 記住使用者選的資料夾，下次開啟程式時沿用
+            self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, download_dir=folder))
+        return folder
 
     def add_from_input(self) -> None:
         if self._busy_expanding:
@@ -644,9 +657,10 @@ class MainWindow(QMainWindow):
         progress = queue.progress()
         self.overall_bar.setValue(int(progress.percent * 10))
         state = "（已暫停）" if queue.is_paused else ""
+        waiting = progress.total - progress.finished - progress.active
         self.overall_label.setText(
-            f"共 {progress.total} 筆：完成 {progress.completed}、失敗 {progress.failed}、"
-            f"取消 {progress.cancelled}、進行中 {progress.active}{state}")
+            f"共 {progress.total} 筆：進行中 {progress.active}、等待 {waiting}、完成 {progress.completed}、"
+            f"失敗 {progress.failed}、取消 {progress.cancelled}{state}")
         tasks = self.table.queue_model.tasks()
         total_speed = sum(t.speed or 0 for t in tasks if t.status.is_active)
         self.speed_label.setText(f"總下載速度：{format_speed(total_speed)}" if total_speed else "")
@@ -663,8 +677,11 @@ class MainWindow(QMainWindow):
         if task is None:
             self.details.clear()
             return
-        lines = [
-            f"影片名稱：{task.display_title}",
+        lines = [f"影片名稱：{task.display_title}"]
+        failed = task.status is TaskStatus.FAILED and task.error_message
+        if failed:
+            lines += ["", "失敗原因：", task.error_message, ""]
+        lines += [
             f"網址：{task.url}",
             f"格式 / 目標品質：{task.media_format.label} {task.quality_text}",
         ]
@@ -675,10 +692,8 @@ class MainWindow(QMainWindow):
         lines.append(f"建立時間：{_local_time(task.created_at)}　嘗試次數：{task.attempts}")
         if task.completed_at:
             lines.append(f"完成時間：{_local_time(task.completed_at)}")
-        if task.error_message:
-            lines.append("")
-            lines.append("訊息：" if task.status is not TaskStatus.FAILED else "錯誤詳細資訊：")
-            lines.append(task.error_message)
+        if task.error_message and not failed:
+            lines += ["", "訊息：", task.error_message]
         self.details.setPlainText("\n".join(lines))
 
     # ================= 啟動與關閉 =================

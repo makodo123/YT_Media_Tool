@@ -30,12 +30,12 @@ class TaskStatus(str, Enum):
 
 
 STATUS_LABELS = {
-    TaskStatus.WAITING: "等待",
+    TaskStatus.WAITING: "等待中",
     TaskStatus.DOWNLOADING: "下載中",
     TaskStatus.PROCESSING: "轉檔中",
-    TaskStatus.COMPLETED: "完成",
+    TaskStatus.COMPLETED: "已完成",
     TaskStatus.FAILED: "失敗",
-    TaskStatus.CANCELLED: "取消",
+    TaskStatus.CANCELLED: "已取消",
 }
 
 # 合法的狀態轉換

@@ -70,7 +70,7 @@ class HistoryDialog(QDialog):
             values = [_local_time(row["finished_at"]), row["title"] or row["url"], fmt_text, quality, status, detail]
             for c, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
-                item.setToolTip(str(value) if c != 1 else f"{row['title']}\n{row['url']}")
+                item.setToolTip(str(value) if c != 1 else "\n".join(filter(None, (row["title"], row["url"]))))
                 self.table.setItem(r, c, item)
 
     def _clear(self) -> None:

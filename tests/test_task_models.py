@@ -56,7 +56,7 @@ def test_invalid_quality_rejected():
 
 
 def test_status_labels_are_traditional_chinese():
-    assert [s.label for s in TaskStatus] == ["等待", "下載中", "轉檔中", "完成", "失敗", "取消"]
+    assert [s.label for s in TaskStatus] == ["等待中", "下載中", "轉檔中", "已完成", "失敗", "已取消"]
 
 
 def test_format_helpers():

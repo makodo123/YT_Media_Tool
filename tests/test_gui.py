@@ -172,7 +172,7 @@ def test_progress_updates_reach_table_without_blocking(window, qtbot, fake):
     model = window.table.queue_model
     qtbot.waitUntil(lambda: model.task_at(0) and model.task_at(0).status is TaskStatus.DOWNLOADING, timeout=5000)
     qtbot.waitUntil(lambda: model.task_at(0).progress > 5, timeout=5000)
-    assert "下載中" in model.data(model.index(0, COL_STATUS))
+    assert model.data(model.index(0, COL_STATUS)) in ("準備中", "下載中")  # 狀態欄顯示目前階段
     fake.release(BLOCK)
     qtbot.waitUntil(lambda: model.task_at(0).status is TaskStatus.COMPLETED, timeout=5000)
     assert model.task_at(0).progress == 100
@@ -396,3 +396,75 @@ def test_quality_text_shows_target_once_unless_different(fmt, quality, actual, e
     task = DownloadTask(url="https://youtu.be/aaaaaaaaaaa", media_format=fmt, quality=quality,
                         output_dir="/tmp", actual_quality=actual)
     assert quality_text(task) == expected
+
+
+@pytest.mark.parametrize(("status", "stage", "expected"), [
+    (TaskStatus.PROCESSING, "MP3 轉檔中", "MP3 轉檔中"),
+    (TaskStatus.PROCESSING, "", "轉檔中"),
+    (TaskStatus.DOWNLOADING, "取得影片資訊中", "取得影片資訊中"),
+    (TaskStatus.DOWNLOADING, "下載中", "下載中"),
+    (TaskStatus.WAITING, "", "等待中"),
+    (TaskStatus.CANCELLED, "", "已取消"),
+])
+def test_status_text_does_not_repeat_stage(status, stage, expected):
+    from yt_media_tool.core.task_models import DownloadTask
+    from yt_media_tool.gui.queue_table import status_text
+
+    task = DownloadTask(url="https://youtu.be/aaaaaaaaaaa", media_format=MediaFormat.MP4, quality="1080",
+                        output_dir="/tmp", status=status, stage=stage)
+    assert status_text(task) == expected
+
+
+def test_overall_label_counts_waiting_tasks(window):
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa\nhttps://youtu.be/bbbbbbbbbbb")
+    window.add_from_input()
+    assert "共 2 筆：進行中 0、等待 2、" in window.overall_label.text()
+
+
+def test_failed_reason_shown_first_in_details(window, qtbot):
+    task = window.ctx.queue.add_tasks([TaskSpec(url="https://youtu.be/aaaaaaaaaaa", media_format=MediaFormat.MP4,
+                                                quality="1080", output_dir=window.folder_edit.text())])[0]
+    task.status, task.error_message = TaskStatus.FAILED, "這是私人影片，無法下載。"
+    window.table.queue_model.upsert(task)
+    window.table.selectRow(0)
+    window._update_details()
+    lines = window.details.toPlainText().splitlines()
+    assert lines[2:4] == ["失敗原因：", "這是私人影片，無法下載。"]
+
+
+def test_saving_settings_keeps_current_choices(window, monkeypatch, tmp_path):
+    import dataclasses
+
+    import yt_media_tool.gui.main_window as main_window
+
+    window.mp3_radio.setChecked(True)
+    window.quality_combo.setCurrentIndex(window.quality_combo.findData("320"))
+    window.folder_edit.setText(str(tmp_path / "chosen"))
+
+    class FakeDialog:
+        def __init__(self, settings, parent):
+            self.settings = settings
+
+        def exec(self):
+            return True
+
+        def result_settings(self):
+            return dataclasses.replace(self.settings, max_concurrent=3)
+
+    monkeypatch.setattr(main_window, "SettingsDialog", FakeDialog)
+    window.open_settings()
+    assert window.selected_format() is MediaFormat.MP3
+    assert window.quality_combo.currentData() == "320"
+    assert window.folder_edit.text() == str(tmp_path / "chosen")
+    assert window.ctx.settings.max_concurrent == 3
+
+
+def test_download_folder_is_remembered(window, tmp_path, db_path):
+    from yt_media_tool.storage.settings import SettingsStore
+
+    chosen = tmp_path / "my videos"
+    window.folder_edit.setText(str(chosen))
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    window.add_from_input()
+    assert window.ctx.settings.download_dir == str(chosen)
+    assert SettingsStore(window.ctx.db).load().download_dir == str(chosen)

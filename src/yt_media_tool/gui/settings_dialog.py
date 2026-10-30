@@ -98,11 +98,12 @@ class SettingsDialog(QDialog):
         # 檔案欄一直可用；選擇或輸入檔案時自動把來源切換為「cookies.txt 檔案」
         self.cookies_file.textEdited.connect(self._on_cookie_file_edited)
         cookies_note = QLabel(
-            "僅在 YouTube 要求「登入以確認不是機器人」時才需要開啟。會使用你在該瀏覽器中 YouTube 帳號的登入狀態；"
+            "一般不需要設定。只有在 YouTube 要求「登入以確認不是機器人」，或影片需要登入才能觀看"
+            "（例如年齡限制、會員專屬）時才使用；程式會以您的 YouTube 帳號登入狀態下載。"
             "yt-dlp 官方提醒帳號可能因此被 YouTube 限制，建議使用次要帳號。\n"
-            "• Firefox：直接讀取，最穩定。\n"
-            "• cookies.txt：以瀏覽器擴充功能匯出後指定（Chrome / Edge 請用此方式，新版的加密讓程式無法直接讀取），"
-            "程式只使用副本，不會修改原檔。\n"
+            "• Firefox：先在 Firefox 登入 YouTube，程式會直接讀取，最穩定。\n"
+            "• cookies.txt：用瀏覽器擴充功能匯出後在此指定（Chrome / Edge 請用這個方式，"
+            "因為新版的加密讓程式無法直接讀取）；程式只使用副本，不會修改原檔。\n"
             "本程式不會另外保存、記錄或傳送 cookies 內容。")
         cookies_note.setObjectName("hintLabel")
         cookies_note.setWordWrap(True)
