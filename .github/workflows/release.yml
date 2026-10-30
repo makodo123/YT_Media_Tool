@@ -4,7 +4,7 @@ name: Release
 #   1. GitHub 網頁：Actions → Release → Run workflow，輸入版本標籤（例如 v2.0.0）
 #   2. 推送版本標籤：git tag v2.0.0 && git push origin v2.0.0
 #   3. 推送 release/<標籤> 分支：git push origin HEAD:release/v2.0.0
-# 流程：Windows 上執行完整測試 → 打包隨附 FFmpeg 與 Deno 的 EXE → 實際啟動檢查 → 建立 GitHub Release
+# 流程：Windows 上執行完整測試 → 打包隨附 FFmpeg 與 Deno 的 EXE → 實際啟動檢查 → 建立並測試安裝程式 → 建立 GitHub Release
 #（標籤不存在時由 GitHub 於本次 commit 建立）。標籤含「-」（例如 -beta.1）時發佈為「預先發行版本」。
 on:
   push:
@@ -85,20 +85,31 @@ jobs:
         shell: pwsh
         run: ./scripts/ci_run.ps1 -Title "build_exe" -Command "scripts\build_exe.bat --skip-tests"
 
+      - name: 安裝 Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: 建立安裝程式
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "build_installer" -Command ".venv\Scripts\python.exe scripts\build_installer.py"
+
+      - name: 安裝 / 啟動 / 解除安裝測試
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "verify_installer" -Command ".venv\Scripts\python.exe scripts\verify_installer.py"
+
       - name: 建立 GitHub Release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:RELEASE_TAG
-          $files = Get-ChildItem dist -File | Where-Object { $_.Name -like "YT_Media_Tool-*-win64.zip*" } | ForEach-Object FullName
-          if ($files.Count -lt 2) { Write-Output "::error::找不到發行檔"; exit 1 }
+          $files = Get-ChildItem dist -File | Where-Object { $_.Name -like "YT_Media_Tool-*-win64*" } | ForEach-Object FullName
+          if ($files.Count -lt 4) { Write-Output "::error::發行檔不齊全（需要 zip、安裝程式與兩個 .sha256）：$($files -join ', ')"; exit 1 }
           $notes = Get-Content docs/RELEASE_NOTES.md -Raw -Encoding UTF8
           $extra = @()
           if ($tag.Contains("-")) {
             $notes = "> ⚠ **預先發行版本**：已通過自動化測試與 Windows 打包啟動檢查，尚未完成實機 YouTube 下載驗證。`n`n" + $notes
             $extra += "--prerelease"
           }
-          $notes = "## 下載`n`n下載下方的 ``YT_Media_Tool-*-win64.zip``，解壓縮後執行 ``YT_Media_Tool\YT_Media_Tool.exe``。`n`n" + $notes
+          $notes = "## 下載`n`n- **安裝版（建議）**：下載 ``YT_Media_Tool-*-win64-setup.exe`` 並執行，會建立開始功能表與桌面捷徑，可從「設定 → 應用程式」解除安裝。`n- **免安裝版**：下載 ``YT_Media_Tool-*-win64.zip``，解壓縮後執行 ``YT_Media_Tool\YT_Media_Tool.exe``。`n`n" + $notes
           Set-Content -Path release_notes.md -Value $notes -Encoding UTF8
           gh release create $tag @files --title "YT Media Tool $tag" --notes-file release_notes.md --target $env:GITHUB_SHA @extra

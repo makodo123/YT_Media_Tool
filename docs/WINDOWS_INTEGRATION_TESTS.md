@@ -104,3 +104,17 @@
 | H6 | 下載中檢查 `<下載資料夾>\.ytmt_tmp\task_*\cookies.txt` | 存在副本；任務結束後連同暫存資料夾刪除 |
 | H7 | 刪除 H5 指定的 cookies.txt 後下載 | 失敗並提示「找不到 cookies 檔案」與設定位置 |
 | H8 | 檢查 `%LOCALAPPDATA%\YT_Media_Tool\logs\yt_media_tool.log` | 日誌中沒有 cookies 內容（例如 SID 值） |
+
+## I. 安裝程式
+
+| # | 步驟 | 預期結果 |
+|---|---|---|
+| I1 | 以一般使用者執行 `*-win64-setup.exe`，全部使用預設值 | 安裝精靈為繁體中文、顯示使用聲明；不要求系統管理員權限；安裝到 `%LOCALAPPDATA%\Programs\YT Media Tool` |
+| I2 | 勾選「建立桌面捷徑」完成安裝，勾選「執行」 | 程式自動開啟；開始功能表與桌面都有「YT Media Tool」捷徑 |
+| I3 | 安裝時選擇「為所有使用者安裝」 | 要求系統管理員權限；安裝到 `C:\Program Files\YT Media Tool` |
+| I4 | 程式開啟中時執行安裝程式（升級） | 提示程式正在執行、要求關閉後再繼續 |
+| I5 | 安裝舊版後再安裝新版 | 覆蓋安裝成功；設定、cookies 設定與佇列保留；「應用程式」清單顯示新版本號 |
+| I6 | 「設定 → 應用程式」解除安裝，詢問時選「否」 | 程式與捷徑移除；`%LOCALAPPDATA%\YT_Media_Tool` 保留；已下載的檔案不受影響 |
+| I7 | 重新安裝後解除安裝，詢問時選「是」 | `%LOCALAPPDATA%\YT_Media_Tool` 被刪除；下載資料夾中的影片仍在 |
+| I8 | 檢查安裝檔內容 → 詳細資料 | 顯示產品名稱與版本號；（未簽章時 SmartScreen 會警示，屬預期） |
+

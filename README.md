@@ -17,11 +17,25 @@ Windows 10 / 11 桌面 YouTube 影音下載工具，採繁體中文介面與深�
 
 ## 下載即用（一般使用者）
 
-1. 到 [Releases](https://github.com/makodo123/YT_Media_Tool/releases/latest) 下載最新的 `YT_Media_Tool-<版本>-win64.zip`
+到 [Releases](https://github.com/makodo123/YT_Media_Tool/releases/latest) 下載最新版本，以下兩種擇一：
+
+**安裝版（建議）**
+
+1. 下載 `YT_Media_Tool-<版本>-win64-setup.exe` 並執行
+2. 依畫面指示安裝：預設只為目前使用者安裝，不需要系統管理員權限；也可以選擇為所有使用者安裝到 Program Files
+3. 從開始功能表或桌面捷徑開啟「YT Media Tool」
+
+- 升級：直接執行新版安裝程式即可覆蓋安裝，設定與佇列會保留。
+- 解除安裝：「設定 → 應用程式 → 已安裝的應用程式 → YT Media Tool」。會詢問是否一併刪除設定與紀錄；
+  已下載的影片與音樂一律不會被刪除。
+
+**免安裝版**
+
+1. 下載 `YT_Media_Tool-<版本>-win64.zip`
 2. 解壓縮到任意資料夾（例如 `D:\Apps\YT_Media_Tool`）
 3. 執行 `YT_Media_Tool\YT_Media_Tool.exe`
 
-不需要另外安裝 Python 或 FFmpeg（已隨附）。首次執行若出現 SmartScreen 警告（程式未經數位簽章），
+兩種版本都不需要另外安裝 Python 或 FFmpeg（已隨附）。首次執行若出現 SmartScreen 警告（程式未經數位簽章），
 請按「其他資訊」→「仍要執行」。
 
 以下「Windows 安裝與啟動（原始碼）」之後的段落僅供開發者參考。
@@ -137,18 +151,40 @@ dist/
 │       ├── ffmpeg/   ffmpeg.exe、ffprobe.exe、FFmpeg 的 DLL、LICENSE、VERSION.json（版本 / 來源 / SHA256）
 │       ├── deno/     deno.exe、LICENSE
 │       └── …         Python、Qt、yt-dlp 等
-├── YT_Media_Tool-2.0.0-win64.zip
-└── YT_Media_Tool-2.0.0-win64.zip.sha256
+├── YT_Media_Tool-<版本>-win64.zip
+├── YT_Media_Tool-<版本>-win64.zip.sha256
+├── YT_Media_Tool-<版本>-win64-setup.exe          （執行 build_installer.bat 後）
+└── YT_Media_Tool-<版本>-win64-setup.exe.sha256
 ```
 
 也可以手動執行：`.venv\Scripts\python -m PyInstaller --noconfirm --clean packaging\yt_media_tool.spec`
 （設定環境變數 `YTMT_BUNDLE_FFMPEG=0` 或 `YTMT_BUNDLE_DENO=0` 可停用對應元件的隨附）。
 
+### 建立安裝程式
+
+先完成上面的打包，再執行：
+
+```bat
+winget install -e --id JRSoftware.InnoSetup
+scripts\build_installer.bat
+```
+
+會以 `packaging\installer.iss`（Inno Setup 6.5 以上）產生 `dist\YT_Media_Tool-<版本>-win64-setup.exe` 與 `.sha256`。
+
+- 預設只為目前使用者安裝（`%LOCALAPPDATA%\Programs\YT Media Tool`），可改為所有使用者（Program Files）。
+- 建立開始功能表捷徑，桌面捷徑可選；安裝精靈為繁體中文，並顯示使用聲明。
+- 升級時先清除舊版 `_internal` 再安裝；程式執行中時會提示關閉（透過程式建立的 mutex 偵測）。
+- 解除安裝時詢問是否刪除 `%LOCALAPPDATA%\YT_Media_Tool`（設定、佇列、歷史、日誌）；靜默解除安裝時預設保留。
+- CI 會以 `scripts\verify_installer.py` 實際靜默安裝、啟動、用隨附 FFmpeg 轉檔，再解除安裝，
+  並確認捷徑與「應用程式」清單登錄都有建立與移除。
+
 ### 發布新版本到 GitHub Releases
 
-1. 更新 `src/yt_media_tool/__init__.py` 與 `scripts/build_exe.bat` 中的版本號，推送到 `main`。
+1. 更新 `src/yt_media_tool/__init__.py`、`scripts/build_exe.bat` 與 `pyproject.toml` 中的版本號，推送到 `main`
+   （EXE 與安裝程式的版本資訊會自動取用 `__init__.py` 的版本號；測試會檢查三者一致）。
 2. 等待該次推送的 Windows CI 全部通過。
-3. 以下列任一方式觸發 `.github/workflows/release.yml`，它會在 Windows 上自動測試、打包（隨附 FFmpeg 與 Deno）並建立 Release：
+3. 以下列任一方式觸發 `.github/workflows/release.yml`，它會在 Windows 上自動測試、打包（隨附 FFmpeg 與 Deno）、
+   建立並測試安裝程式，再建立 Release（附上 zip、安裝程式與兩者的 `.sha256`）：
    - **GitHub 網頁**：Actions → Release → Run workflow，輸入標籤（例如 `v2.0.1`）
    - **推送標籤**：
 
@@ -253,9 +289,11 @@ YT_Media_Tool/
 │       ├── win_job.py              Windows Job Object：程式結束時終止 ffmpeg 等子程序
 │       └── logging_utils.py        日誌
 ├── tests/                          pytest（單元、GUI、離線整合）
-├── scripts/                        setup_windows.bat、run_dev.bat、build_exe.bat、fetch_ffmpeg.ps1、
-│                                   verify_dist.py、make_release_zip.py、ci_run.ps1、junit_annotations.py、make_icon.py
-├── packaging/                      yt_media_tool.spec、ffmpeg_manifest.json、version_info.txt
+├── scripts/                        setup_windows.bat、run_dev.bat、build_exe.bat、build_installer.bat / .py、
+│                                   fetch_ffmpeg.ps1、verify_dist.py、verify_installer.py、make_release_zip.py、
+│                                   ci_run.ps1、junit_annotations.py、make_icon.py
+├── packaging/                      yt_media_tool.spec、version_info.txt（範本）、ffmpeg_manifest.json、
+│                                   installer.iss、installer_notice.txt、ChineseTraditional.isl
 ├── .github/workflows/              windows-ci.yml、release.yml、ffmpeg-verify.yml、ffmpeg-candidates.yml
 ├── assets/                         app.ico、app.png
 └── docs/                           WINDOWS_INTEGRATION_TESTS.md、RELEASE_NOTES.md
@@ -291,8 +329,8 @@ set QT_QPA_PLATFORM=offscreen
 - 測試完全不連線 YouTube。`tests/integration/` 以本機 HTTP 伺服器提供測試影片，實際執行 yt-dlp 與 FFmpeg
   （需要 FFmpeg；找不到時會自動略過）。
 - GitHub Actions（`.github/workflows/windows-ci.yml`）會在 `windows-latest` 上執行 ruff 與完整 pytest（含 FFmpeg 整合測試），
-  再以與 Release 相同的流程打包（隨附 FFmpeg 與 Deno）、用發行資料夾中的 FFmpeg 實際轉檔並啟動 EXE；
-  產出的 zip 可在該次執行的 Artifacts 下載。
+  再以與 Release 相同的流程打包（隨附 FFmpeg 與 Deno）、用發行資料夾中的 FFmpeg 實際轉檔並啟動 EXE，
+  接著建立安裝程式並實際安裝 / 啟動 / 解除安裝；產出的 zip 與安裝程式可在該次執行的 Artifacts 下載。
 - Windows 實機整合測試清單：[`docs/WINDOWS_INTEGRATION_TESTS.md`](docs/WINDOWS_INTEGRATION_TESTS.md)
 
 ## 授權

@@ -86,3 +86,10 @@ def test_job_object_is_noop_off_windows(monkeypatch):
 
     monkeypatch.setattr(win_job.sys, "platform", "linux")
     assert win_job.kill_children_on_exit() is False
+
+
+def test_app_mutex_is_noop_off_windows(monkeypatch):
+    from yt_media_tool.utils import win_job
+
+    monkeypatch.setattr(win_job.sys, "platform", "linux")
+    assert win_job.create_app_mutex() is False

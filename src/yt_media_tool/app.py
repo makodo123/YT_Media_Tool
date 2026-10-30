@@ -8,7 +8,7 @@ import sys
 from yt_media_tool import APP_DISPLAY_NAME, APP_ID, __version__
 from yt_media_tool.utils import paths
 from yt_media_tool.utils.logging_utils import setup_logging
-from yt_media_tool.utils.win_job import kill_children_on_exit
+from yt_media_tool.utils.win_job import create_app_mutex, kill_children_on_exit
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ def main(argv: list[str] | None = None) -> int:
     argv = [a for a in argv if a != "--smoke-test"]
     log_path = setup_logging()
     kill_children_on_exit()
+    create_app_mutex()
     log.info("%s %s 啟動（frozen=%s），資料目錄：%s", APP_DISPLAY_NAME, __version__, paths.is_frozen(),
              paths.app_data_dir())
 

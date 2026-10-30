@@ -16,6 +16,7 @@
 
 import json
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -26,6 +27,18 @@ ROOT = Path(SPECPATH).resolve().parent
 EXE_SUFFIX = ".exe" if sys.platform.startswith("win") else ""
 BUNDLE_FFMPEG = os.environ.get("YTMT_BUNDLE_FFMPEG", "1") != "0"
 BUNDLE_DENO = os.environ.get("YTMT_BUNDLE_DENO", "1") != "0"
+
+# 版本號唯一來源：src/yt_media_tool/__init__.py；EXE 版本資源由範本產生，避免與程式版本不一致
+APP_VERSION = re.search(r'__version__\s*=\s*"([^"]+)"',
+                        (ROOT / "src" / "yt_media_tool" / "__init__.py").read_text(encoding="utf-8")).group(1)
+_version_numbers = [int(part) for part in re.findall(r"\d+", APP_VERSION)[:3]]
+_version_tuple = tuple(_version_numbers + [0] * (4 - len(_version_numbers)))
+VERSION_FILE = Path(workpath) / "version_info.txt"
+VERSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+VERSION_FILE.write_text(
+    (ROOT / "packaging" / "version_info.txt").read_text(encoding="utf-8")
+    .replace("$VERSION_TUPLE$", repr(_version_tuple)).replace("$VERSION$", APP_VERSION),
+    encoding="utf-8")
 
 datas = [
     (str(ROOT / "assets" / "app.ico"), "assets"),
@@ -119,7 +132,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     icon=str(ROOT / "assets" / "app.ico"),
-    version=str(ROOT / "packaging" / "version_info.txt") if sys.platform.startswith("win") else None,
+    version=str(VERSION_FILE) if sys.platform.startswith("win") else None,
 )
 coll = COLLECT(
     exe,

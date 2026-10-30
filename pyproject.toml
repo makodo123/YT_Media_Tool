@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "yt-media-tool"
-version = "2.0.0"
+version = "2.1.0"
 description = "YT Media Tool V2.0 — Windows 11 桌面 YouTube 影音下載工具（PySide6 + yt-dlp + FFmpeg）"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"

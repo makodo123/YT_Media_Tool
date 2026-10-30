@@ -76,3 +76,29 @@ def kill_children_on_exit() -> bool:
     except Exception:  # 失敗時僅記錄，不影響程式啟動
         log.warning("無法建立 Windows Job Object，關閉時可能殘留 ffmpeg 子程序", exc_info=True)
         return False
+
+
+APP_MUTEX_NAME = "YTMediaTool_AppMutex"  # 須與 packaging/installer.iss 的 AppMutex 相同
+_mutex_handle = None
+
+
+def create_app_mutex(name: str = APP_MUTEX_NAME) -> bool:
+    """建立具名 mutex，讓安裝 / 解除安裝程式能偵測程式是否仍在執行並提示使用者關閉。"""
+    global _mutex_handle
+    if not sys.platform.startswith("win") or _mutex_handle is not None:
+        return _mutex_handle is not None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR]
+        handle = kernel32.CreateMutexW(None, False, name)
+        if not handle:
+            raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
+        _mutex_handle = handle  # 保持 handle 直到程序結束
+        return True
+    except Exception:
+        log.warning("無法建立程式 mutex，安裝程式將無法偵測程式是否執行中", exc_info=True)
+        return False

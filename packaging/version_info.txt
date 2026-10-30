@@ -1,16 +1,17 @@
 # PyInstaller Windows 版本資源（顯示於檔案內容 → 詳細資料）
+# 範本：$VERSION$ / $VERSION_TUPLE$ 由 yt_media_tool.spec 依 src/yt_media_tool/__init__.py 的版本號填入
 VSVersionInfo(
-  ffi=FixedFileInfo(filevers=(2, 0, 0, 0), prodvers=(2, 0, 0, 0), mask=0x3f, flags=0x0, OS=0x40004,
+  ffi=FixedFileInfo(filevers=$VERSION_TUPLE$, prodvers=$VERSION_TUPLE$, mask=0x3f, flags=0x0, OS=0x40004,
                     fileType=0x1, subtype=0x0, date=(0, 0)),
   kids=[
     StringFileInfo([StringTable('040404B0', [
       StringStruct('CompanyName', 'YT Media Tool'),
       StringStruct('FileDescription', 'YT Media Tool V2.0'),
-      StringStruct('FileVersion', '2.0.0'),
+      StringStruct('FileVersion', '$VERSION$'),
       StringStruct('InternalName', 'YT_Media_Tool'),
       StringStruct('OriginalFilename', 'YT_Media_Tool.exe'),
       StringStruct('ProductName', 'YT Media Tool'),
-      StringStruct('ProductVersion', '2.0.0')])]),
+      StringStruct('ProductVersion', '$VERSION$')])]),
     VarFileInfo([VarStruct('Translation', [0x0404, 1200])])
   ]
 )

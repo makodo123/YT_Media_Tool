@@ -1,13 +1,19 @@
-# YT Media Tool V2.0.0 發行說明
+# YT Media Tool 發行說明
 
 ## 安裝
 
-1. 解壓縮 `YT_Media_Tool-2.0.0-win64.zip`（可用 `.sha256` 檔案核對完整性：
-   PowerShell 執行 `Get-FileHash YT_Media_Tool-2.0.0-win64.zip`）。
-2. 執行 `YT_Media_Tool\YT_Media_Tool.exe`。不需安裝 Python。
-3. 首次啟動若出現 SmartScreen 警告（EXE 未經程式碼簽章），請確認來源後選擇「仍要執行」。
+**安裝版（建議）**：執行 `YT_Media_Tool-<版本>-win64-setup.exe`。
 
-資料庫、設定與日誌存放於 `%LOCALAPPDATA%\YT_Media_Tool`；移除程式時刪除程式資料夾與該資料夾即可。
+- 預設只為目前使用者安裝，不需要系統管理員權限；也可選擇為所有使用者安裝。
+- 會建立開始功能表捷徑（桌面捷徑可選）。升級時直接執行新版安裝程式即可，設定與佇列會保留。
+- 解除安裝：「設定 → 應用程式 → 已安裝的應用程式 → YT Media Tool」。會詢問是否一併刪除設定與紀錄；
+  已下載的影片與音樂一律不會被刪除。
+
+**免安裝版**：解壓縮 `YT_Media_Tool-<版本>-win64.zip`，執行 `YT_Media_Tool\YT_Media_Tool.exe`。
+移除時刪除程式資料夾，以及 `%LOCALAPPDATA%\YT_Media_Tool`（設定與紀錄）即可。
+
+兩種版本都不需要安裝 Python 或 FFmpeg。可用 `.sha256` 檔案核對完整性（PowerShell：`Get-FileHash <檔名>`）。
+首次啟動若出現 SmartScreen 警告（未經程式碼簽章），請確認來源後選擇「其他資訊」→「仍要執行」。
 
 ## 主要功能
 

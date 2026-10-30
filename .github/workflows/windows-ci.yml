@@ -59,7 +59,7 @@ jobs:
           retention-days: 14
 
   build:
-    name: 打包 EXE（隨附 FFmpeg 與 Deno）
+    name: 打包 EXE 與安裝程式（隨附 FFmpeg 與 Deno）
     needs: test
     runs-on: windows-latest
     timeout-minutes: 30
@@ -86,6 +86,17 @@ jobs:
         shell: pwsh
         run: ./scripts/ci_run.ps1 -Title "build_exe" -Command "scripts\build_exe.bat --skip-tests"
 
+      - name: 安裝 Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: 建立安裝程式
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "build_installer" -Command ".venv\Scripts\python.exe scripts\build_installer.py"
+
+      - name: 安裝 / 啟動 / 解除安裝測試
+        shell: pwsh
+        run: ./scripts/ci_run.ps1 -Title "verify_installer" -Command ".venv\Scripts\python.exe scripts\verify_installer.py"
+
       - name: 上傳發行檔
         uses: actions/upload-artifact@v5
         with:
@@ -93,5 +104,7 @@ jobs:
           path: |
             dist/YT_Media_Tool-*-win64.zip
             dist/YT_Media_Tool-*-win64.zip.sha256
+            dist/YT_Media_Tool-*-win64-setup.exe
+            dist/YT_Media_Tool-*-win64-setup.exe.sha256
           if-no-files-found: error
           retention-days: 14

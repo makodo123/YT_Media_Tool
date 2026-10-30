@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import sys
+from pathlib import Path
 import xml.etree.ElementTree as ET  # 只解析 CI 自己產生的檔案
 
 
@@ -14,6 +15,10 @@ def _escape(text: str) -> str:
 
 
 def main(path: str) -> int:
+    if not Path(path).is_file():
+        # 測試尚未執行就失敗（例如標籤格式錯誤）時沒有結果檔，不應再額外回報失敗
+        print(f"找不到 {path}，略過（測試可能尚未執行）")
+        return 0
     root = ET.parse(path).getroot()  # noqa: S314
     count = 0
     for case in root.iter("testcase"):
