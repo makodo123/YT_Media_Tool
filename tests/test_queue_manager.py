@@ -217,8 +217,8 @@ def test_events_emitted_and_listener_errors_isolated(queue_factory, spec_factory
     queue.add_listener(lambda e, p: (_ for _ in ()).throw(RuntimeError("listener bug")))
     queue.add_listener(lambda e, p: seen.append(e))
     queue.add_task(spec_factory(URL_A))
-    assert wait_until(idle(queue))
-    assert TASK_FINISHED in seen
+    # 事件在釋放佇列鎖之後才送出，因此等待事件本身，而不是只等佇列閒置
+    assert wait_until(lambda: TASK_FINISHED in seen)
     assert queue.progress().completed == 1
 
 
