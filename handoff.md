@@ -1,6 +1,6 @@
 # YT Media Tool V2.0 交接文件
 
-> 更新時間：2026-10-30｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`）
+> 更新時間：2026-10-30｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆。
 
 ---
@@ -17,8 +17,12 @@
   資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中，README.md 的「功能」表已涵蓋全部要求。
 
-**目前階段**：功能完成、beta 測試中。使用者已實機測過 beta.2 / beta.3 下載成功（含 cookies）。
-「縮小發行檔」已於 beta.4 完成；使用者回報的「無法批次刪除佇列」與「總進度條包含失敗任務」已於 **beta.5** 修正並發布，使用者已實測 beta.5 無誤，**正式版 `v2.0.0` 已發布**（https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0 ，標示為 Latest）。
+**目前階段：已完成，沒有進行中的工作。**
+
+- **正式版 `v2.0.0` 已發布**並標示為 Latest：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0
+- 使用者已在 Windows 實機測試 beta.2～beta.5 與正式版內容：下載、cookies、MP4 / MP3、批次移除、總進度皆正常。
+- 發布後另外完成：`docs/RELEASE_NOTES.md` 補齊功能說明；README 全文校稿（語句、用詞、過時內容）。
+- 之後若有新需求或問題回報，以 `v2.0.1` 等新版本號修正並發布（流程見第 4 節）。
 
 ---
 
@@ -28,7 +32,7 @@
 
 | 版本 | commit | 狀態 |
 |---|---|---|
-| v2.0.0-beta.1 | 3a381b7 | 已發布（舊，建議使用者刪除） |
+| v2.0.0-beta.1 | 3a381b7 | 已發布（舊版） |
 | v2.0.0-beta.2 | 66f0cf5 | 已發布（新增 cookies） |
 | v2.0.0-beta.3 | 99fcf7d | 已發布，**使用者實測下載正常** |
 | v2.0.0-beta.4 | 90af50e | 已發布（程式碼同 b122bf8）；縮小發行檔、FFmpeg 改 LGPL |
@@ -37,6 +41,8 @@
 
 beta.4 相對 beta.3：發行資料夾 412.4 MB → **333.4 MB**；FFmpeg 改 BtbN LGPL shared；確認對話框按鈕改中文。
 beta.5 相對 beta.4：佇列可批次移除（「移除所選」按鈕、多選右鍵選單、Delete 鍵）；總進度不計入失敗與取消的任務。
+
+**使用者決定保留所有 beta 版本，不刪除**（正式版為 Latest，一般使用者不會下載到 beta）。
 
 ### 專案結構（主要檔案）
 
@@ -95,6 +101,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 批次移除：`main_window.remove_selected()`、`build_context_menu()` / `_build_batch_menu()`（多選右鍵選單），
   只移除佇列紀錄、不刪檔案、略過進行中任務，2 筆以上先確認
 - 總進度（`queue_manager.progress().percent`）只計算完成 / 下載中 / 等待中；失敗與取消不計入（使用者要求）
+- 發布 v2.0.0 後：`docs/RELEASE_NOTES.md` 補上批次操作、cookies、LGPL FFmpeg；README 全文校稿
+  （改寫不通順的句子、統一「您」與「發布」、修正過時內容、補上新功能與檔案、發布流程改為步驟並說明標籤格式）
 
 ---
 
@@ -121,19 +129,34 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-1. ~~發布 beta.4、beta.5~~（已完成：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0-beta.5 ）
-2. ~~請使用者實測 beta.5~~（已完成，無問題）：
-   - 換 FFmpeg（beta.4 起）後的 MP4（含 1080p 合併）與 MP3（128/192/320）是否正常；確認對話框按鈕是否為中文
-   - 批次移除（多選 → 「移除所選」/ 右鍵 / Delete）與總進度條（有失敗任務時不再虛高）
-3. ~~發布正式版 `v2.0.0`~~（已完成）。之後的修正請以 `v2.0.1` 等版本號發布（需同步更新 `__init__.py` 與 `build_exe.bat` 的版本號）。
-4. 可選：
-   - 使用者可自行刪除舊的 beta.1（Releases 頁刪 Release，再到 Tags 頁刪 tag；本環境無權限刪除）。
-   - 安裝程式（Inno Setup：Program Files、開始功能表、解除安裝）——先前提過，使用者尚未決定。
-   - `actions/upload-artifact@v5` 仍有 Node.js 20 淘汰警告，可評估升級。
-   - 小問題（未修）：Release 在測試之前就失敗時（例如標籤格式錯誤），「將失敗測試轉為註解」步驟也會因找不到
-     `test-results.xml` 而顯示失敗；可讓 `scripts/junit_annotations.py` 在檔案不存在時直接結束，或在 workflow 加上
-     `hashFiles('test-results.xml') != ''` 條件。只影響顯示，不影響發布。
-   - 依 `docs/WINDOWS_INTEGRATION_TESTS.md` 完整跑實機清單。
+目前沒有待辦的必要工作。以下為之後可能的方向（皆需使用者決定）：
+
+- **安裝程式**（Inno Setup：安裝到 Program Files、建立開始功能表與桌面捷徑、可從系統解除安裝）——先前提過，使用者尚未決定。
+- 依 `docs/WINDOWS_INTEGRATION_TESTS.md` 完整跑一次實機清單（A–H 段）。
+- 小問題（未修，只影響顯示）：Release 在測試之前就失敗時（例如標籤格式錯誤），「將失敗測試轉為註解」步驟也會因找不到
+  `test-results.xml` 而顯示失敗。可讓 `scripts/junit_annotations.py` 在檔案不存在時直接結束，
+  或在 workflow 加上 `hashFiles('test-results.xml') != ''` 條件。
+- `actions/upload-artifact@v5` 仍有 Node.js 20 淘汰警告，可評估升級。
+
+### 發布新版本的流程（例如修正問題後發 v2.0.1）
+
+1. 修改程式並補測試；本機跑完整測試數次與 ruff（見第 5 節「流程習慣」）。
+2. 同步更新版本號：`src/yt_media_tool/__init__.py` 的 `__version__` 與 `scripts/build_exe.bat` 的 `VERSION`。
+3. 視需要更新 `docs/RELEASE_NOTES.md`（Release 頁面內容來源）與 README。
+4. 推送到 `main`，等該 commit 的 Windows CI 兩個工作（測試、打包）都 success。
+5. 請使用者到 Actions → Release → Run workflow，tag 填 `v2.0.1`（測試版用 `v2.0.1-beta.1`）。
+6. 用 API 確認 Release、附件與 `.sha256` 內容（見第 6 節），並更新本文件。
+
+---
+
+## 使用者偏好與背景
+
+- 全程使用繁體中文回覆。
+- 等待 CI 或發布時，使用者通常回覆「等 CI 通過再通知我」「發布完成再通知我」：請在背景監看，完成後主動回報結果。
+- 公開發布（Run workflow）由使用者親自按；本環境無法推 tag 或建立 Release。
+- 使用者為 **Claude Pro 方案**，已確認「Usage credits（額外用量）」為**關閉**，不會產生額外費用；
+  儲存庫為公開，GitHub Actions 不收費。
+- 所有 beta 版本保留，不刪除。
 
 ---
 
