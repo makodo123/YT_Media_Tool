@@ -17,12 +17,14 @@
   資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中，README.md 的「功能」表已涵蓋全部要求。
 
-**目前階段：已完成，沒有進行中的工作。**
+**目前階段：v2.0.0 正式版已完成；正在進行「安裝程式」（v2.1.0），`v2.1.0-beta.1` 已發布，等待使用者實測安裝流程。**
 
 - **正式版 `v2.0.0` 已發布**並標示為 Latest：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.0.0
 - 使用者已在 Windows 實機測試 beta.2～beta.5 與正式版內容：下載、cookies、MP4 / MP3、批次移除、總進度皆正常。
 - 發布後另外完成：`docs/RELEASE_NOTES.md` 補齊功能說明；README 全文校稿（語句、用詞、過時內容）。
-- 之後若有新需求或問題回報，以 `v2.0.1` 等新版本號修正並發布（流程見第 4 節）。
+- **安裝程式（v2.1.0）**：Inno Setup 安裝檔已完成，CI 一次通過（實際靜默安裝、啟動、轉檔、解除安裝皆驗證），
+  `v2.1.0-beta.1` 已發布：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.0-beta.1
+- 之後若有新需求或問題回報，以新版本號修正並發布（流程見第 4 節）。
 
 ---
 
@@ -38,6 +40,7 @@
 | v2.0.0-beta.4 | 90af50e | 已發布（程式碼同 b122bf8）；縮小發行檔、FFmpeg 改 LGPL |
 | v2.0.0-beta.5 | eb5d61d | 已發布；zip 144.1 MB，sha256 `033f37d6…ea87e7` 已核對；**使用者實測無誤** |
 | **v2.0.0** | ab7e980 | **正式版已發布（Latest）**；程式碼同 eb5d61d（僅更新文件）；zip 144.1 MB，sha256 `15cdf062…c026ef` 已核對 |
+| v2.1.0-beta.1 | 68afd24 | 已發布（預先發行）；新增安裝程式。setup.exe 106.0 MB（`ddbee981…5148`）、zip 144.1 MB（`d1a1692d…1cacd`），sha256 已核對；**等待使用者實測** |
 
 beta.4 相對 beta.3：發行資料夾 412.4 MB → **333.4 MB**；FFmpeg 改 BtbN LGPL shared；確認對話框按鈕改中文。
 beta.5 相對 beta.4：佇列可批次移除（「移除所選」按鈕、多選右鍵選單、Delete 鍵）；總進度不計入失敗與取消的任務。
@@ -101,6 +104,10 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 批次移除：`main_window.remove_selected()`、`build_context_menu()` / `_build_batch_menu()`（多選右鍵選單），
   只移除佇列紀錄、不刪檔案、略過進行中任務，2 筆以上先確認
 - 總進度（`queue_manager.progress().percent`）只計算完成 / 下載中 / 等待中；失敗與取消不計入（使用者要求）
+- **安裝程式（v2.1.0）**：`packaging/installer.iss`（Inno Setup 6.5+，繁中語系優先用內建、否則用 `packaging/ChineseTraditional.isl`）、
+  `installer_notice.txt`、`scripts/build_installer.py`/`.bat`、`scripts/verify_installer.py`（CI 實測安裝/解除安裝）；
+  程式新增具名 mutex `YTMediaTool_AppMutex`（`win_job.create_app_mutex`）供安裝程式偵測執行中；
+  EXE 版本資源改由 `__init__.py` 自動產生（`version_info.txt` 為範本）；`tests/test_release_config.py` 檢查版本與名稱一致
 - 發布 v2.0.0 後：`docs/RELEASE_NOTES.md` 補上批次操作、cookies、LGPL FFmpeg；README 全文校稿
   （改寫不通順的句子、統一「您」與「發布」、修正過時內容、補上新功能與檔案、發布流程改為步驟並說明標籤格式）
 
@@ -129,23 +136,20 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-目前沒有待辦的必要工作。以下為之後可能的方向（皆需使用者決定）：
-
-- **安裝程式**（Inno Setup：安裝到 Program Files、建立開始功能表與桌面捷徑、可從系統解除安裝）——先前提過，使用者尚未決定。
-- 依 `docs/WINDOWS_INTEGRATION_TESTS.md` 完整跑一次實機清單（A–H 段）。
-- 小問題（未修，只影響顯示）：Release 在測試之前就失敗時（例如標籤格式錯誤），「將失敗測試轉為註解」步驟也會因找不到
-  `test-results.xml` 而顯示失敗。可讓 `scripts/junit_annotations.py` 在檔案不存在時直接結束，
-  或在 workflow 加上 `hashFiles('test-results.xml') != ''` 條件。
-- `actions/upload-artifact@v5` 仍有 Node.js 20 淘汰警告，可評估升級。
+1. **請使用者實測 `v2.1.0-beta.1` 的安裝程式**（`docs/WINDOWS_INTEGRATION_TESTS.md` 的 I 段）：
+   預設安裝、桌面捷徑、為所有使用者安裝、程式開啟中升級、從 v2.0.0 免安裝版改用安裝版、解除安裝時選「否 / 是」。
+2. 實測無誤後發布正式版 **`v2.1.0`**（程式碼不需變更；若只改文件可直接發）。
+3. 可選：依實機清單完整測試；`actions/upload-artifact@v5` 的 Node.js 20 淘汰警告可評估升級。
 
 ### 發布新版本的流程（例如修正問題後發 v2.0.1）
 
 1. 修改程式並補測試；本機跑完整測試數次與 ruff（見第 5 節「流程習慣」）。
-2. 同步更新版本號：`src/yt_media_tool/__init__.py` 的 `__version__` 與 `scripts/build_exe.bat` 的 `VERSION`。
+2. 同步更新版本號：`src/yt_media_tool/__init__.py`、`scripts/build_exe.bat` 的 `VERSION`、`pyproject.toml`
+   （`tests/test_release_config.py` 會檢查三者一致；EXE 與安裝程式版本自動取 `__init__.py`）。
 3. 視需要更新 `docs/RELEASE_NOTES.md`（Release 頁面內容來源）與 README。
 4. 推送到 `main`，等該 commit 的 Windows CI 兩個工作（測試、打包）都 success。
 5. 請使用者到 Actions → Release → Run workflow，tag 填 `v2.0.1`（測試版用 `v2.0.1-beta.1`）。
-6. 用 API 確認 Release、附件與 `.sha256` 內容（見第 6 節），並更新本文件。
+6. 用 API 確認 Release 的 4 個附件（zip、setup.exe 與兩個 `.sha256`）及雜湊內容（見第 6 節），並更新本文件。
 
 ---
 
@@ -174,6 +178,13 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - **測試不可執行假的 .exe**：有桌面的 Windows 會跳「不支援的 16 位元應用程式」對話框卡住 pytest（`test_converter_and_errors.py` 用 `fake_version` fixture 替換 `_version_of`）。
 - 路徑比對不要寫死 `/`：`str(Path("/d"))` 在 Windows 是 `\d`。
 - Windows 剛刪除的資料夾可能處於「等待刪除」，在其中建立子資料夾會暫時 PermissionError（`_make_task_dir` 已重試）。
+
+### 安裝程式
+- `installer.iss` 的 `AppId` GUID **不可更改**（改了會變成另一個程式，無法升級舊安裝）。
+- `AppMutex` 與 `win_job.APP_MUTEX_NAME`、`AppDataFolder` 與 `APP_ID` 必須一致（測試會檢查）。
+- `.iss`、`installer_notice.txt`、`.isl` 必須是 UTF-8 with BOM + CRLF（測試會檢查），否則中文會亂碼。
+- 解除安裝程式會先複製自己到暫存資料夾再執行，原程序立即結束；`verify_installer.py` 以輪詢等待完成。
+- 解除安裝的資料刪除提示只刪 `%LOCALAPPDATA%\YT_Media_Tool`，**絕不可**擴大到下載資料夾。
 
 ### 打包
 - FFmpeg 檔案在 spec 的 **COLLECT 之後**手動複製，不要改回 `datas`（會重複打包約 140 MB）。`verify_dist.py` 會檢查。
