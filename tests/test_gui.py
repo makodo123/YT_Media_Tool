@@ -268,17 +268,33 @@ def test_settings_dialog_returns_validated_settings(qtbot, window):
     assert window.ctx.queue.keep_history is False
 
 
-def test_settings_dialog_cookie_options(qtbot, window, tmp_path):
+def test_settings_dialog_cookie_options(qtbot, window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QFileDialog
+
     cookie_file = tmp_path / "cookies.txt"
     cookie_file.write_text("# Netscape HTTP Cookie File\n", encoding="utf-8")
+    window.ctx.settings.cookies_source = "chrome"
     dialog = SettingsDialog(window.ctx.settings, window)
     qtbot.addWidget(dialog)
-    assert dialog.cookies_source.currentData() == "none"
-    assert not dialog.cookies_file_row.isEnabled()
-    dialog.cookies_source.setCurrentIndex(dialog.cookies_source.findData("file"))
+    assert dialog.cookies_source.currentData() == "chrome"
+    # 即使來源是瀏覽器，檔案欄與「瀏覽…」也必須可用
     assert dialog.cookies_file_row.isEnabled()
-    dialog.cookies_file.setText(str(cookie_file))
+
+    # 以「瀏覽…」選擇檔案後，來源自動切換為 cookies.txt 檔案
+    monkeypatch.setattr(QFileDialog, "getOpenFileName", lambda *a, **k: (str(cookie_file), ""))
+    dialog._browse_cookies()
+    assert dialog.cookies_source.currentData() == "file"
+    assert dialog.cookies_file.text() == str(cookie_file)
+
     result = dialog.result_settings()
     assert result.cookies_source == "file" and result.cookies_file == str(cookie_file)
     window.ctx.apply_settings(result)
     assert "cookies.txt" in window.dependency_report()
+
+
+def test_typing_cookie_path_switches_source(qtbot, window):
+    dialog = SettingsDialog(window.ctx.settings, window)
+    qtbot.addWidget(dialog)
+    dialog.cookies_source.setCurrentIndex(dialog.cookies_source.findData("edge"))
+    qtbot.keyClicks(dialog.cookies_file, "D:/cookies.txt")
+    assert dialog.cookies_source.currentData() == "file"

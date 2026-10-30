@@ -95,7 +95,8 @@ class SettingsDialog(QDialog):
         browse_cookies = QPushButton("瀏覽…")
         browse_cookies.clicked.connect(self._browse_cookies)
         file_layout.addWidget(browse_cookies)
-        self.cookies_source.currentIndexChanged.connect(self._update_cookie_widgets)
+        # 檔案欄一直可用；選擇或輸入檔案時自動把來源切換為「cookies.txt 檔案」
+        self.cookies_file.textEdited.connect(self._on_cookie_file_edited)
         cookies_note = QLabel(
             "僅在 YouTube 要求「登入以確認不是機器人」時才需要開啟。會使用你在該瀏覽器中 YouTube 帳號的登入狀態；"
             "yt-dlp 官方提醒帳號可能因此被 YouTube 限制，建議使用次要帳號。\n"
@@ -110,7 +111,6 @@ class SettingsDialog(QDialog):
         cookies_form.addRow("來源：", self.cookies_source)
         cookies_form.addRow("cookies.txt：", self.cookies_file_row)
         cookies_form.addRow(cookies_note)
-        self._update_cookie_widgets()
 
         note = QLabel("畫質與音質為目標輸出設定；原始素材不支援時，會在佇列中顯示實際取得的格式。")
         note.setObjectName("hintLabel")
@@ -129,14 +129,19 @@ class SettingsDialog(QDialog):
         layout.addWidget(buttons)
         self._check_ffmpeg()
 
-    def _update_cookie_widgets(self) -> None:
-        self.cookies_file_row.setEnabled(self.cookies_source.currentData() == "file")
+    def _use_cookie_file_source(self) -> None:
+        self.cookies_source.setCurrentIndex(self.cookies_source.findData("file"))
+
+    def _on_cookie_file_edited(self, text: str) -> None:
+        if text.strip():
+            self._use_cookie_file_source()
 
     def _browse_cookies(self) -> None:
         start = self.cookies_file.text() or str(Path.home())
         chosen, _ = QFileDialog.getOpenFileName(self, "選擇 cookies.txt", start, "Cookies 檔案 (*.txt);;所有檔案 (*)")
         if chosen:
             self.cookies_file.setText(chosen)
+            self._use_cookie_file_source()
 
     def _check_ffmpeg(self) -> None:
         info = converter.find_ffmpeg(self.ffmpeg_dir.text().strip() or None)
