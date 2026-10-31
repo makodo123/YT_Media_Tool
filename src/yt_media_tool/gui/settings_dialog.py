@@ -59,8 +59,18 @@ class SettingsDialog(QDialog):
         self.mp3_quality.setCurrentIndex(self.mp3_quality.findData(settings.default_mp3_quality))
         self.open_folder = QCheckBox("下載完成後開啟資料夾")
         self.open_folder.setChecked(settings.open_folder_on_complete)
+        self.notify = QCheckBox("全部下載完成時通知（工作列閃爍並顯示系統通知）")
+        self.notify.setToolTip("程式不在前景時才會通知，切到其他視窗做事也會知道下載完成。")
+        self.notify.setChecked(settings.notify_on_complete)
         self.keep_history = QCheckBox("保留下載歷史紀錄")
         self.keep_history.setChecked(settings.keep_history)
+        self.embed_metadata = QCheckBox("寫入歌名、演出者與封面（以影片縮圖作為封面）")
+        self.embed_metadata.setToolTip("在 MP3 / MP4 檔案中寫入標題、演出者（頻道名稱）等資訊並嵌入封面，\n"
+                                       "音樂播放器與手機會顯示歌名和封面。")
+        self.embed_metadata.setChecked(settings.embed_metadata)
+        self.playlist_subfolder = QCheckBox("播放清單存到以清單名稱命名的子資料夾")
+        self.playlist_subfolder.setToolTip("例如「下載資料夾\\我的最愛歌單\\」；只下載貼上的那一支影片時不另建資料夾。")
+        self.playlist_subfolder.setChecked(settings.playlist_subfolder)
         self.ffmpeg_dir = QLineEdit(settings.ffmpeg_dir)
         self.ffmpeg_dir.setPlaceholderText("留白＝自動偵測（隨附版本或系統 PATH）")
         self.ffmpeg_status = QLabel()
@@ -76,7 +86,10 @@ class SettingsDialog(QDialog):
         form.addRow("預設 MP4 解析度：", self.mp4_quality)
         form.addRow("預設 MP3 品質：", self.mp3_quality)
         form.addRow("", self.open_folder)
+        form.addRow("", self.notify)
         form.addRow("", self.keep_history)
+        form.addRow("", self.embed_metadata)
+        form.addRow("", self.playlist_subfolder)
         form.addRow("FFmpeg 資料夾：", _folder_row(self, self.ffmpeg_dir, "選擇含 ffmpeg.exe 的資料夾"))
         form.addRow("", check_button)
         form.addRow("", self.ffmpeg_status)
@@ -180,7 +193,10 @@ class SettingsDialog(QDialog):
             default_mp4_quality=self.mp4_quality.currentData(),
             default_mp3_quality=self.mp3_quality.currentData(),
             open_folder_on_complete=self.open_folder.isChecked(),
+            notify_on_complete=self.notify.isChecked(),
             keep_history=self.keep_history.isChecked(),
+            embed_metadata=self.embed_metadata.isChecked(),
+            playlist_subfolder=self.playlist_subfolder.isChecked(),
             ffmpeg_dir=self.ffmpeg_dir.text().strip(),
             cookies_source=self.cookies_source.currentData(),
             cookies_file=self.cookies_file.text().strip(),

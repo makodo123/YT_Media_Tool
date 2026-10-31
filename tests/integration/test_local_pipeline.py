@@ -54,6 +54,10 @@ def media_server(tmp_path_factory):
                     "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "4M", "-pix_fmt", "yuv420p",
                     str(root / "large.mp4")], check=True)
 
+    # 影片縮圖（YouTube 多為 WebP；本機 FFmpeg 不一定有 WebP 編碼器，改用 PNG 一樣需經過轉檔）
+    subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=c=red:size=320x180", "-frames:v", "1",
+                    str(root / "thumb.png")], check=True)
+
     slow = type("SlowHandler", (_QuietHandler,), {"delay": 0.02})
     servers = []
     for handler in (_QuietHandler, slow):
@@ -151,3 +155,42 @@ def test_queue_with_real_engine(media_server, real_downloader, db, tmp_path):
     assert names == ["sample (1).mp4", "sample.mp3", "sample.mp4"]
     assert "404" in queue.tasks()[2].error_message
     queue.shutdown(5)
+
+
+def _probe_json(path):
+    import json
+
+    ffprobe = str(converter.find_ffmpeg().ffprobe)
+    out = subprocess.run([ffprobe, "-v", "error", "-print_format", "json", "-show_format", "-show_streams", str(path)],
+                         capture_output=True, text=True, check=True).stdout
+    return json.loads(out)
+
+
+@pytest.mark.parametrize(("fmt", "quality"), [(MediaFormat.MP3, "192"), (MediaFormat.MP4, "720")])
+def test_embed_title_artist_and_cover(media_server, tmp_path, fmt, quality):
+    """寫入歌名、演出者並以縮圖作為封面；暫存的縮圖不得殘留在下載資料夾。"""
+    import yt_dlp
+
+    base = media_server["fast"]
+
+    class WithThumbnail(yt_dlp.YoutubeDL):
+        def extract_info(self, url, *args, **kwargs):
+            info = super().extract_info(url, *args, **kwargs)
+            info.update({"title": "晴天", "uploader": "周杰倫",
+                         "thumbnails": [{"url": f"{base}/thumb.png", "id": "0"}]})
+            return info
+
+    tools = converter.find_ffmpeg()
+    downloader = Downloader(tools_provider=lambda: tools, js_runtime_provider=converter.JsRuntimeInfo,
+                            extra_options={"proxy": ""}, ydl_factory=WithThumbnail, metadata_provider=lambda: True)
+    stages = []
+    result = downloader.download(task(f"{base}/sample.mp4", tmp_path, fmt, quality), CancelToken(),
+                                 lambda u: stages.append(u.stage))
+    data = _probe_json(result.output_path)
+    tags = {k.lower(): v for k, v in data["format"].get("tags", {}).items()}
+    assert tags.get("title") == "晴天" and tags.get("artist") == "周杰倫"
+    covers = [s for s in data["streams"] if s.get("disposition", {}).get("attached_pic")]
+    assert covers and covers[0]["codec_name"] == "mjpeg"
+    assert result.media_info.has_audio and result.media_info.has_video is (fmt is MediaFormat.MP4)
+    assert "嵌入封面中" in stages
+    assert sorted(p.name for p in tmp_path.iterdir()) == [result.output_path.name]

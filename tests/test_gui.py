@@ -129,7 +129,7 @@ def test_playlist_url_opens_picker_with_all_checked(window, qtbot, monkeypatch):
 
     def choose(groups):
         shown.append(groups)
-        return [e.url for e in groups[0].entries[:2]]  # 使用者只勾選前兩部
+        return [[e.url for e in groups[0].entries[:2]]]  # 使用者只勾選前兩部
 
     monkeypatch.setattr(window, "choose_playlist_entries", choose)
     window.url_input.setPlainText(PLAYLIST)
@@ -137,6 +137,18 @@ def test_playlist_url_opens_picker_with_all_checked(window, qtbot, monkeypatch):
     qtbot.waitUntil(lambda: rows(window) == 2, timeout=5000)
     assert len(shown[0]) == 1 and shown[0][0].preselect_video_id is None
     assert len(shown[0][0].entries) == 3
+    # 存到以清單名稱命名的子資料夾
+    folder = str(Path(window.folder_edit.text()) / "清單")
+    assert {t.output_dir for t in window.ctx.queue.tasks()} == {folder}
+
+
+def test_playlist_subfolder_can_be_disabled(window, qtbot, monkeypatch):
+    window.ctx.settings.playlist_subfolder = False
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: [[groups[0].entries[0].url]])
+    window.url_input.setPlainText(PLAYLIST)
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
+    assert window.ctx.queue.tasks()[0].output_dir == str(Path(window.folder_edit.text()))
 
 
 def test_playlist_picker_cancel_adds_nothing(window, qtbot, monkeypatch, dialogs):
@@ -153,19 +165,29 @@ def test_video_in_playlist_preselects_pasted_video(window, qtbot, monkeypatch):
 
     def choose(groups):
         shown.append(groups)
-        return [e.url for e in groups[0].entries if e.video_id == groups[0].preselect_video_id]
+        return [[e.url for e in groups[0].entries if e.video_id == groups[0].preselect_video_id]]
 
     monkeypatch.setattr(window, "choose_playlist_entries", choose)
     window.url_input.setPlainText("https://www.youtube.com/watch?v=vid00000001&list=PLabcdefghij123456")
     window.add_from_input()
     qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
     assert shown[0][0].preselect_video_id == "vid00000001"
-    assert window.ctx.queue.tasks()[0].url == "https://www.youtube.com/watch?v=vid00000001"
+    task = window.ctx.queue.tasks()[0]
+    assert task.url == "https://www.youtube.com/watch?v=vid00000001"
+    assert task.output_dir == str(Path(window.folder_edit.text()))  # 只下載貼上的影片：不另建子資料夾
+
+
+def test_video_in_playlist_whole_list_goes_to_subfolder(window, qtbot, monkeypatch):
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: [[e.url for e in groups[0].entries]])
+    window.url_input.setPlainText("https://www.youtube.com/watch?v=vid00000001&list=PLabcdefghij123456")
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
+    assert {t.output_dir for t in window.ctx.queue.tasks()} == {str(Path(window.folder_edit.text()) / "清單")}
 
 
 def test_pasted_video_missing_from_playlist_is_listed_first(window, qtbot, monkeypatch):
     shown = []
-    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: shown.append(groups) or [])
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: shown.append(groups) or [[]])
     window.url_input.setPlainText("https://www.youtube.com/watch?v=aaaaaaaaaaa&list=PLabcdefghij123456")
     window.add_from_input()
     qtbot.waitUntil(lambda: bool(shown), timeout=5000)
@@ -198,6 +220,7 @@ def test_playlist_picker_dialog(qtbot):
                                    PlaylistGroup("清單 B", entries("b"), preselect_video_id="b0000000001")], 500)
     qtbot.addWidget(dialog)
     assert dialog.selected_urls() == [e.url for e in entries("a")] + ["https://www.youtube.com/watch?v=b0000000001"]
+    assert dialog.selected_by_group() == [[e.url for e in entries("a")], ["https://www.youtube.com/watch?v=b0000000001"]]
     assert dialog.ok_button.text() == "加入 4 部" and dialog.count_label.text() == "已選 4 / 6 部"
 
     dialog.search.setText("歌曲 2")  # 搜尋後「全不選」只影響符合的影片
@@ -319,9 +342,11 @@ def test_settings_dialog_returns_validated_settings(qtbot, window):
     dialog.default_format.setCurrentIndex(dialog.default_format.findData("mp3"))
     dialog.mp3_quality.setCurrentIndex(dialog.mp3_quality.findData("320"))
     dialog.keep_history.setChecked(False)
+    dialog.embed_metadata.setChecked(False)
     result = dialog.result_settings()
     assert result.max_concurrent == 3 and result.default_format == "mp3"
     assert result.default_mp3_quality == "320" and result.keep_history is False
+    assert result.embed_metadata is False
     window.ctx.apply_settings(result)
     assert window.ctx.queue.max_concurrent == 3
     assert window.ctx.queue.keep_history is False
@@ -574,3 +599,87 @@ def test_history_dialog_shows_file_name_search_and_actions(window, qtbot, tmp_pa
     assert (task.url, task.media_format, task.quality) == (
         "https://www.youtube.com/watch?v=hist0000002", MediaFormat.MP4, "1080")
     assert window.url_input.toPlainText() == "https://youtu.be/keepthis01"  # 不清除使用者正在輸入的網址
+
+
+def test_drop_urls_appends_to_input(window):
+    from PySide6.QtCore import QMimeData, QPoint, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    mime = QMimeData()
+    mime.setUrls([QUrl("https://www.youtube.com/watch?v=bbbbbbbbbbb"), QUrl("file:///C:/x.txt")])
+    enter = QDragEnterEvent(QPoint(10, 10), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+                            Qt.KeyboardModifier.NoModifier)
+    window.dragEnterEvent(enter)
+    assert enter.isAccepted()
+    drop = QDropEvent(QPointF(10, 10), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+                      Qt.KeyboardModifier.NoModifier)
+    window.dropEvent(drop)
+    assert window.url_input.toPlainText() == "https://youtu.be/aaaaaaaaaaa\nhttps://www.youtube.com/watch?v=bbbbbbbbbbb"
+    assert "已加入 1 個網址" in window.statusBar().currentMessage()
+
+    text_only = QMimeData()
+    text_only.setText("沒有網址")
+    enter = QDragEnterEvent(QPoint(1, 1), Qt.DropAction.CopyAction, text_only, Qt.MouseButton.LeftButton,
+                            Qt.KeyboardModifier.NoModifier)
+    enter.ignore()
+    window.dragEnterEvent(enter)
+    window.dropEvent(QDropEvent(QPointF(1, 1), Qt.DropAction.CopyAction, text_only, Qt.MouseButton.LeftButton,
+                                Qt.KeyboardModifier.NoModifier))
+    assert "沒有可辨識的 YouTube 網址" in window.statusBar().currentMessage()
+
+
+def test_double_click_completed_task_plays_file(window, qtbot, fake, monkeypatch):
+    from yt_media_tool.utils import system_open
+
+    played = []
+    monkeypatch.setattr(system_open, "_open_with_default_app", lambda path: played.append(path) or True)
+    window.ctx.queue.resume()
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    window.add_from_input()
+    model = window.table.queue_model
+    qtbot.waitUntil(lambda: model.task_at(0).status is TaskStatus.COMPLETED, timeout=5000)
+    task = model.task_at(0)
+    window.table.doubleClicked.emit(model.index(0, 1))
+    assert played == [Path(task.output_path)]
+    assert "播放（雙擊）" in [a.text() for a in window.build_context_menu(task).actions()]
+
+    Path(task.output_path).unlink()
+    assert not window.play(task)
+    assert "檔案已不存在" in window.statusBar().currentMessage()
+
+
+def test_open_media_only_opens_mp3_and_mp4(tmp_path, monkeypatch):
+    from yt_media_tool.utils import system_open
+
+    opened = []
+    monkeypatch.setattr(system_open, "_open_with_default_app", lambda path: opened.append(path.name) or True)
+    for name in ("a.mp3", "b.MP4", "c.exe", "d.bat"):
+        (tmp_path / name).write_bytes(b"x")
+        system_open.open_media(tmp_path / name)
+    assert not system_open.open_media(tmp_path / "missing.mp3")
+    assert opened == ["a.mp3", "b.MP4"]
+
+
+def test_notify_once_when_whole_queue_finishes(window, qtbot, fake, monkeypatch):
+    shown = []
+    monkeypatch.setattr(window, "isActiveWindow", lambda: False)
+    monkeypatch.setattr(window, "_show_notification", lambda title, message: shown.append((title, message)))
+    window.ctx.queue.resume()
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa\nhttps://youtu.be/bbbbbbbbbbb")
+    window.add_from_input()
+    model = window.table.queue_model
+    qtbot.waitUntil(lambda: all(model.task_at(i).status is TaskStatus.COMPLETED for i in range(2)), timeout=5000)
+    qtbot.waitUntil(lambda: bool(shown), timeout=3000)
+    qtbot.wait(1000)  # 確認不會再發出第二次通知
+    assert shown == [("下載完成", "2 部下載完成")]
+    assert "佇列已全部完成" in window.statusBar().currentMessage()
+
+
+def test_no_notification_when_disabled_or_window_active(window, monkeypatch):
+    shown = []
+    monkeypatch.setattr(window, "_show_notification", lambda title, message: shown.append(message))
+    monkeypatch.setattr(window, "isActiveWindow", lambda: True)
+    window.notify_queue_finished(1, 1)
+    assert shown == []  # 使用者正在看視窗時只更新狀態列
+    assert "1 部下載完成，1 部失敗" in window.statusBar().currentMessage()

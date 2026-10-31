@@ -52,7 +52,11 @@ POSTPROCESSOR_STAGES = {
     "FixupDuplicateMoov": "修正影片結構中",
     "FixupTimestamp": "修正時間戳記中",
     "MoveFiles": "移動檔案中",
+    "Metadata": "寫入歌曲資訊中",
+    "EmbedThumbnail": "嵌入封面中",
 }
+# 不改變任務狀態的後處理（下載前就會執行，例如轉換縮圖格式）
+SILENT_POSTPROCESSORS = {"MoveFiles", "ThumbnailsConvertor"}
 
 
 class CancelToken:
@@ -197,6 +201,7 @@ class Downloader:
         extra_options: dict[str, Any] | None = None,
         probe: Callable[[Path, MediaFormat, Path], MediaInfo] = converter.verify_output,
         cookies_provider: Callable[[], CookieConfig] | None = None,
+        metadata_provider: Callable[[], bool] | None = None,
     ) -> None:
         self._tools_provider = tools_provider
         self._js_runtime_provider = js_runtime_provider or converter.find_js_runtime
@@ -205,6 +210,7 @@ class Downloader:
         self._extra_options = dict(extra_options or {})
         self._probe = probe
         self._cookies_provider = cookies_provider or CookieConfig
+        self._metadata_provider = metadata_provider or (lambda: False)
 
     # ---- 共用設定 ----
     def _base_options(self, logger: _YdlLogger, tools: ToolInfo | None,
@@ -373,18 +379,21 @@ class Downloader:
             name = d.get("postprocessor") or ""
             if name == "ExtractAudio" and d.get("status") == "started" and source_audio["kbps"] is None:
                 source_audio["kbps"] = self._source_audio_kbps(d.get("info_dict") or {}, tools)
-            if d.get("status") == "started" and name != "MoveFiles":
+            if d.get("status") == "started" and name not in SILENT_POSTPROCESSORS:
                 stage = POSTPROCESSOR_STAGES.get(name, f"後處理中（{name}）")
                 on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=DOWNLOAD_PROGRESS_SHARE,
                                            speed=None, eta=None, stage=stage))
 
+        embed_metadata = bool(self._metadata_provider())
         opts = self._base_options(logger, tools, cookie_options)
         opts.update({
             "format": converter.format_selector(task.media_format, task.quality),
+            # 縮圖也寫在暫存資料夾（media.jpg），嵌入後由 yt-dlp 刪除，殘留的會隨暫存資料夾清除
+            "writethumbnail": embed_metadata,
             # 固定的 ASCII 暫存檔名：避免標題中的特殊字元與過長路徑問題
             "outtmpl": {"default": "media.%(ext)s"},
             "paths": {"home": str(temp_dir)},
-            "postprocessors": converter.postprocessors(task.media_format, task.quality),
+            "postprocessors": converter.postprocessors(task.media_format, task.quality, embed_metadata),
             "progress_hooks": [progress_hook],
             "postprocessor_hooks": [postprocessor_hook],
         })

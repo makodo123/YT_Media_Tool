@@ -27,6 +27,9 @@ class AppSettings:
     playlist_confirm_threshold: int = 1  # 播放清單展開時一律提示確認
     cookies_source: str = "none"  # YouTube 登入資訊來源：none / firefox / file
     cookies_file: str = ""  # cookies_source 為 file 時的 cookies.txt 路徑
+    embed_metadata: bool = True  # 寫入標題、演出者並以影片縮圖作為封面
+    playlist_subfolder: bool = True  # 播放清單的影片存到以清單名稱命名的子資料夾
+    notify_on_complete: bool = True  # 佇列全部完成時通知（工作列閃爍、系統通知）
 
     def validated(self) -> AppSettings:
         defaults = AppSettings()
@@ -45,6 +48,9 @@ class AppSettings:
             s.download_dir = defaults.download_dir
         s.open_folder_on_complete = bool(s.open_folder_on_complete)
         s.keep_history = bool(s.keep_history)
+        s.embed_metadata = bool(s.embed_metadata)
+        s.playlist_subfolder = bool(s.playlist_subfolder)
+        s.notify_on_complete = bool(s.notify_on_complete)
         s.ffmpeg_dir = s.ffmpeg_dir if isinstance(s.ffmpeg_dir, str) else ""
         if s.cookies_source not in COOKIE_SOURCES:
             s.cookies_source = defaults.cookies_source

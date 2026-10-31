@@ -133,6 +133,15 @@ class PlaylistPickerDialog(QDialog):
         self.ok_button.setText(f"加入 {count} 部")
         self.ok_button.setEnabled(count > 0)
 
+    def selected_by_group(self) -> list[list[str]]:
+        """依清單分組回傳勾選的影片網址（順序與傳入的清單相同）。"""
+        result = []
+        for i in range(self.tree.topLevelItemCount()):
+            group = self.tree.topLevelItem(i)
+            result.append([group.child(j).data(0, UrlRole) for j in range(group.childCount())
+                           if group.child(j).checkState(0) == Qt.CheckState.Checked])
+        return result
+
     def selected_urls(self) -> list[str]:
         """依清單順序回傳勾選的影片網址。"""
         return [item.data(0, UrlRole) for item in self._entry_items()

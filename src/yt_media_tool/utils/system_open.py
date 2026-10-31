@@ -1,4 +1,4 @@
-"""在檔案總管中開啟資料夾或選取檔案。
+"""在檔案總管中開啟資料夾、選取檔案，或以預設播放器開啟下載的媒體檔。
 
 不經由 shell 執行：Windows 使用 Shell API（SHOpenFolderAndSelectItems），
 其他平台使用參數清單呼叫 xdg-open / open。
@@ -13,6 +13,9 @@ import sys
 from pathlib import Path
 
 log = logging.getLogger(__name__)
+
+# 只開啟本程式產生的媒體檔，避免把可執行檔等交給系統執行
+MEDIA_SUFFIXES = {".mp3", ".mp4"}
 
 
 def _windows_select_file(path: Path) -> bool:
@@ -41,21 +44,29 @@ def _windows_select_file(path: Path) -> bool:
         return False
 
 
-def open_folder(folder: Path) -> bool:
-    folder = Path(folder)
-    if not folder.is_dir():
-        return False
+def _open_with_default_app(path: Path) -> bool:
     try:
         if sys.platform.startswith("win"):
-            os.startfile(str(folder))  # type: ignore[attr-defined]  # noqa: S606
+            os.startfile(str(path))  # type: ignore[attr-defined]  # noqa: S606
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(folder)])  # noqa: S607
+            subprocess.Popen(["open", str(path)])  # noqa: S607
         else:
-            subprocess.Popen(["xdg-open", str(folder)])  # noqa: S607
+            subprocess.Popen(["xdg-open", str(path)])  # noqa: S607
         return True
     except OSError:
-        log.exception("無法開啟資料夾 %s", folder)
+        log.exception("無法開啟 %s", path)
         return False
+
+
+def open_folder(folder: Path) -> bool:
+    folder = Path(folder)
+    return folder.is_dir() and _open_with_default_app(folder)
+
+
+def open_media(path: Path) -> bool:
+    """以系統預設播放器開啟下載的 MP3 / MP4；其他類型的檔案一律不開啟。"""
+    path = Path(path)
+    return path.suffix.lower() in MEDIA_SUFFIXES and path.is_file() and _open_with_default_app(path)
 
 
 def reveal_file(path: Path) -> bool:

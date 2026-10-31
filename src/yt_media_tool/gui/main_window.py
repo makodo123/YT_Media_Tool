@@ -8,11 +8,11 @@ from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import QByteArray, Qt, QThreadPool, QTimer
-from PySide6.QtGui import QAction, QCloseEvent, QGuiApplication, QKeySequence
+from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
     QApplication, QButtonGroup, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSplitter,
-    QTextEdit, QVBoxLayout, QWidget,
+    QSystemTrayIcon, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from yt_media_tool import APP_DISPLAY_NAME, __version__
@@ -34,6 +34,7 @@ from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RET
 from yt_media_tool.gui.settings_dialog import SettingsDialog
 from yt_media_tool.gui.workers import BackgroundJob
 from yt_media_tool.storage.settings import AppSettings
+from yt_media_tool.utils.paths import sanitize_filename
 from yt_media_tool.utils import system_open
 
 log = logging.getLogger(__name__)
@@ -59,10 +60,13 @@ class MainWindow(QMainWindow):
         self._closing = False
         self._busy_expanding = False
         self._last_completed_dir: str | None = None
+        self._batch_counts = {"completed": 0, "failed": 0}  # 自上次佇列全部結束以來的完成 / 失敗筆數
+        self._tray: QSystemTrayIcon | None = None
         self._jobs: set[BackgroundJob] = set()
         self._expand_context: tuple = ()
         self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(1180, 760)
+        self.setAcceptDrops(True)  # 可把瀏覽器的網址拖曳到視窗任何位置
 
         self.bridge = QueueEventBridge(self)
         self.bridge.event.connect(self._on_queue_event)
@@ -74,6 +78,8 @@ class MainWindow(QMainWindow):
         self._restore_geometry()
         self._refresh_dependency_banner()
 
+        self._idle_timer = QTimer(self, singleShot=True, interval=800)
+        self._idle_timer.timeout.connect(self._check_queue_idle)
         self._parse_timer = QTimer(self, singleShot=True, interval=250)
         self._parse_timer.timeout.connect(self._update_detection_summary)
         self.url_input.textChanged.connect(self._parse_timer.start)
@@ -127,9 +133,11 @@ class MainWindow(QMainWindow):
         url_layout = QVBoxLayout(url_group)
         self.url_input = QPlainTextEdit()
         self.url_input.setPlaceholderText(
-            "貼上 YouTube 影片、Shorts 或播放清單網址；可一次貼上多行，重複網址會自動去除。\n"
+            "貼上或從瀏覽器拖曳 YouTube 影片、Shorts 或播放清單網址；可一次貼上多行，重複網址會自動去除。\n"
             "含有播放清單的網址會列出清單中的影片，讓您勾選要下載哪些。")
         self.url_input.setFixedHeight(90)
+        # 拖曳交給主視窗處理：一律另起一行附加，避免插入到既有網址中間
+        self.url_input.setAcceptDrops(False)
         url_layout.addWidget(self.url_input)
         row = QHBoxLayout()
         paste_button = QPushButton("從剪貼簿貼上")
@@ -178,6 +186,7 @@ class MainWindow(QMainWindow):
         # ---- 佇列 ----
         self.table = QueueTableView()
         self.table.actionTriggered.connect(self._on_row_action)
+        self.table.doubleClicked.connect(lambda index: self.play(self.table.queue_model.task_at(index.row())))
         self.table.customContextMenuRequested.connect(self._show_context_menu)
         self.table.selectionModel().currentRowChanged.connect(lambda *_: self._update_details())
         self.table.selectionModel().selectionChanged.connect(lambda *_: self._update_queue_controls())
@@ -317,11 +326,36 @@ class MainWindow(QMainWindow):
                           + DISCLAIMER.replace("\n", "<br>"))
 
     # ================= 網址處理 =================
+    def _append_urls(self, text: str) -> None:
+        current = self.url_input.toPlainText().rstrip()
+        self.url_input.setPlainText(f"{current}\n{text}".strip() if current else text.strip())
+
     def _paste_clipboard(self) -> None:
         text = QGuiApplication.clipboard().text()
         if text:
-            current = self.url_input.toPlainText().rstrip()
-            self.url_input.setPlainText(f"{current}\n{text}".strip() if current else text.strip())
+            self._append_urls(text)
+
+    @staticmethod
+    def _dropped_text(mime) -> str:
+        if mime.hasUrls():
+            return "\n".join(u.toString() for u in mime.urls() if u.scheme() in ("http", "https"))
+        return mime.text() if mime.hasText() else ""
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if self._dropped_text(event.mimeData()).strip():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        text = self._dropped_text(event.mimeData()).strip()
+        if not text:
+            return
+        event.acceptProposedAction()
+        self._append_urls(text)
+        self.url_input.setFocus()
+        count = len(parse_urls(text).valid)
+        message = (f"已加入 {count} 個網址到輸入框，按「加入佇列」開始下載" if count
+                   else "拖曳的內容中沒有可辨識的 YouTube 網址")
+        self.statusBar().showMessage(message, 6000)
 
     def _update_detection_summary(self) -> None:
         result = parse_urls(self.url_input.toPlainText())
@@ -448,18 +482,34 @@ class MainWindow(QMainWindow):
                 notes.append(f"• 播放清單「{title}」中沒有可下載的影片。")
                 continue
             groups.append(PlaylistGroup(title, entries, preselect, outcome.truncated))
+        folders: dict[str, str] = {}
         if groups:
             chosen = self.choose_playlist_entries(groups)
             if chosen is None:
                 notes.append("已取消加入播放清單中的影片。")
             else:
-                singles.extend(chosen)
-        self._finish_add(singles, fmt, quality, output_dir, notes)
+                for group, urls in zip(groups, chosen, strict=True):
+                    folder = self._playlist_folder(output_dir, group, urls)
+                    for url in urls:
+                        singles.append(url)
+                        if folder:
+                            folders.setdefault(url, folder)
+        self._finish_add(singles, fmt, quality, output_dir, notes, folders=folders)
 
-    def choose_playlist_entries(self, groups: list[PlaylistGroup]) -> list[str] | None:
-        """顯示播放清單選擇對話框；回傳勾選的影片網址，取消時回傳 None。"""
+    def _playlist_folder(self, output_dir: str, group: PlaylistGroup, urls: list[str]) -> str | None:
+        """播放清單的影片存到以清單名稱命名的子資料夾；只下載貼上的那一支影片時不另建資料夾。"""
+        if not self.ctx.settings.playlist_subfolder or not urls:
+            return None
+        if group.preselect_video_id and len(urls) == 1:
+            entry = next((e for e in group.entries if e.url == urls[0]), None)
+            if entry is not None and entry.video_id == group.preselect_video_id:
+                return None
+        return str(Path(output_dir) / sanitize_filename(group.title or "播放清單"))
+
+    def choose_playlist_entries(self, groups: list[PlaylistGroup]) -> list[list[str]] | None:
+        """顯示播放清單選擇對話框；依清單回傳勾選的影片網址，取消時回傳 None。"""
         dialog = PlaylistPickerDialog(groups, MAX_PLAYLIST_ITEMS, self)
-        return dialog.selected_urls() if dialog.exec() else None
+        return dialog.selected_by_group() if dialog.exec() else None
 
     def open_history(self) -> None:
         HistoryDialog(self.ctx.db, self, on_redownload=self.redownload).exec()
@@ -476,7 +526,9 @@ class MainWindow(QMainWindow):
         return self._finish_add([url], fmt, quality, output_dir, [], clear_input=False)
 
     def _finish_add(self, urls: list[str], fmt: MediaFormat, quality: str, output_dir: str,
-                    notes: list[str], clear_input: bool = True) -> list[DownloadTask]:
+                    notes: list[str], clear_input: bool = True,
+                    folders: dict[str, str] | None = None) -> list[DownloadTask]:
+        """加入佇列；folders 可為個別網址指定儲存資料夾（例如播放清單子資料夾）。"""
         # 去除重複（播放清單展開後可能與單一網址重複）並略過佇列中尚未完成的相同任務
         existing = {(t.url, t.media_format, t.quality, t.output_dir) for t in self.ctx.queue.tasks()
                     if not t.status.is_finished}
@@ -489,10 +541,11 @@ class MainWindow(QMainWindow):
             if key in seen:
                 continue
             seen.add(key)
-            if (url, fmt, quality, output_dir) in existing:
+            target = (folders or {}).get(url, output_dir)
+            if (url, fmt, quality, target) in existing:
                 skipped += 1
                 continue
-            specs.append(TaskSpec(url=url, media_format=fmt, quality=quality, output_dir=output_dir))
+            specs.append(TaskSpec(url=url, media_format=fmt, quality=quality, output_dir=target))
         if skipped:
             notes.append(f"已略過 {skipped} 個已在佇列中的相同任務。")
         added = self.ctx.queue.add_tasks(specs) if specs else []
@@ -517,6 +570,15 @@ class MainWindow(QMainWindow):
             task = self.ctx.queue.get(task_id)
             if task:
                 self._reveal(task)
+
+    def play(self, task: DownloadTask | None) -> bool:
+        """雙擊已完成的任務：以預設播放器開啟檔案。"""
+        if task is None or task.status is not TaskStatus.COMPLETED or not task.output_path:
+            return False
+        if not Path(task.output_path).is_file():
+            self.statusBar().showMessage(f"檔案已不存在（可能已被移動或刪除）：{task.output_path}", 8000)
+            return False
+        return system_open.open_media(Path(task.output_path))
 
     def _reveal(self, task: DownloadTask) -> None:
         if task.output_path and Path(task.output_path).is_file():
@@ -600,6 +662,8 @@ class MainWindow(QMainWindow):
             menu.addAction("取消", lambda: queue.cancel(task.id))
         if task.status in (TaskStatus.FAILED, TaskStatus.CANCELLED):
             menu.addAction("重試", lambda: queue.retry(task.id))
+        if task.status is TaskStatus.COMPLETED:
+            menu.addAction("播放（雙擊）", lambda: self.play(task))
         menu.addAction("開啟檔案位置", lambda: self._reveal(task))
         menu.addAction("複製網址", lambda: QGuiApplication.clipboard().setText(task.url))
         if task.status is TaskStatus.WAITING:
@@ -649,14 +713,55 @@ class MainWindow(QMainWindow):
     def _on_task_finished(self, task: DownloadTask) -> None:
         if task.status is TaskStatus.COMPLETED:
             self._last_completed_dir = task.output_dir
+            self._batch_counts["completed"] += 1
             self.statusBar().showMessage(f"完成：{task.display_title}", 5000)
         elif task.status is TaskStatus.FAILED:
+            self._batch_counts["failed"] += 1
             self.statusBar().showMessage(f"失敗：{task.display_title}（選取任務可檢視詳細錯誤）", 8000)
+        # 佇列事件以非同步方式送達：稍候再判斷是否全部結束，避免連續完成的任務被拆成多次通知
+        self._idle_timer.start()
         queue = self.ctx.queue
         if (self.ctx.settings.open_folder_on_complete and self._last_completed_dir and not self._closing
                 and not queue.has_active_tasks() and (queue.pending_count() == 0 or queue.is_paused)):
             system_open.open_folder(Path(self._last_completed_dir))
             self._last_completed_dir = None
+
+    def _check_queue_idle(self) -> None:
+        queue = self.ctx.queue
+        if self._closing or queue.has_active_tasks() or queue.pending_count():
+            return
+        completed, failed = self._batch_counts["completed"], self._batch_counts["failed"]
+        self._batch_counts = {"completed": 0, "failed": 0}
+        if self.ctx.settings.notify_on_complete and (completed or failed):
+            self.notify_queue_finished(completed, failed)
+
+    def notify_queue_finished(self, completed: int, failed: int) -> None:
+        """佇列全部下載完成：工作列圖示閃爍，並在視窗不在前景時顯示系統通知。"""
+        message = f"{completed} 部下載完成" + (f"，{failed} 部失敗" if failed else "")
+        self.statusBar().showMessage(f"佇列已全部完成：{message}", 10000)
+        if self.isActiveWindow():
+            return
+        QApplication.alert(self)  # Windows：工作列圖示閃爍直到使用者切回視窗
+        self._show_notification("下載完成" if not failed else "下載結束", message)
+
+    def _show_notification(self, title: str, message: str) -> None:
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        if self._tray is None:
+            self._tray = QSystemTrayIcon(self.windowIcon(), self)
+            self._tray.setToolTip(APP_DISPLAY_NAME)
+            self._tray.messageClicked.connect(self._bring_to_front)
+            self._tray.activated.connect(lambda *_: self._bring_to_front())
+        self._tray.show()
+        self._tray.showMessage(f"{APP_DISPLAY_NAME}：{title}", message, QSystemTrayIcon.MessageIcon.Information, 8000)
+        # 通知顯示後收起系統匣圖示，不常駐
+        QTimer.singleShot(15000, self._tray.hide)
+
+    def _bring_to_front(self) -> None:
+        if self.isMinimized():
+            self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def _update_queue_controls(self) -> None:
         queue = self.ctx.queue

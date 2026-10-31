@@ -17,7 +17,12 @@
   資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中；README.md 的「功能」表已涵蓋全部要求。
 
-### 目前階段：已完成，沒有進行中的工作
+### 目前階段：v2.3.0（使用者選定的 4 項新功能）已推送到 `main`，等 CI 通過後請使用者發布 `v2.3.0-beta.1`
+
+- 使用者第二次要求「以使用者角度檢查文字與功能及是否可新增功能」（2026-10-31）：修正歷史紀錄並詢問新功能，
+  使用者選了 4 項新功能（MP3 寫入歌名與封面、播放清單子資料夾、拖曳網址＋雙擊播放、全部完成通知），
+  沒有選「小改進」（記住上次格式與品質、加入前提醒已下載過、同時下載上限提高到 5）。
+
 
 - **最新正式版 `v2.2.0`**（標示為 Latest），提供安裝版（`-setup.exe`）與免安裝版（zip）：
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.2.0
@@ -60,6 +65,19 @@
 - v2.1.1：品質欄不再顯示「720p → 720p」：實際與目標相同只顯示一次；低於目標「1080p → 720p ⚠」；
   最高可用解析度「最高可用解析度 → 2160p」；MP3 高於原始音源「320 kbps ⚠」（v2.2.0 起改為「320 kbps → 128 kbps ⚠」；`gui/queue_table.py` 的 `quality_text()`，
   以數字比較解析度；完整說明在儲存格提示）。發布流程同時改為自動去除 tag 前後空白。
+- v2.3.0（未發布）：
+  - 歌名與封面：`converter.postprocessors(..., embed_metadata)` 加入 FFmpegThumbnailsConvertor(jpg, before_dl)、
+    FFmpegMetadata、EmbedThumbnail，並設 `writethumbnail`（與 yt-dlp `--embed-metadata --embed-thumbnail
+    --convert-thumbnails jpg` 相同）；縮圖在任務暫存資料夾中處理。設定 `embed_metadata`（預設開）。
+    整合測試 `test_embed_title_artist_and_cover` 以本機伺服器提供縮圖，實際驗證 MP3 / MP4 的標籤與 mjpeg 封面。
+  - 播放清單子資料夾：`PlaylistPickerDialog.selected_by_group()`；`_finish_add(folders=...)` 可為個別網址指定資料夾；
+    只下載貼上的那一支（`watch?v=…&list=…`）時不建子資料夾。設定 `playlist_subfolder`（預設開）。
+  - 拖曳：主視窗 `setAcceptDrops`，輸入框關閉自身拖放（避免插入既有網址中間），一律另起一行附加。
+    雙擊 / 右鍵「播放」：`system_open.open_media()` 只開啟 .mp3 / .mp4。
+  - 完成通知：佇列事件為非同步，以 800 ms 單次計時器（`_idle_timer`）延後判斷是否全部結束，避免拆成多次通知；
+    視窗不在前景時 `QApplication.alert` + `QSystemTrayIcon.showMessage`（通知後 15 秒收起圖示）。設定 `notify_on_complete`。
+  - 歷史紀錄：只顯示檔名、搜尋、狀態顏色、雙擊在檔案總管中顯示、右鍵複製網址 / 重新下載（`MainWindow.redownload`，
+    不清除輸入框）。取消訊息改為「已取消下載」。
 - v2.2.0：播放清單選擇對話框——列出名稱與長度、可搜尋、全選 / 全不選（只影響目前顯示的項目）、
   勾選清單本身＝整個清單；`playlist?list=` 預設全勾，`watch?v=…&list=…` 只預勾該影片（不在清單中時插在最前面）；
   讀取失敗時退回只加入該影片。`PlaylistEntry` 新增 `video_id`、`duration`。深色主題的勾選框加上明顯外框
@@ -98,14 +116,15 @@ src/yt_media_tool/
   storage/database.py           SQLite（參數化 SQL、PRAGMA user_version migration，目前 v2）
   storage/settings.py           AppSettings（含 cookies_source / cookies_file）
   gui/main_window.py            主視窗（含批次移除、多選右鍵選單）
-  gui/playlist_dialog.py        播放清單選擇對話框（勾選要下載的影片）
+  gui/playlist_dialog.py        播放清單選擇對話框（勾選要下載的影片，可依清單分組取得）
+  gui/history_dialog.py         下載歷史（搜尋、在檔案總管中顯示、重新下載）
   gui/queue_table.py            表格 model、進度條與操作按鈕 delegate
   gui/settings_dialog.py        設定（含「YouTube 登入資訊（選用）」）
-  gui/history_dialog.py / qt_bridge.py / workers.py / theme.py / i18n.py
+  gui/qt_bridge.py / workers.py / theme.py / i18n.py
   utils/paths.py                AppData、隨附檔位置、安全檔名、FileNameReserver
   utils/win_job.py              Job Object（結束時終止子程序）、具名 mutex（供安裝程式偵測）
   utils/system_open.py / logging_utils.py
-tests/                          211 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
+tests/                          221 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
 scripts/
   setup_windows.bat / run_dev.bat / build_exe.bat   Windows 開發與打包
   build_installer.py / .bat     以 Inno Setup 建立 setup.exe 與 .sha256
@@ -161,6 +180,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 | **cookies 功能**（設定 → YouTube 登入資訊，預設不使用） | 使用者實測遇到「Sign in to confirm you're not a bot」，yt-dlp 官方解法即提供使用者自己帳號的 cookies，屬正當驗證、非規避；經使用者同意後加入。cookies.txt 只用暫存副本（yt-dlp 會寫回檔案、並行會互相覆寫）。 |
 | cookies 來源**移除 Chrome / Edge**（v2.1.1 之後；只剩不使用 / Firefox / cookies.txt），Chrome / Edge 改用 **cookies.txt**（擴充功能「Get cookies.txt LOCALLY」，無痕視窗匯出） | Chrome 127+ 的 app-bound encryption 讓 yt-dlp 在 Windows 上讀不到 cookies，使用者回報「選了也沒用」。舊設定的 chrome / edge 載入時自動改回「不使用」（`SettingsStore.load` 驗證）。cookies.txt 方式使用者實測成功。 |
 | **FFmpeg 改用 BtbN win64-lgpl-shared 9.0.2**（使用者選擇） | CI 實測比較：需要的大小 gyan essentials 200.9 MB → lgpl-shared 約 144–167 MB，且改為 LGPL、不含 GPL 元件；MP3（libmp3lame）與 stream copy 皆具備。代價：BtbN 每日建置不保證長期保留。 |
+| **歌名與封面用 yt-dlp 內建後處理**（Metadata / EmbedThumbnail），不另加 mutagen 等套件 | 與 yt-dlp 官方 `--embed-thumbnail` 行為一致，只需隨附的 FFmpeg；所有處理仍在任務暫存資料夾內，不影響檔案安全設計。 |
 | FFmpeg **不交給 PyInstaller**，在 spec 的 COLLECT 之後原樣複製到 `_internal/ffmpeg` | 以 datas 加入時 PyInstaller 分析 DLL 相依，在 `_internal` 最上層多放一份（+142 MB）。 |
 | FFmpeg SHA256 一律**交叉驗證**後才寫入 manifest | 下載檔、GitHub release asset digest、建置者公布的 checksums 三者一致才採用。 |
 | **安裝程式用 Inno Setup**，預設「只為目前使用者」安裝（可改所有使用者） | 不需系統管理員權限即可安裝與升級；資料本來就在 `%LOCALAPPDATA%`，與安裝位置無關。 |
@@ -177,7 +197,11 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-目前沒有待辦的必要工作。以下為之後可能的方向（皆需使用者決定）：
+- **待辦**：v2.3.0 CI 通過 → 使用者發布 `v2.3.0-beta.1` → 確認附件 → 使用者實測（第 C12–C17、E6a 項）→ 發布正式版 `v2.3.0`。
+
+以下為之後可能的方向（皆需使用者決定）：
+
+- 使用者這次未選的小改進：記住上次的格式與品質、加入前提醒已下載過、同時下載上限提高到 5。
 
 - **多線程下載**（使用者詢問過，尚未決定）：
   - 已支援「同時下載多個影片」1–3 筆（原始規格上限 3）。

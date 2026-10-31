@@ -79,6 +79,10 @@ def test_format_selectors():
     assert postprocessors(MediaFormat.MP3, "192") == [
         {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}]
     assert postprocessors(MediaFormat.MP4, "best")[0]["key"] == "FFmpegVideoRemuxer"
+    keys = [pp["key"] for pp in postprocessors(MediaFormat.MP3, "192", embed_metadata=True)]
+    assert keys == ["FFmpegThumbnailsConvertor", "FFmpegExtractAudio", "FFmpegMetadata", "EmbedThumbnail"]
+    keys = [pp["key"] for pp in postprocessors(MediaFormat.MP4, "720", embed_metadata=True)]
+    assert keys == ["FFmpegThumbnailsConvertor", "FFmpegVideoRemuxer", "FFmpegMetadata", "EmbedThumbnail"]
 
 
 def test_js_runtime_option():

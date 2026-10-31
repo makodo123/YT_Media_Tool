@@ -270,8 +270,17 @@ def format_selector(media_format: MediaFormat, quality: str) -> str:
     )
 
 
-def postprocessors(media_format: MediaFormat, quality: str) -> list[dict]:
+def postprocessors(media_format: MediaFormat, quality: str, embed_metadata: bool = False) -> list[dict]:
+    """yt-dlp 後處理設定。embed_metadata 時寫入標題、演出者等資訊並以影片縮圖作為封面
+    （與 yt-dlp 的 --embed-metadata --embed-thumbnail --convert-thumbnails jpg 相同；需配合 writethumbnail）。"""
     if media_format is MediaFormat.MP3:
-        return [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": quality}]
-    # 若下載到的是單一非 MP4 檔案，轉封裝為 MP4（不重新編碼）
-    return [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+        pps = [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": quality}]
+    else:
+        # 若下載到的是單一非 MP4 檔案，轉封裝為 MP4（不重新編碼）
+        pps = [{"key": "FFmpegVideoRemuxer", "preferedformat": "mp4"}]
+    if embed_metadata:
+        # 縮圖多為 WebP，先轉成 JPEG 再嵌入（播放器相容性最好、檔案較小）
+        pps.insert(0, {"key": "FFmpegThumbnailsConvertor", "format": "jpg", "when": "before_dl"})
+        pps.append({"key": "FFmpegMetadata", "add_metadata": True, "add_chapters": False, "add_infojson": False})
+        pps.append({"key": "EmbedThumbnail", "already_have_thumbnail": False})
+    return pps
