@@ -5,9 +5,10 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout, QLabel,
-    QLineEdit, QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame, QGroupBox,
+    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from yt_media_tool.core import converter
@@ -45,6 +46,7 @@ class SettingsDialog(QDialog):
         self.max_concurrent = QSpinBox()
         self.max_concurrent.setRange(MIN_CONCURRENT, MAX_CONCURRENT)
         self.max_concurrent.setValue(settings.max_concurrent)
+        self.max_concurrent.setToolTip("同時下載太多影片較容易被 YouTube 要求驗證，一般建議 1–2。")
         self.default_format = QComboBox()
         self.default_format.addItem("MP4 影片", MediaFormat.MP4.value)
         self.default_format.addItem("MP3 音訊", MediaFormat.MP3.value)
@@ -57,7 +59,7 @@ class SettingsDialog(QDialog):
         for key, label in MP3_QUALITIES.items():
             self.mp3_quality.addItem(label, key)
         self.mp3_quality.setCurrentIndex(self.mp3_quality.findData(settings.default_mp3_quality))
-        self.open_folder = QCheckBox("下載完成後開啟資料夾")
+        self.open_folder = QCheckBox("全部下載完成後開啟資料夾")
         self.open_folder.setChecked(settings.open_folder_on_complete)
         self.notify = QCheckBox("全部下載完成時通知（工作列閃爍並顯示系統通知）")
         self.notify.setToolTip("程式不在前景時才會通知，切到其他視窗做事也會知道下載完成。")
@@ -76,23 +78,30 @@ class SettingsDialog(QDialog):
         self.ffmpeg_status = QLabel()
         self.ffmpeg_status.setObjectName("hintLabel")
         self.ffmpeg_status.setWordWrap(True)
-        check_button = QPushButton("檢查 FFmpeg")
+        check_button = QPushButton("檢查")
         check_button.clicked.connect(self._check_ffmpeg)
 
-        form = QFormLayout()
-        form.addRow("預設儲存資料夾：", _folder_row(self, self.download_dir, "選擇下載資料夾"))
+        download_group = QGroupBox("下載")
+        form = QFormLayout(download_group)
+        folder_row = _folder_row(self, self.download_dir, "選擇下載資料夾")
+        folder_row.setToolTip("與主視窗的「儲存至」相同；在主視窗換資料夾並加入任務後，這裡也會跟著更新。")
+        form.addRow("下載資料夾：", folder_row)
         form.addRow("同時下載數量：", self.max_concurrent)
-        form.addRow("預設下載格式：", self.default_format)
+        form.addRow("預設格式：", self.default_format)
         form.addRow("預設 MP4 解析度：", self.mp4_quality)
         form.addRow("預設 MP3 品質：", self.mp3_quality)
-        form.addRow("", self.open_folder)
-        form.addRow("", self.notify)
-        form.addRow("", self.keep_history)
-        form.addRow("", self.embed_metadata)
-        form.addRow("", self.playlist_subfolder)
-        form.addRow("FFmpeg 資料夾：", _folder_row(self, self.ffmpeg_dir, "選擇含 ffmpeg.exe 的資料夾"))
-        form.addRow("", check_button)
-        form.addRow("", self.ffmpeg_status)
+
+        files_group = QGroupBox("檔案與完成後")
+        files_layout = QVBoxLayout(files_group)
+        for box in (self.embed_metadata, self.playlist_subfolder, self.notify, self.open_folder, self.keep_history):
+            files_layout.addWidget(box)
+
+        ffmpeg_group = QGroupBox("FFmpeg（通常不需更改）")
+        ffmpeg_form = QFormLayout(ffmpeg_group)
+        ffmpeg_row = _folder_row(self, self.ffmpeg_dir, "選擇含 ffmpeg.exe 的資料夾")
+        ffmpeg_row.layout().addWidget(check_button)
+        ffmpeg_form.addRow("FFmpeg 資料夾：", ffmpeg_row)
+        ffmpeg_form.addRow("", self.ffmpeg_status)
 
         # ---- YouTube 登入資訊（cookies）----
         self.cookies_source = QComboBox()
@@ -129,6 +138,7 @@ class SettingsDialog(QDialog):
         note = QLabel("畫質與音質為目標輸出設定；原始素材不支援時，會在佇列中顯示實際取得的格式。")
         note.setObjectName("hintLabel")
         note.setWordWrap(True)
+        form.addRow(note)  # 放在「下載」群組內，說明上面的畫質與音質設定
 
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
         buttons.button(QDialogButtonBox.StandardButton.Ok).setText("儲存")
@@ -136,12 +146,30 @@ class SettingsDialog(QDialog):
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
+        # 內容放在捲動區域：小螢幕或高縮放比例時也不會被截斷，儲存 / 取消按鈕固定在底部
+        content = QWidget()
+        content_layout = QVBoxLayout(content)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        for group in (download_group, files_group, ffmpeg_group, cookies_group):
+            content_layout.addWidget(group)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(content)
         layout = QVBoxLayout(self)
-        layout.addLayout(form)
-        layout.addWidget(cookies_group)
-        layout.addWidget(note)
+        layout.addWidget(scroll, 1)
         layout.addWidget(buttons)
         self._check_ffmpeg()
+        self._fit_to_screen(content)
+
+    def _fit_to_screen(self, content: QWidget) -> None:
+        """依內容決定高度，但不超過螢幕可用高度的 90%。"""
+        content.setMinimumWidth(self.minimumWidth() - 40)
+        wanted = content.sizeHint().height() + 70
+        screen = self.screen() or QApplication.primaryScreen()
+        limit = int(screen.availableGeometry().height() * 0.9) if screen else wanted
+        self.resize(max(self.minimumWidth(), content.sizeHint().width() + 40), min(wanted, limit))
 
     def _use_cookie_file_source(self) -> None:
         self.cookies_source.setCurrentIndex(self.cookies_source.findData("file"))

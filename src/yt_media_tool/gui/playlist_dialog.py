@@ -31,7 +31,8 @@ def _duration_text(seconds: float | None) -> str:
 
 
 class PlaylistPickerDialog(QDialog):
-    def __init__(self, groups: list[PlaylistGroup], limit: int, parent: QWidget | None = None) -> None:
+    def __init__(self, groups: list[PlaylistGroup], limit: int, parent: QWidget | None = None,
+                 destination: str = "") -> None:
         super().__init__(parent)
         self.setWindowTitle("選擇要下載的影片")
         self.resize(720, 560)
@@ -40,6 +41,8 @@ class PlaylistPickerDialog(QDialog):
                       "要下載整個清單請按「全選」。")
         hint.setObjectName("hintLabel")
         hint.setWordWrap(True)
+        if destination:
+            hint.setText(hint.text() + "\n" + destination)
         if any(g.truncated for g in groups):
             hint.setText(hint.text() + f"\n部分清單超過 {limit} 部，只列出前 {limit} 部。")
 

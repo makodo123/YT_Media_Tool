@@ -40,6 +40,7 @@ from yt_media_tool.utils import system_open
 log = logging.getLogger(__name__)
 
 MAX_PLAYLIST_ITEMS = 500
+PASTED_VIDEO_TITLE = "（您貼上的影片）"  # 貼上的影片不在讀到的播放清單中時，選擇對話框顯示的名稱
 DISCLAIMER = (
     "本工具僅供下載您擁有權利、已獲授權或平台明確允許下載的內容。\n"
     "請遵守著作權法及 YouTube 服務條款；本工具不支援、也不會嘗試繞過 DRM 或其他存取限制。"
@@ -477,14 +478,15 @@ class MainWindow(QMainWindow):
             preselect = item.video_id if item.kind is UrlKind.VIDEO_IN_PLAYLIST else None
             if preselect and not any(e.video_id == preselect for e in entries):
                 # 貼上的影片不在讀到的清單中（例如超過上限）：放在最前面，避免使用者想要的影片消失
-                entries.insert(0, PlaylistEntry(item.video_url or "", "（您貼上的影片）", preselect))
+                entries.insert(0, PlaylistEntry(item.video_url or "", PASTED_VIDEO_TITLE, preselect))
             if not entries:
                 notes.append(f"• 播放清單「{title}」中沒有可下載的影片。")
                 continue
             groups.append(PlaylistGroup(title, entries, preselect, outcome.truncated))
         folders: dict[str, str] = {}
+        titles = {e.url: e.title for g in groups for e in g.entries if e.title and e.title != PASTED_VIDEO_TITLE}
         if groups:
-            chosen = self.choose_playlist_entries(groups)
+            chosen = self.choose_playlist_entries(groups, output_dir)
             if chosen is None:
                 notes.append("已取消加入播放清單中的影片。")
             else:
@@ -494,7 +496,7 @@ class MainWindow(QMainWindow):
                         singles.append(url)
                         if folder:
                             folders.setdefault(url, folder)
-        self._finish_add(singles, fmt, quality, output_dir, notes, folders=folders)
+        self._finish_add(singles, fmt, quality, output_dir, notes, folders=folders, titles=titles)
 
     def _playlist_folder(self, output_dir: str, group: PlaylistGroup, urls: list[str]) -> str | None:
         """播放清單的影片存到以清單名稱命名的子資料夾；只下載貼上的那一支影片時不另建資料夾。"""
@@ -506,15 +508,20 @@ class MainWindow(QMainWindow):
                 return None
         return str(Path(output_dir) / sanitize_filename(group.title or "播放清單"))
 
-    def choose_playlist_entries(self, groups: list[PlaylistGroup]) -> list[list[str]] | None:
+    def choose_playlist_entries(self, groups: list[PlaylistGroup], output_dir: str = "") -> list[list[str]] | None:
         """顯示播放清單選擇對話框；依清單回傳勾選的影片網址，取消時回傳 None。"""
-        dialog = PlaylistPickerDialog(groups, MAX_PLAYLIST_ITEMS, self)
+        folder = output_dir or self.folder_edit.text()
+        if self.ctx.settings.playlist_subfolder:
+            destination = f"儲存位置：{Path(folder) / '（清單名稱）'}（只下載貼上的那一支時存在 {folder}）"
+        else:
+            destination = f"儲存位置：{folder}"
+        dialog = PlaylistPickerDialog(groups, MAX_PLAYLIST_ITEMS, self, destination=destination)
         return dialog.selected_by_group() if dialog.exec() else None
 
     def open_history(self) -> None:
         HistoryDialog(self.ctx.db, self, on_redownload=self.redownload).exec()
 
-    def redownload(self, url: str, fmt: MediaFormat, quality: str) -> list[DownloadTask]:
+    def redownload(self, url: str, fmt: MediaFormat, quality: str, title: str = "") -> list[DownloadTask]:
         """從歷史紀錄重新下載：以相同格式與品質加入佇列，存到目前的下載資料夾。"""
         if not self.ctx.current_tools().available:
             self._refresh_dependency_banner()
@@ -523,12 +530,14 @@ class MainWindow(QMainWindow):
         output_dir = self._ensure_output_dir()
         if output_dir is None:
             return []
-        return self._finish_add([url], fmt, quality, output_dir, [], clear_input=False)
+        return self._finish_add([url], fmt, quality, output_dir, [], clear_input=False,
+                                titles={url: title} if title else None)
 
     def _finish_add(self, urls: list[str], fmt: MediaFormat, quality: str, output_dir: str,
-                    notes: list[str], clear_input: bool = True,
-                    folders: dict[str, str] | None = None) -> list[DownloadTask]:
-        """加入佇列；folders 可為個別網址指定儲存資料夾（例如播放清單子資料夾）。"""
+                    notes: list[str], clear_input: bool = True, folders: dict[str, str] | None = None,
+                    titles: dict[str, str] | None = None) -> list[DownloadTask]:
+        """加入佇列；folders 可為個別網址指定儲存資料夾（例如播放清單子資料夾），
+        titles 為已知的影片名稱（下載開始前就能在佇列中顯示，開始下載後以實際名稱更新）。"""
         # 去除重複（播放清單展開後可能與單一網址重複）並略過佇列中尚未完成的相同任務
         existing = {(t.url, t.media_format, t.quality, t.output_dir) for t in self.ctx.queue.tasks()
                     if not t.status.is_finished}
@@ -545,7 +554,8 @@ class MainWindow(QMainWindow):
             if (url, fmt, quality, target) in existing:
                 skipped += 1
                 continue
-            specs.append(TaskSpec(url=url, media_format=fmt, quality=quality, output_dir=target))
+            specs.append(TaskSpec(url=url, media_format=fmt, quality=quality, output_dir=target,
+                                  title=(titles or {}).get(url, "")))
         if skipped:
             notes.append(f"已略過 {skipped} 個已在佇列中的相同任務。")
         added = self.ctx.queue.add_tasks(specs) if specs else []
@@ -583,8 +593,12 @@ class MainWindow(QMainWindow):
     def _reveal(self, task: DownloadTask) -> None:
         if task.output_path and Path(task.output_path).is_file():
             system_open.reveal_file(Path(task.output_path))
-        else:
-            self._open_folder(task.output_dir)
+            return
+        # 尚未開始下載的任務，資料夾（例如播放清單子資料夾）可能還沒建立：改開最近的上層資料夾
+        folder = Path(task.output_dir)
+        while not folder.is_dir() and folder.parent != folder:
+            folder = folder.parent
+        self._open_folder(str(folder if folder.is_dir() else task.output_dir))
 
     def _open_folder(self, folder: str) -> None:
         if not system_open.open_folder(Path(folder)):

@@ -19,8 +19,8 @@ from yt_media_tool.gui.theme import STATUS_COLORS
 from yt_media_tool.storage.database import Database
 from yt_media_tool.utils import system_open
 
-# 重新下載：(網址, 格式, 品質)
-RedownloadCallback = Callable[[str, MediaFormat, str], None]
+# 重新下載：(網址, 格式, 品質, 影片名稱)
+RedownloadCallback = Callable[[str, MediaFormat, str, str], None]
 
 
 def _local_time(iso: str) -> str:
@@ -136,7 +136,7 @@ class HistoryDialog(QDialog):
         except ValueError:
             return
         if self._on_redownload is not None:
-            self._on_redownload(data["url"], fmt, data["quality"])
+            self._on_redownload(data["url"], fmt, data["quality"], data["title"] or "")
 
     def build_context_menu(self, row: int) -> QMenu:
         data = self._rows[row]

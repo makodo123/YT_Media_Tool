@@ -127,7 +127,7 @@ def test_all_invalid_shows_warning_and_adds_nothing(window, dialogs):
 def test_playlist_url_opens_picker_with_all_checked(window, qtbot, monkeypatch):
     shown = []
 
-    def choose(groups):
+    def choose(groups, *_):
         shown.append(groups)
         return [[e.url for e in groups[0].entries[:2]]]  # 使用者只勾選前兩部
 
@@ -144,7 +144,7 @@ def test_playlist_url_opens_picker_with_all_checked(window, qtbot, monkeypatch):
 
 def test_playlist_subfolder_can_be_disabled(window, qtbot, monkeypatch):
     window.ctx.settings.playlist_subfolder = False
-    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: [[groups[0].entries[0].url]])
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: [[groups[0].entries[0].url]])
     window.url_input.setPlainText(PLAYLIST)
     window.add_from_input()
     qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
@@ -152,7 +152,7 @@ def test_playlist_subfolder_can_be_disabled(window, qtbot, monkeypatch):
 
 
 def test_playlist_picker_cancel_adds_nothing(window, qtbot, monkeypatch, dialogs):
-    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: None)
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: None)
     window.url_input.setPlainText(PLAYLIST)
     window.add_from_input()
     qtbot.waitUntil(lambda: not window._busy_expanding, timeout=5000)
@@ -163,7 +163,7 @@ def test_playlist_picker_cancel_adds_nothing(window, qtbot, monkeypatch, dialogs
 def test_video_in_playlist_preselects_pasted_video(window, qtbot, monkeypatch):
     shown = []
 
-    def choose(groups):
+    def choose(groups, *_):
         shown.append(groups)
         return [[e.url for e in groups[0].entries if e.video_id == groups[0].preselect_video_id]]
 
@@ -178,7 +178,7 @@ def test_video_in_playlist_preselects_pasted_video(window, qtbot, monkeypatch):
 
 
 def test_video_in_playlist_whole_list_goes_to_subfolder(window, qtbot, monkeypatch):
-    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: [[e.url for e in groups[0].entries]])
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: [[e.url for e in groups[0].entries]])
     window.url_input.setPlainText("https://www.youtube.com/watch?v=vid00000001&list=PLabcdefghij123456")
     window.add_from_input()
     qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
@@ -187,7 +187,7 @@ def test_video_in_playlist_whole_list_goes_to_subfolder(window, qtbot, monkeypat
 
 def test_pasted_video_missing_from_playlist_is_listed_first(window, qtbot, monkeypatch):
     shown = []
-    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: shown.append(groups) or [[]])
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: shown.append(groups) or [[]])
     window.url_input.setPlainText("https://www.youtube.com/watch?v=aaaaaaaaaaa&list=PLabcdefghij123456")
     window.add_from_input()
     qtbot.waitUntil(lambda: bool(shown), timeout=5000)
@@ -596,8 +596,8 @@ def test_history_dialog_shows_file_name_search_and_actions(window, qtbot, tmp_pa
     window.url_input.setPlainText("https://youtu.be/keepthis01")
     dialog.redownload(rows["私人影片"])
     task = window.ctx.queue.tasks()[0]
-    assert (task.url, task.media_format, task.quality) == (
-        "https://www.youtube.com/watch?v=hist0000002", MediaFormat.MP4, "1080")
+    assert (task.url, task.media_format, task.quality, task.title) == (
+        "https://www.youtube.com/watch?v=hist0000002", MediaFormat.MP4, "1080", "私人影片")
     assert window.url_input.toPlainText() == "https://youtu.be/keepthis01"  # 不清除使用者正在輸入的網址
 
 
@@ -683,3 +683,49 @@ def test_no_notification_when_disabled_or_window_active(window, monkeypatch):
     window.notify_queue_finished(1, 1)
     assert shown == []  # 使用者正在看視窗時只更新狀態列
     assert "1 部下載完成，1 部失敗" in window.statusBar().currentMessage()
+
+
+def test_playlist_tasks_show_titles_before_download(window, qtbot, monkeypatch):
+    seen_destination = []
+
+    def choose(groups, output_dir):
+        seen_destination.append(output_dir)
+        return [[e.url for e in groups[0].entries]]
+
+    monkeypatch.setattr(window, "choose_playlist_entries", choose)
+    window.url_input.setPlainText(PLAYLIST)
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
+    assert [t.title for t in window.ctx.queue.tasks()] == ["影片 0", "影片 1", "影片 2"]  # 不必等開始下載
+    assert seen_destination == [str(Path(window.folder_edit.text()))]
+
+
+def test_reveal_waiting_task_opens_nearest_existing_folder(window, tmp_path, monkeypatch):
+    from yt_media_tool.core.task_models import DownloadTask
+    from yt_media_tool.utils import system_open
+
+    opened = []
+    monkeypatch.setattr(system_open, "open_folder", lambda folder: opened.append(folder) or True)
+    task = DownloadTask(url="https://youtu.be/aaaaaaaaaaa", media_format=MediaFormat.MP3, quality="192",
+                        output_dir=str(tmp_path / "清單" / "尚未建立"))
+    window._reveal(task)
+    assert opened == [tmp_path]  # 子資料夾還沒建立：開啟最近的上層資料夾，不顯示錯誤
+
+
+def test_playlist_dialog_shows_destination(window, qtbot):
+    from PySide6.QtWidgets import QLabel
+
+    from yt_media_tool.core.downloader import PlaylistEntry
+    from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
+
+    dialog = PlaylistPickerDialog([PlaylistGroup("清單", [PlaylistEntry("https://youtu.be/aaaaaaaaaaa", "歌")])], 500,
+                                  window, destination="儲存位置：D:\\音樂\\（清單名稱）")
+    qtbot.addWidget(dialog)
+    assert any("儲存位置：D:\\音樂" in label.text() for label in dialog.findChildren(QLabel))
+
+
+def test_settings_dialog_fits_screen(qtbot, window):
+    dialog = SettingsDialog(window.ctx.settings, window)
+    qtbot.addWidget(dialog)
+    available = dialog.screen().availableGeometry().height()
+    assert dialog.height() <= available
