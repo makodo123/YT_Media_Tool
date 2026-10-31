@@ -85,6 +85,10 @@ class SettingsDialog(QDialog):
         self.playlist_subfolder = QCheckBox("播放清單存到以清單名稱命名的子資料夾")
         self.playlist_subfolder.setToolTip("例如「下載資料夾\\我的最愛歌單\\」；只下載貼上的那一支影片時不另建資料夾。")
         self.playlist_subfolder.setChecked(settings.playlist_subfolder)
+        self.playlist_m3u = QCheckBox("播放清單產生清單檔（.m3u8），音樂播放器可依原順序播放")
+        self.playlist_m3u.setToolTip("從播放清單下載 2 部以上時，在存放的資料夾產生「清單名稱.m3u8」，\n"
+                                     "用音樂播放器（例如 VLC、foobar2000、手機音樂 App）開啟即依原清單順序播放。")
+        self.playlist_m3u.setChecked(settings.playlist_m3u)
         self.check_updates = QCheckBox("啟動時檢查是否有新版本")
         self.check_updates.setToolTip("只連線 GitHub 讀取最新版本號，不會傳送任何個人資料。\n"
                                       "也可以從「說明 → 檢查新版本」手動檢查。")
@@ -110,8 +114,8 @@ class SettingsDialog(QDialog):
 
         files_group = QGroupBox("其他功能")
         files_layout = QVBoxLayout(files_group)
-        for box in (self.embed_metadata, self.playlist_subfolder, self.auto_paste, self.notify, self.open_folder,
-                    self.keep_history, self.check_updates):
+        for box in (self.embed_metadata, self.playlist_subfolder, self.playlist_m3u, self.auto_paste, self.notify,
+                    self.open_folder, self.keep_history, self.check_updates):
             files_layout.addWidget(box)
 
         ffmpeg_group = QGroupBox("FFmpeg（通常不需更改）")
@@ -246,6 +250,7 @@ class SettingsDialog(QDialog):
             keep_history=self.keep_history.isChecked(),
             embed_metadata=self.embed_metadata.isChecked(),
             playlist_subfolder=self.playlist_subfolder.isChecked(),
+            playlist_m3u=self.playlist_m3u.isChecked(),
             ffmpeg_dir=self.ffmpeg_dir.text().strip(),
             cookies_source=self.cookies_source.currentData(),
             cookies_file=self.cookies_file.text().strip(),

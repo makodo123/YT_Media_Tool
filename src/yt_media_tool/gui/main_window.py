@@ -21,6 +21,8 @@ from yt_media_tool import APP_DISPLAY_NAME, __version__
 from yt_media_tool.app_context import AppContext
 from yt_media_tool.core import converter, updates
 from yt_media_tool.core.downloader import PlaylistEntry, PlaylistInfo
+from yt_media_tool.core.local_convert import is_media_file
+from yt_media_tool.core.playlist_files import PlaylistFileStore
 from yt_media_tool.core.errors import explain_error
 from yt_media_tool.core.queue_manager import (
     QUEUE_STATE, TASK_ADDED, TASK_FINISHED, TASK_PROGRESS, TASK_REMOVED, TASK_UPDATED, TaskSpec,
@@ -29,6 +31,7 @@ from yt_media_tool.core.task_models import (
     DownloadTask, MediaFormat, TaskStatus, format_speed, quality_options,
 )
 from yt_media_tool.core.url_parser import ParsedUrl, UrlKind, parse_urls
+from yt_media_tool.gui.convert_dialog import ConvertDialog
 from yt_media_tool.gui.history_dialog import HistoryDialog
 from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
 from yt_media_tool.gui.qt_bridge import QueueEventBridge
@@ -66,6 +69,8 @@ class MainWindow(QMainWindow):
         self._batch_counts = {"completed": 0, "failed": 0}  # 自上次佇列全部結束以來的完成 / 失敗筆數
         self._tray: QSystemTrayIcon | None = None
         self._update_job: BackgroundJob | None = None
+        self._convert_dialog: ConvertDialog | None = None
+        self._playlist_files = PlaylistFileStore(ctx.db)
         self._update_manual = False
         self._available_update: str | None = None
         self._jobs: set[BackgroundJob] = set()
@@ -113,6 +118,9 @@ class MainWindow(QMainWindow):
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
         settings_action.triggered.connect(self.open_settings)
         tools_menu.addAction(settings_action)
+        convert_action = QAction("本機檔案轉 MP3…", self)
+        convert_action.triggered.connect(lambda: self.open_converter())
+        tools_menu.addAction(convert_action)
         history_action = QAction("下載歷史紀錄…", self)
         history_action.triggered.connect(self.open_history)
         tools_menu.addAction(history_action)
@@ -453,11 +461,23 @@ class MainWindow(QMainWindow):
             return "\n".join(u.toString() for u in mime.urls() if u.scheme() in ("http", "https"))
         return mime.text() if mime.hasText() else ""
 
+    @staticmethod
+    def _dropped_media_files(mime) -> list[Path]:
+        if not mime.hasUrls():
+            return []
+        return [Path(u.toLocalFile()) for u in mime.urls() if u.isLocalFile() and is_media_file(Path(u.toLocalFile()))]
+
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:
-        if self._dropped_text(event.mimeData()).strip():
+        if self._dropped_text(event.mimeData()).strip() or self._dropped_media_files(event.mimeData()):
             event.acceptProposedAction()
 
     def dropEvent(self, event: QDropEvent) -> None:
+        files = self._dropped_media_files(event.mimeData())
+        if files:
+            # 拖進來的是電腦裡的影音檔：開啟「本機檔案轉 MP3」
+            event.acceptProposedAction()
+            self.open_converter(files)
+            return
         text = self._dropped_text(event.mimeData()).strip()
         if not text:
             return
@@ -607,6 +627,8 @@ class MainWindow(QMainWindow):
                         singles.append(url)
                         if folder:
                             folders.setdefault(url, folder)
+                    if self.ctx.settings.playlist_m3u:
+                        self._playlist_files.add_batch(folder or output_dir, group.title, fmt.value, urls)
         self._finish_add(singles, fmt, quality, output_dir, notes, folders=folders, titles=titles)
 
     def _playlist_folder(self, output_dir: str, group: PlaylistGroup, urls: list[str]) -> str | None:
@@ -628,6 +650,18 @@ class MainWindow(QMainWindow):
             destination = f"儲存位置：{folder}"
         dialog = PlaylistPickerDialog(groups, MAX_PLAYLIST_ITEMS, self, destination=destination)
         return dialog.selected_by_group() if dialog.exec() else None
+
+    def open_converter(self, files: list[Path] | None = None) -> ConvertDialog:
+        """開啟「本機檔案轉 MP3」（非強制回應視窗，轉檔時仍可操作主視窗）。"""
+        if self._convert_dialog is None or not self._convert_dialog.isVisible():
+            self._convert_dialog = ConvertDialog(self.ctx.current_tools(), self.ctx.settings.default_mp3_quality, self)
+        dialog = self._convert_dialog
+        if files and not dialog.is_running():
+            dialog.add_files(files)
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        return dialog
 
     def open_history(self) -> None:
         HistoryDialog(self.ctx.db, self, on_redownload=self.redownload).exec()
@@ -839,6 +873,10 @@ class MainWindow(QMainWindow):
         if task.status is TaskStatus.COMPLETED:
             self._last_completed_dir = task.output_dir
             self._batch_counts["completed"] += 1
+            try:
+                self._playlist_files.on_task_completed(task)  # 更新播放清單檔（.m3u8）
+            except Exception:  # 清單檔只是附加功能，不可影響佇列
+                log.warning("更新播放清單檔失敗", exc_info=True)
             self.statusBar().showMessage(f"完成：{task.display_title}", 5000)
         elif task.status is TaskStatus.FAILED:
             self._batch_counts["failed"] += 1
@@ -959,6 +997,10 @@ class MainWindow(QMainWindow):
         if self._closing:
             event.accept()
             return
+        if self._convert_dialog is not None and self._convert_dialog.is_running():
+            if not self._convert_dialog.close():  # 會詢問是否取消轉檔
+                event.ignore()
+                return
         if self.ctx.queue.has_active_tasks():
             answer = QMessageBox.question(
                 self, "結束程式",

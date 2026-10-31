@@ -845,3 +845,102 @@ def test_check_for_updates_runs_in_background(window, qtbot, monkeypatch):
     window.check_for_updates()
     qtbot.waitUntil(lambda: not window.update_banner.isHidden(), timeout=3000)
     assert window._update_job is None
+
+
+needs_ffmpeg = pytest.mark.skipif(not (__import__("shutil").which("ffmpeg") and __import__("shutil").which("ffprobe")),
+                                  reason="需要 FFmpeg / FFprobe")
+
+
+@pytest.fixture
+def local_media(tmp_path):
+    import shutil
+    import subprocess
+
+    src = tmp_path / "來源"
+    src.mkdir()
+    subprocess.run([shutil.which("ffmpeg"), "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+                    "-c:a", "aac", str(src / "錄音.m4a")], check=True)
+    (src / "說明.txt").write_text("x", encoding="utf-8")
+    return src
+
+
+@needs_ffmpeg
+def test_convert_dialog_converts_files(qtbot, window, local_media, tmp_path):
+    from yt_media_tool.core import converter
+    from yt_media_tool.gui.convert_dialog import COL_STATUS, ConvertDialog
+
+    dialog = ConvertDialog(converter.find_ffmpeg(), "128", window)
+    qtbot.addWidget(dialog)
+    assert dialog.add_files([local_media / "錄音.m4a", local_media / "說明.txt", local_media / "錄音.m4a"]) == 1
+    assert "說明.txt" in dialog.summary.text()  # 不支援的檔案會被略過並提示
+
+    out = tmp_path / "輸出"
+    dialog.other_folder.setChecked(True)
+    dialog.folder_edit.setText(str(out))
+    dialog.start_button.click()
+    qtbot.waitUntil(lambda: dialog.table.item(0, COL_STATUS).text().startswith("完成"), timeout=20000)
+    qtbot.waitUntil(lambda: not dialog.is_running(), timeout=5000)
+    assert (out / "錄音.mp3").is_file()
+    assert sorted(p.name for p in local_media.iterdir()) == ["說明.txt", "錄音.m4a"]  # 來源資料夾不變
+    assert "完成 1 個" in dialog.summary.text()
+    dialog.start_button.click()
+    assert "都已轉好" in dialog.summary.text()  # 已轉好的不重複轉
+
+
+def test_convert_dialog_requires_output_folder(qtbot, window, tmp_path, dialogs):
+    from yt_media_tool.core.converter import ToolInfo
+    from yt_media_tool.gui.convert_dialog import ConvertDialog
+
+    media = tmp_path / "a.mp4"
+    media.write_bytes(b"x")
+    dialog = ConvertDialog(ToolInfo(ffmpeg=Path("/fake/ffmpeg"), ffprobe=Path("/fake/ffprobe"), source="test"),
+                           "192", window, files=[media])
+    qtbot.addWidget(dialog)
+    dialog.other_folder.setChecked(True)
+    dialog.start_button.click()
+    assert "請選擇要存放 MP3 的資料夾" in dialogs.text()
+    assert not dialog.is_running()
+
+
+def test_dropping_local_media_opens_converter(window, tmp_path):
+    from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDropEvent
+
+    media = tmp_path / "影片.mp4"
+    media.write_bytes(b"x")
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(media)), QUrl.fromLocalFile(str(tmp_path / "x.exe"))])
+    window.dropEvent(QDropEvent(QPointF(5, 5), Qt.DropAction.CopyAction, mime, Qt.MouseButton.LeftButton,
+                                Qt.KeyboardModifier.NoModifier))
+    dialog = window._convert_dialog
+    assert dialog is not None and dialog.isVisible()
+    assert dialog.files() == [media]
+    assert window.url_input.toPlainText() == ""  # 本機檔案不放進網址輸入框
+    dialog.close()
+
+
+def test_playlist_download_writes_m3u8_in_order(window, qtbot, monkeypatch):
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: [[e.url for e in groups[0].entries]])
+    window.ctx.queue.resume()
+    window.url_input.setPlainText(PLAYLIST)
+    window.add_from_input()
+    model = window.table.queue_model
+    qtbot.waitUntil(lambda: rows(window) == 3 and all(model.task_at(i).status is TaskStatus.COMPLETED
+                                                     for i in range(3)), timeout=10000)
+    folder = Path(window.folder_edit.text()) / "清單"
+    m3u = folder / "清單.m3u8"
+    qtbot.waitUntil(m3u.is_file, timeout=3000)
+    names = [line for line in m3u.read_text(encoding="utf-8").splitlines() if not line.startswith("#")]
+    assert names == [Path(t.output_path).name for t in window.ctx.queue.tasks()]
+
+
+def test_playlist_m3u_can_be_disabled(window, qtbot, monkeypatch):
+    window.ctx.settings.playlist_m3u = False
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: [[e.url for e in groups[0].entries]])
+    window.ctx.queue.resume()
+    window.url_input.setPlainText(PLAYLIST)
+    window.add_from_input()
+    model = window.table.queue_model
+    qtbot.waitUntil(lambda: rows(window) == 3 and all(model.task_at(i).status is TaskStatus.COMPLETED
+                                                     for i in range(3)), timeout=10000)
+    assert not list((Path(window.folder_edit.text()) / "清單").glob("*.m3u8"))

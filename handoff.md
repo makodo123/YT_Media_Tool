@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-10-31（v2.4.0 發布並經使用者實測後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-10-31（v2.5.0 開發中）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -20,7 +20,9 @@
   不得把使用者輸入拼成 shell 指令；資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中；README.md 的「功能」表涵蓋全部功能（含後續新增）。
 
-最近三輪的工作方式：使用者要求「**以使用者角度檢查文字與功能（及是否可新增功能）**」→ 修正並發測試版 →
+使用者詢問「還能做什麼實用小工具」後，選了「本機檔案轉 MP3」與「產生播放清單檔」（v2.5.0）。
+
+最近幾輪的工作方式：使用者要求「**以使用者角度檢查文字與功能（及是否可新增功能）**」→ 修正並發測試版 →
 使用者實機測試回報 → 修正 → 使用者確認後發正式版。
 
 ---
@@ -31,11 +33,12 @@
 
 - **最新正式版 `v2.4.0`**（標示為 Latest）：2026-10-31 發布，4 個附件與 `.sha256` 已核對；**使用者實測下載無誤**。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.4.0
-- v2.4.0 的程式碼與使用者實測無誤的 `v2.4.0-beta.1`（18c3d1d）相同，之後只改 handoff.md。
-- **沒有進行中的工作**。
+- v2.4.0 的程式碼與使用者實測無誤的 `v2.4.0-beta.1`（18c3d1d）相同。
+- **進行中：v2.5.0**（本機檔案轉 MP3、播放清單檔 .m3u8）。已推送到 `main`，等 Windows CI 通過後請使用者發布 `v2.5.0-beta.1`，
+  實測無誤再發 `v2.5.0`（流程見第 4 節）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0 皆回報無誤。
-- 測試：251 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：266 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
@@ -60,6 +63,14 @@
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.5.0**（未發布；使用者從「實用小工具」建議中選了 2 項）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 本機檔案轉 MP3 | 新檔 `core/local_convert.py`：`convert_to_mp3()` 先 FFprobe 確認有音訊 → FFmpeg（參數清單、`-progress pipe:1` 回報進度、可取消）寫到輸出資料夾的隱藏暫存檔 `.ytmt_convert_<亂數>.mp3` → `verify_output` → `FileNameReserver`＋`move_no_overwrite` 改成 `原檔名.mp3`（已存在加「 (1)」）；失敗 / 取消只刪自己的暫存檔；`ConvertError` 為中文原因。新檔 `gui/convert_dialog.py`：非強制回應視窗、加入 / 拖曳檔案、音質、存到「原資料夾」或指定資料夾、逐檔進度與結果、雙擊在檔案總管中顯示、關閉時詢問取消。`gui/main_window.py`：「工具 → 本機檔案轉 MP3…」、`open_converter()`；把本機影音檔拖到主視窗即開啟轉檔視窗（網址仍放進輸入框）；主視窗關閉時若轉檔中先詢問 |
+| 播放清單檔（.m3u8） | 新檔 `core/playlist_files.py`：`PlaylistFileStore` 把每個播放清單批次（資料夾、清單名稱、格式、影片順序、已完成檔名、清單檔名）存在 `application_settings` 的 `playlist_files.batches`（最多 50 筆）；任務完成時重寫清單檔（UTF-8、相對路徑、依清單順序、只列存在的檔案；暫存檔＋`os.replace`）；第一次建立時同名檔存在改用「 (1)」。`gui/main_window.py`：`_on_playlists_expanded` 登記批次（2 部以上）、`_on_task_finished` 更新（例外只記錄）。設定 `playlist_m3u`（預設開） |
+| 測試與文件 | `tests/integration/test_local_convert.py`（新，真實 FFmpeg：轉檔、不覆蓋、沒有聲音 / 非影音檔、取消）、`tests/test_playlist_files.py`（新）、`tests/test_gui.py`（轉檔視窗、拖曳本機檔、播放清單下載後產生 .m3u8）；README、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（C22–C25） |
 
 **v2.4.0**（使用者第三次「使用者角度檢查」：修正 4 個問題＋使用者選定的 4 項新功能）
 
@@ -135,15 +146,18 @@ src/yt_media_tool/
   core/downloader.py            yt-dlp 下載引擎（暫存隔離、取消、驗證、不覆蓋移動、播放清單讀取、字幕、DownloadPreferences）
   core/converter.py             FFmpeg / FFprobe / Deno 偵測、ffprobe 驗證、格式選擇、後處理（含歌名與封面）
   core/updates.py               新版本檢查（GitHub releases/latest）
+  core/local_convert.py         本機影音檔轉 MP3（暫存檔→驗證→不覆蓋移動、進度、取消）
+  core/playlist_files.py        播放清單檔（.m3u8）批次記錄與產生
   core/cookies.py               YouTube cookies 設定 → yt-dlp 參數（cookies.txt 只用副本）
   core/queue_manager.py         佇列排程、取消、重試、保存與恢復（不依賴 Qt）
   core/errors.py                例外 → 中文說明（yt-dlp、FFmpeg、cookies、磁碟、權限）
   storage/database.py           SQLite（參數化 SQL、PRAGMA user_version migration，目前 v2）
   storage/settings.py           AppSettings（cookies、embed_metadata、playlist_subfolder、notify_on_complete、rate_limit_mbps、
-                                download_subtitles、auto_paste_clipboard、check_updates、skipped_update_version 等）
+                                download_subtitles、auto_paste_clipboard、check_updates、skipped_update_version、playlist_m3u 等）
   gui/main_window.py            主視窗（加入佇列、播放清單、拖曳、剪貼簿帶入、字幕勾選、雙擊播放、批次操作、完成通知、新版本提醒）
   gui/playlist_dialog.py        播放清單選擇對話框（勾選要下載的影片，可依清單分組取得）
   gui/history_dialog.py         下載歷史（搜尋、在檔案總管中顯示、重新下載）
+  gui/convert_dialog.py         本機檔案轉 MP3 視窗
   gui/queue_table.py            表格 model、品質 / 狀態文字、進度條與操作按鈕 delegate
   gui/settings_dialog.py        設定（含「YouTube 登入資訊（選用）」）
   gui/qt_bridge.py / workers.py / theme.py / i18n.py
@@ -174,7 +188,7 @@ packaging/
   release.yml                   Run workflow / 推 tag / 推 release/v* 分支 → 測試、打包、安裝程式 → 建立 Release
   ffmpeg-verify.yml             manifest 變更時交叉驗證 FFmpeg SHA256
   ffmpeg-candidates.yml         比較 FFmpeg 候選建置的大小與 MP3 支援（只在修改此檔時執行）
-docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0，C18–C21 為 v2.4.0 新功能）
+docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0，C18–C21 為 v2.4.0，C22–C25 為 v2.5.0 新功能）
 docs/RELEASE_NOTES.md               Release 頁面說明（release.yml 會讀取）
 THIRD_PARTY_NOTICES.md              第三方授權
 ```
@@ -183,10 +197,16 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 3. 剛剛做的關鍵決定，以及為什麼這樣決定
 
-### 3.1 最近三輪（v2.1.3～v2.4.0）的決定
+### 3.1 最近幾輪（v2.1.3～v2.5.0）的決定
 
 | 決定 | 原因 |
 |---|---|
+| 播放清單檔用 **`.m3u8`（UTF-8）**，不用 `.m3u` | 使用者要求的是 .m3u 清單檔；.m3u 在許多播放器以系統編碼讀取，中文歌名會變亂碼，.m3u8 是同一種格式的 UTF-8 版本。 |
+| 清單檔**每完成一首就重寫**，批次資訊存在資料庫 | 下載完成順序不固定、可能失敗後重試、程式可能中途關閉；每次依原清單順序重寫，只列出存在的檔案，最後一定完整。 |
+| 只有從播放清單加入 **2 部以上**才產生清單檔 | 只下載一首時清單檔沒有意義。 |
+| 本機轉檔先寫**隱藏暫存檔、驗證後才改名**，與下載相同的不覆蓋規則 | 沿用檔案安全設計：原檔絕不修改，轉一半失敗或取消不會留下殘缺的 .mp3，也不會蓋掉同名檔。 |
+| 本機轉檔放在**獨立的非強制回應視窗**，不進下載佇列 | 轉檔與下載是不同的工作（沒有網址、速度、重試）；獨立視窗可邊轉檔邊操作主視窗。 |
+| 本機轉檔的檔案類型以 FFprobe 判斷「有沒有聲音」，副檔名清單只用於篩選 | 副檔名不可靠；沒有聲音的影片會給清楚的原因，而不是 FFmpeg 錯誤訊息。 |
 | **字幕另外跑一次 yt-dlp（`skip_download`），不與影片一起下載** | yt-dlp 下載字幕失敗時，除非開 `ignoreerrors` 否則會讓整個下載失敗；開 `ignoreerrors` 又會吞掉真正的下載錯誤。分開處理後字幕只是附加項目，失敗只在詳細資訊加附註。 |
 | 字幕**只下載一種語言**，自己依偏好選，不用 yt-dlp 的 `subtitleslangs` 清單 | `subtitleslangs` 會下載清單中所有符合的語言；YouTube 自動翻譯字幕幾乎涵蓋所有語言，會產生一堆檔案。上傳者提供的字幕優先於自動產生字幕（品質較好）。 |
 | 字幕存成 `影片名.srt`（不嵌入 MP4） | 依使用者選項的說明；同名 .srt 播放器會自動載入，也方便另外編輯。 |
@@ -240,7 +260,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-**目前沒有待辦的必要工作。** v2.4.0 已發布為 Latest；使用者有新需求或回報問題時，依下方流程以新版本號修正並發布。
+- **待辦**：v2.5.0 的 Windows CI 通過 → 請使用者發布 `v2.5.0-beta.1` → 確認附件 → 使用者實測（C22–C25）
+  → 發布正式版 `v2.5.0` → 確認附件與 Latest → 更新本文件。
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
@@ -248,6 +269,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
   - 兩次都未選：記住上次在主視窗選的格式與品質、加入前提醒「歷史紀錄中已下載過」。
   - 第二次檢查（v2.3.0）未選：同時下載上限從 3 提高到 5。
   - 第三次檢查（v2.4.0）未選：只下載片段（指定開始 / 結束時間）、自訂檔名格式（例如「演出者 - 標題」）。
+  - 「實用小工具」建議（v2.5.0）未選：播放清單同步（只下載新歌）、依章節分割成多首、歌名自動整理、音量平衡、
+    全部下載完成後自動睡眠 / 關機、另存影片縮圖。
 - **多線程下載**（使用者詢問過，尚未決定）：
   - 已支援「同時下載多個影片」1–3 筆（原始規格上限 3）。
   - 選項 A：設定新增「單一影片分段同時下載數」（yt-dlp `concurrent_fragment_downloads`，建議 1–8、預設 4）；
@@ -279,6 +302,10 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `system_open.open_media()` 的副檔名白名單（.mp3 / .mp4）不要放寬。
 
 ### 近期新增功能的雷
+- 本機轉檔 `convert_to_mp3()`：**不可**讓 FFmpeg 直接寫到正式檔名或使用 `-y`；一律暫存檔 → 驗證 → `move_no_overwrite`。
+  取消時由監看執行緒 `kill` FFmpeg，`finally` 刪除暫存檔。
+- `PlaylistFileStore` 的 `os.replace` 只能用在本程式記錄的清單檔名（batch 的 `m3u`）；第一次建立一定先找未使用的檔名。
+- 測試的 `db` fixture 把資料庫放在 `tmp_path`，檢查資料夾內容的測試要另建子資料夾。
 - **測試中的主視窗已關閉自動帶入剪貼簿**（`window` fixture 設 `auto_paste_clipboard = False`）；否則剪貼簿內容會跨測試影響輸入框。
 - **新版本檢查只能在 `app.py` 觸發**，不要放進 `MainWindow.__init__`（測試與 smoke test 會連網）。
 - 字幕步驟 `_download_subtitle()` 必須維持「任何例外都只回傳附註」；`actual_quality` 結尾的「；字幕：…」附註不可放在開頭（`quality_text()` 從開頭比對「Np」）。
