@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-10-31（v2.4.0 發布後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-10-31（v2.4.0 發布並經使用者實測後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -81,7 +81,7 @@
 
 | 功能 | 修改的檔案與重點 |
 |---|---|
-| 歌名、演出者與封面 | `core/converter.py`：`postprocessors(..., embed_metadata)` 加入 `FFmpegThumbnailsConvertor`（jpg、before_dl）、`FFmpegMetadata`、`EmbedThumbnail`；`core/downloader.py`：`metadata_provider`、`writethumbnail`、`POSTPROCESSOR_STAGES` 新增「寫入歌曲資訊中」「嵌入封面中」、`SILENT_POSTPROCESSORS`；`app_context.py` 接上設定；`storage/settings.py` 新增 `embed_metadata`（預設開）；`gui/settings_dialog.py` 勾選框 |
+| 歌名、演出者與封面 | `core/converter.py`：`postprocessors(..., embed_metadata)` 加入 `FFmpegThumbnailsConvertor`（jpg、before_dl）、`FFmpegMetadata`、`EmbedThumbnail`；`core/downloader.py`：`metadata_provider`（v2.4.0 起併入 `preferences_provider`）、`writethumbnail`、`POSTPROCESSOR_STAGES` 新增「寫入歌曲資訊中」「嵌入封面中」、`SILENT_POSTPROCESSORS`；`app_context.py` 接上設定；`storage/settings.py` 新增 `embed_metadata`（預設開）；`gui/settings_dialog.py` 勾選框 |
 | 播放清單子資料夾 | `gui/playlist_dialog.py`：`selected_by_group()`；`gui/main_window.py`：`choose_playlist_entries()` 改回傳 `list[list[str]]`、`_playlist_folder()`、`_finish_add(folders=...)`；`storage/settings.py` 新增 `playlist_subfolder`（預設開） |
 | 拖曳網址 | `gui/main_window.py`：`setAcceptDrops`、`dragEnterEvent` / `dropEvent` / `_dropped_text()` / `_append_urls()`；輸入框 `setAcceptDrops(False)` |
 | 雙擊播放 | `utils/system_open.py`：`open_media()`（只開 .mp3 / .mp4）、`_open_with_default_app()`；`gui/main_window.py`：`play()`、表格 `doubleClicked`、右鍵「播放（雙擊）」 |
@@ -129,7 +129,7 @@ pyproject.toml                  套件資訊、版本號、pytest、ruff 設定�
 src/yt_media_tool/
   __init__.py                   __version__（版本號唯一來源；EXE / 安裝程式自動取用）
   app.py                        進入點：日誌、Job Object、具名 mutex、單一執行個體鎖、Qt 中文翻譯、--smoke-test / --version
-  app_context.py                組合 DB / 設定 / Downloader（cookies、metadata provider）/ QueueManager
+  app_context.py                組合 DB / 設定 / Downloader（cookies_provider、preferences_provider）/ QueueManager
   core/task_models.py           任務模型與狀態機（等待中 / 下載中 / 轉檔中 / 已完成 / 失敗 / 已取消）
   core/url_parser.py            網址分類、正規化、去重、錯誤原因
   core/downloader.py            yt-dlp 下載引擎（暫存隔離、取消、驗證、不覆蓋移動、播放清單讀取、字幕、DownloadPreferences）
@@ -139,8 +139,9 @@ src/yt_media_tool/
   core/queue_manager.py         佇列排程、取消、重試、保存與恢復（不依賴 Qt）
   core/errors.py                例外 → 中文說明（yt-dlp、FFmpeg、cookies、磁碟、權限）
   storage/database.py           SQLite（參數化 SQL、PRAGMA user_version migration，目前 v2）
-  storage/settings.py           AppSettings（cookies、embed_metadata、playlist_subfolder、notify_on_complete 等）
-  gui/main_window.py            主視窗（加入佇列、播放清單、拖曳、雙擊播放、批次操作、完成通知）
+  storage/settings.py           AppSettings（cookies、embed_metadata、playlist_subfolder、notify_on_complete、rate_limit_mbps、
+                                download_subtitles、auto_paste_clipboard、check_updates、skipped_update_version 等）
+  gui/main_window.py            主視窗（加入佇列、播放清單、拖曳、剪貼簿帶入、字幕勾選、雙擊播放、批次操作、完成通知、新版本提醒）
   gui/playlist_dialog.py        播放清單選擇對話框（勾選要下載的影片，可依清單分組取得）
   gui/history_dialog.py         下載歷史（搜尋、在檔案總管中顯示、重新下載）
   gui/queue_table.py            表格 model、品質 / 狀態文字、進度條與操作按鈕 delegate
@@ -210,7 +211,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 | 輸入框 `setAcceptDrops(False)`，拖放交給主視窗**另起一行附加** | QPlainTextEdit 預設會把拖入的文字插在滑鼠位置，可能插進既有網址中間。 |
 | 歷史紀錄「重新下載」**不清除輸入框** | 使用者可能正在輸入其他網址。 |
 | 三個新功能都**預設開啟並可在設定關閉**（`embed_metadata`、`playlist_subfolder`、`notify_on_complete`） | 大多數使用者想要；若某環境出問題（例如封面嵌入失敗），可自行關閉而不必等新版。 |
-| 使用者**未選**的小改進不做：記住上次格式與品質、加入前提醒已下載過、同時下載上限提高到 5 | 使用者在 2026-10-31 的選項中沒有勾選。 |
+| 使用者**未選**的項目不做（詳見第 4 節） | 2026-10-31 兩次提出選項，使用者都只勾選了部分項目；未經同意不實作。 |
 
 ### 3.2 架構、檔案安全與發布的決定（長期有效）
 
@@ -243,8 +244,10 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
-- 使用者兩次都未選的項目：記住上次在主視窗選的格式與品質、加入前提醒「歷史紀錄中已下載過」、同時下載上限從 3 提高到 5、
-  只下載片段（指定開始 / 結束時間）、自訂檔名格式（例如「演出者 - 標題」）。
+- 提出過但使用者未選的項目（2026-10-31）：
+  - 兩次都未選：記住上次在主視窗選的格式與品質、加入前提醒「歷史紀錄中已下載過」。
+  - 第二次檢查（v2.3.0）未選：同時下載上限從 3 提高到 5。
+  - 第三次檢查（v2.4.0）未選：只下載片段（指定開始 / 結束時間）、自訂檔名格式（例如「演出者 - 標題」）。
 - **多線程下載**（使用者詢問過，尚未決定）：
   - 已支援「同時下載多個影片」1–3 筆（原始規格上限 3）。
   - 選項 A：設定新增「單一影片分段同時下載數」（yt-dlp `concurrent_fragment_downloads`，建議 1–8、預設 4）；
@@ -286,6 +289,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `converter.probe_media()` 判斷影像串流時會略過 `attached_pic`（封面）；改這段會讓有封面的 MP3 被誤判為有影像、或 MP4 驗證錯誤。
 - 狀態欄文字直接顯示 `task.stage`（例如「準備中」「取得影片資訊中」），測試中的 FakeDownloader 只會停在「準備中」。
 - `PlaylistEntry` 的 `video_id` 用來判斷預先勾選；`extract_playlist()` 要持續填入。
+- **新增一個設定要改四個地方**：`AppSettings` 欄位（含預設值）、`AppSettings.validated()`（型別與範圍）、
+  `SettingsDialog` 的元件與 `result_settings()`；主視窗上的快速開關（例如「下載字幕」）以 `apply_settings` 存回。漏改 `validated()` 時壞掉的設定值會讓程式出錯。
 
 ### Windows 專屬的雷（CI 上踩過）
 - **從 pwsh 呼叫 Windows PowerShell 5.1**：繼承的 `PSModulePath` 會讓 `Get-FileHash`、`Expand-Archive`、`Compress-Archive` 失效。腳本中一律用 .NET（`fetch_ffmpeg.ps1`）或 Python（`make_release_zip.py`）；`ci_run.ps1` 會清除 `PSModulePath`。
@@ -317,8 +322,9 @@ THIRD_PARTY_NOTICES.md              第三方授權
 ### 本雲端環境的限制
 - tag 格式常出錯：曾打成 `v2.0.0beta.5`（少 `-`）、「 v2.1.1」（前面有空白，`release.yml` 現已 `Trim()`）。請提醒格式 `vX.Y.Z` 或 `vX.Y.Z-beta.N`，
   且要從 workflow 頁面重新 Run，**不要 Re-run 失敗的那次**（會沿用錯誤的輸入與舊 commit）。使用者回報時常貼上舊的 run 連結：先用 API 確認是否真的有新 run。
-- 背景監看 Release 時，**不要只看「監看開始後才建立」的 run**：使用者常在 CI 通過的同時就按下 Run workflow（v2.4.0-beta.1 的監看因此漏掉），
-  應以 tag 或「head_sha＋未完成」判斷。
+- 背景監看 Release 時，**不要只看「監看開始後才建立」的 run**：使用者常在 CI 通過的同時就按下 Run workflow（v2.4.0-beta.1 的監看因此漏掉）。
+  改用「run id 大於上一次 Release run 的 id」判斷，成功或失敗都回報（v2.4.0 正式版即以此方式監看，附錄 B 有範例）。
+- 用 `pkill -f <腳本名>` 停止監看時，會連同執行 pkill 的那個 shell 一起結束（指令列含同樣字串）；改用 `TaskStop` 或記下 PID。
 - 使用者回覆「沒問題」有時只是「好的」，有時是「實測無誤」：**先用 API 查是否真的有新的 Release run**，再依情況回覆。
 - **不能推送 git tag**（代理 403）；**不能建立 / 刪除 GitHub Release**（屬公開動作，需使用者觸發；推 `release/v*` 分支也被拒）。發布一律請使用者按 Run workflow。
 - 連不到 YouTube（代理擋）；`gh` CLI 的 token 無效。GitHub 公開 API（未驗證）可讀 runs / jobs / annotations / releases，**讀不到完整日誌**——所以失敗原因要靠 `ci_run.ps1` / `junit_annotations.py` 轉成註解。
@@ -365,4 +371,10 @@ curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/check-runs/<job_i
 curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/releases"
 curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/releases/latest"
 curl -sSL "https://github.com/makodo123/YT_Media_Tool/releases/download/<tag>/YT_Media_Tool-<版本>-win64.zip.sha256"
+
+# 背景監看：等待比上一次 Release run（AFTER_ID）更新的那一次完成（用 Bash run_in_background 執行）
+AFTER_ID=<上一次 Release run 的 id>
+until curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/actions/workflows/release.yml/runs?per_page=3" \
+  | python3 -c "import sys,json; r=[x for x in json.load(sys.stdin)['workflow_runs'] if x['id']>$AFTER_ID]; \
+print(r[0]['id'], r[0]['conclusion']) if r and r[0]['status']=='completed' else sys.exit(1)"; do sleep 60; done
 ```
