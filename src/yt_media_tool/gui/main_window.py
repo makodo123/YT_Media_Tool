@@ -96,7 +96,7 @@ class MainWindow(QMainWindow):
         settings_action.triggered.connect(self.open_settings)
         tools_menu.addAction(settings_action)
         history_action = QAction("下載歷史紀錄…", self)
-        history_action.triggered.connect(lambda: HistoryDialog(self.ctx.db, self).exec())
+        history_action.triggered.connect(self.open_history)
         tools_menu.addAction(history_action)
         check_action = QAction("檢查相依元件（FFmpeg / Deno）", self)
         check_action.triggered.connect(self.show_dependency_report)
@@ -461,8 +461,22 @@ class MainWindow(QMainWindow):
         dialog = PlaylistPickerDialog(groups, MAX_PLAYLIST_ITEMS, self)
         return dialog.selected_urls() if dialog.exec() else None
 
+    def open_history(self) -> None:
+        HistoryDialog(self.ctx.db, self, on_redownload=self.redownload).exec()
+
+    def redownload(self, url: str, fmt: MediaFormat, quality: str) -> list[DownloadTask]:
+        """從歷史紀錄重新下載：以相同格式與品質加入佇列，存到目前的下載資料夾。"""
+        if not self.ctx.current_tools().available:
+            self._refresh_dependency_banner()
+            QMessageBox.warning(self, "缺少 FFmpeg", converter.FFMPEG_INSTALL_GUIDE)
+            return []
+        output_dir = self._ensure_output_dir()
+        if output_dir is None:
+            return []
+        return self._finish_add([url], fmt, quality, output_dir, [], clear_input=False)
+
     def _finish_add(self, urls: list[str], fmt: MediaFormat, quality: str, output_dir: str,
-                    notes: list[str]) -> list[DownloadTask]:
+                    notes: list[str], clear_input: bool = True) -> list[DownloadTask]:
         # 去除重複（播放清單展開後可能與單一網址重複）並略過佇列中尚未完成的相同任務
         existing = {(t.url, t.media_format, t.quality, t.output_dir) for t in self.ctx.queue.tasks()
                     if not t.status.is_finished}
@@ -483,7 +497,8 @@ class MainWindow(QMainWindow):
             notes.append(f"已略過 {skipped} 個已在佇列中的相同任務。")
         added = self.ctx.queue.add_tasks(specs) if specs else []
         if added:
-            self.url_input.clear()
+            if clear_input:
+                self.url_input.clear()
             self.statusBar().showMessage(f"已加入 {len(added)} 筆任務", 5000)
             if self.ctx.queue.is_paused and not self.ctx.queue.has_active_tasks():
                 self.statusBar().showMessage(

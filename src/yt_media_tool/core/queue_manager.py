@@ -204,7 +204,7 @@ class QueueManager:
                 events.append((TASK_UPDATED, task.snapshot()))
             else:
                 task.transition_to(TaskStatus.CANCELLED)
-                task.error_message = "使用者已取消"
+                task.error_message = "已取消下載"
                 self._db.save_task(task)
                 self._add_history(task)
                 events += [(TASK_UPDATED, task.snapshot()), (TASK_FINISHED, task.snapshot())]
@@ -345,7 +345,7 @@ class QueueManager:
             if exc.reason == "shutdown":
                 status, fields = TaskStatus.WAITING, {"error_message": "程式關閉時中斷，下次開啟時繼續"}
             else:
-                status, fields = TaskStatus.CANCELLED, {"error_message": "使用者已取消"}
+                status, fields = TaskStatus.CANCELLED, {"error_message": "已取消下載"}
         except Exception as exc:
             log.exception("任務 %s 下載失敗", task_id)
             status, fields = TaskStatus.FAILED, {"error_message": explain_error(exc)}

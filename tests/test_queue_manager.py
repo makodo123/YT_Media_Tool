@@ -86,7 +86,7 @@ def test_cancel_running_task_stops_it_and_queue_continues(queue_factory, spec_fa
     assert queue.cancel(running.id)
     assert wait_until(lambda: queue.get(running.id).status is TaskStatus.CANCELLED)
     assert wait_until(lambda: queue.get(nxt.id).status is TaskStatus.COMPLETED)
-    assert queue.get(running.id).error_message == "使用者已取消"
+    assert queue.get(running.id).error_message == "已取消下載"
 
 
 def test_cancel_finished_task_is_noop(queue_factory, spec_factory):

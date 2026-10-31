@@ -527,3 +527,50 @@ def test_download_folder_is_remembered(window, tmp_path, db_path):
     window.add_from_input()
     assert window.ctx.settings.download_dir == str(chosen)
     assert SettingsStore(window.ctx.db).load().download_dir == str(chosen)
+
+
+def _history_task(tmp_path, n, status, title="", output="", error="", fmt=MediaFormat.MP3, quality="320"):
+    from yt_media_tool.core.task_models import DownloadTask
+
+    return DownloadTask(url=f"https://www.youtube.com/watch?v=hist0000{n:03d}", media_format=fmt, quality=quality,
+                        output_dir=str(tmp_path), id=n, title=title, status=status, output_path=output,
+                        error_message=error)
+
+
+def test_history_dialog_shows_file_name_search_and_actions(window, qtbot, tmp_path, monkeypatch, dialogs):
+    from yt_media_tool.gui.history_dialog import HistoryDialog
+    from yt_media_tool.utils import system_open
+
+    song = tmp_path / "晴天.mp3"
+    song.write_bytes(b"x")
+    db = window.ctx.db
+    db.add_history(_history_task(tmp_path, 1, TaskStatus.COMPLETED, "晴天", str(song)))
+    db.add_history(_history_task(tmp_path, 2, TaskStatus.FAILED, "私人影片",
+                                 error="這是私人影片，無法下載。\n詳細資訊：x", fmt=MediaFormat.MP4, quality="1080"))
+    db.add_history(_history_task(tmp_path, 3, TaskStatus.COMPLETED, "已刪除", str(tmp_path / "gone.mp3")))
+    dialog = HistoryDialog(db, window, on_redownload=window.redownload)
+    qtbot.addWidget(dialog)
+
+    rows = {dialog.table.item(r, 1).text(): r for r in range(dialog.table.rowCount())}
+    assert dialog.table.item(rows["晴天"], 5).text() == "晴天.mp3"  # 只顯示檔名，完整路徑在提示
+    assert dialog.table.item(rows["晴天"], 5).toolTip() == str(song)
+    assert dialog.table.item(rows["私人影片"], 5).text() == "這是私人影片，無法下載。"
+
+    dialog.search.setText("晴天")
+    assert dialog.visible_rows() == [rows["晴天"]]
+    dialog.search.clear()
+
+    revealed = []
+    monkeypatch.setattr(system_open, "reveal_file", lambda path: revealed.append(path) or True)
+    assert dialog.reveal(rows["晴天"]) and revealed == [song]
+    assert not dialog.reveal(rows["已刪除"])
+    assert "檔案已不存在" in dialogs.text()
+
+    labels = [a.text() for a in dialog.build_context_menu(rows["私人影片"]).actions()]
+    assert labels == ["複製網址", "重新下載（以相同格式加入佇列）"]
+    window.url_input.setPlainText("https://youtu.be/keepthis01")
+    dialog.redownload(rows["私人影片"])
+    task = window.ctx.queue.tasks()[0]
+    assert (task.url, task.media_format, task.quality) == (
+        "https://www.youtube.com/watch?v=hist0000002", MediaFormat.MP4, "1080")
+    assert window.url_input.toPlainText() == "https://youtu.be/keepthis01"  # 不清除使用者正在輸入的網址
