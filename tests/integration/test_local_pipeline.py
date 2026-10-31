@@ -15,7 +15,7 @@ import time
 import pytest
 
 from yt_media_tool.core import converter
-from yt_media_tool.core.downloader import TEMP_ROOT_NAME, CancelToken, Downloader
+from yt_media_tool.core.downloader import TEMP_ROOT_NAME, CancelToken, DownloadPreferences, Downloader
 from yt_media_tool.core.errors import DownloadCancelledError
 from yt_media_tool.core.queue_manager import QueueManager, TaskSpec
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus
@@ -57,6 +57,8 @@ def media_server(tmp_path_factory):
     # 影片縮圖（YouTube 多為 WebP；本機 FFmpeg 不一定有 WebP 編碼器，改用 PNG 一樣需經過轉檔）
     subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "color=c=red:size=320x180", "-frames:v", "1",
                     str(root / "thumb.png")], check=True)
+
+    (root / "sub.vtt").write_text("WEBVTT\n\n00:00:00.500 --> 00:00:02.000\n測試字幕\n", encoding="utf-8")
 
     slow = type("SlowHandler", (_QuietHandler,), {"delay": 0.02})
     servers = []
@@ -182,7 +184,8 @@ def test_embed_title_artist_and_cover(media_server, tmp_path, fmt, quality):
 
     tools = converter.find_ffmpeg()
     downloader = Downloader(tools_provider=lambda: tools, js_runtime_provider=converter.JsRuntimeInfo,
-                            extra_options={"proxy": ""}, ydl_factory=WithThumbnail, metadata_provider=lambda: True)
+                            extra_options={"proxy": ""}, ydl_factory=WithThumbnail,
+                            preferences_provider=lambda: DownloadPreferences(embed_metadata=True))
     stages = []
     result = downloader.download(task(f"{base}/sample.mp4", tmp_path, fmt, quality), CancelToken(),
                                  lambda u: stages.append(u.stage))
@@ -194,3 +197,51 @@ def test_embed_title_artist_and_cover(media_server, tmp_path, fmt, quality):
     assert result.media_info.has_audio and result.media_info.has_video is (fmt is MediaFormat.MP4)
     assert "嵌入封面中" in stages
     assert sorted(p.name for p in tmp_path.iterdir()) == [result.output_path.name]
+
+
+def _downloader_with_info(base, extra: dict, prefs):
+    import yt_dlp
+
+    class Injected(yt_dlp.YoutubeDL):
+        def extract_info(self, url, *args, **kwargs):
+            info = super().extract_info(url, *args, **kwargs)
+            info.update(extra)
+            return info
+
+    tools = converter.find_ffmpeg()
+    return Downloader(tools_provider=lambda: tools, js_runtime_provider=converter.JsRuntimeInfo,
+                      extra_options={"proxy": ""}, ydl_factory=Injected, preferences_provider=lambda: prefs)
+
+
+def test_subtitle_saved_next_to_video_as_srt(media_server, tmp_path):
+    base = media_server["fast"]
+    subs = {"title": "有字幕的影片", "subtitles": {"en": [{"url": f"{base}/sub.vtt", "ext": "vtt"}],
+                                                   "zh-TW": [{"url": f"{base}/sub.vtt", "ext": "vtt"}]}}
+    downloader = _downloader_with_info(base, subs, DownloadPreferences(subtitles=True))
+    (tmp_path / "有字幕的影片.srt").write_text("使用者既有的字幕", encoding="utf-8")  # 同名檔不可被覆蓋
+    stages = []
+    result = downloader.download(task(f"{base}/sample.mp4", tmp_path), CancelToken(), lambda u: stages.append(u.stage))
+    assert result.output_path.name == "有字幕的影片.mp4"
+    assert (tmp_path / "有字幕的影片.srt").read_text(encoding="utf-8") == "使用者既有的字幕"
+    srt = (tmp_path / "有字幕的影片.zh-TW.srt").read_text(encoding="utf-8")
+    assert "00:00:00,500 --> 00:00:02,000" in srt and "測試字幕" in srt  # 已轉成 SRT，且選了繁體中文
+    assert result.actual_quality.endswith("；字幕：繁體中文")
+    assert "下載字幕中" in stages
+    names = sorted(p.name for p in tmp_path.iterdir())
+    assert names == ["有字幕的影片.mp4", "有字幕的影片.srt", "有字幕的影片.zh-TW.srt"]
+
+
+def test_subtitle_failure_does_not_fail_video(media_server, tmp_path):
+    base = media_server["fast"]
+    extra = {"title": "字幕壞掉", "subtitles": {"zh-TW": [{"url": f"{base}/missing.vtt", "ext": "vtt"}]}}
+    result = _downloader_with_info(base, extra, DownloadPreferences(subtitles=True)).download(
+        task(f"{base}/sample.mp4", tmp_path), CancelToken(), lambda u: None)
+    assert result.output_path.is_file() and result.actual_quality.endswith("；字幕下載失敗（影片不受影響）")
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["字幕壞掉.mp4"]
+
+
+def test_no_subtitles_available_is_noted(media_server, tmp_path):
+    base = media_server["fast"]
+    result = _downloader_with_info(base, {"title": "沒字幕"}, DownloadPreferences(subtitles=True)).download(
+        task(f"{base}/sample.mp4", tmp_path), CancelToken(), lambda u: None)
+    assert result.actual_quality.endswith("；此影片沒有可用字幕")

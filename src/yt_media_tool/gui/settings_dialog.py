@@ -7,14 +7,14 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFileDialog, QFormLayout, QFrame, QGroupBox,
-    QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
+    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
+    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from yt_media_tool.core import converter
 from yt_media_tool.core.cookies import COOKIE_SOURCES
 from yt_media_tool.core.task_models import MP3_QUALITIES, MP4_QUALITIES, MediaFormat
-from yt_media_tool.storage.settings import MAX_CONCURRENT, MIN_CONCURRENT, AppSettings
+from yt_media_tool.storage.settings import MAX_CONCURRENT, MAX_RATE_LIMIT_MBPS, MIN_CONCURRENT, AppSettings
 
 
 def _folder_row(parent: QWidget, line_edit: QLineEdit, title: str) -> QWidget:
@@ -47,6 +47,18 @@ class SettingsDialog(QDialog):
         self.max_concurrent.setRange(MIN_CONCURRENT, MAX_CONCURRENT)
         self.max_concurrent.setValue(settings.max_concurrent)
         self.max_concurrent.setToolTip("同時下載太多影片較容易被 YouTube 要求驗證，一般建議 1–2。")
+        self.rate_limit = QDoubleSpinBox()
+        self.rate_limit.setRange(0.0, MAX_RATE_LIMIT_MBPS)
+        self.rate_limit.setDecimals(1)
+        self.rate_limit.setSingleStep(0.5)
+        self.rate_limit.setSuffix(" MB/s")
+        self.rate_limit.setSpecialValueText("不限制")
+        self.rate_limit.setValue(settings.rate_limit_mbps)
+        self.auto_paste = QCheckBox("切回程式時自動帶入剪貼簿中的 YouTube 網址")
+        self.auto_paste.setToolTip("在瀏覽器複製網址後切回本程式，網址會自動放進輸入框（不會自動開始下載）。")
+        self.auto_paste.setChecked(settings.auto_paste_clipboard)
+        self.rate_limit.setToolTip("所有下載合計的速度上限，避免下載時佔滿網路、影響看影片或開會。\n"
+                                   "0 表示不限制。變更後對下一個開始的任務生效。")
         self.default_format = QComboBox()
         self.default_format.addItem("MP4 影片", MediaFormat.MP4.value)
         self.default_format.addItem("MP3 音訊", MediaFormat.MP3.value)
@@ -73,6 +85,10 @@ class SettingsDialog(QDialog):
         self.playlist_subfolder = QCheckBox("播放清單存到以清單名稱命名的子資料夾")
         self.playlist_subfolder.setToolTip("例如「下載資料夾\\我的最愛歌單\\」；只下載貼上的那一支影片時不另建資料夾。")
         self.playlist_subfolder.setChecked(settings.playlist_subfolder)
+        self.check_updates = QCheckBox("啟動時檢查是否有新版本")
+        self.check_updates.setToolTip("只連線 GitHub 讀取最新版本號，不會傳送任何個人資料。\n"
+                                      "也可以從「說明 → 檢查新版本」手動檢查。")
+        self.check_updates.setChecked(settings.check_updates)
         self.ffmpeg_dir = QLineEdit(settings.ffmpeg_dir)
         self.ffmpeg_dir.setPlaceholderText("留白＝自動偵測（隨附版本或系統 PATH）")
         self.ffmpeg_status = QLabel()
@@ -87,13 +103,15 @@ class SettingsDialog(QDialog):
         folder_row.setToolTip("與主視窗的「儲存至」相同；在主視窗換資料夾並加入任務後，這裡也會跟著更新。")
         form.addRow("下載資料夾：", folder_row)
         form.addRow("同時下載數量：", self.max_concurrent)
+        form.addRow("速度上限：", self.rate_limit)
         form.addRow("預設格式：", self.default_format)
         form.addRow("預設 MP4 解析度：", self.mp4_quality)
         form.addRow("預設 MP3 品質：", self.mp3_quality)
 
-        files_group = QGroupBox("檔案與完成後")
+        files_group = QGroupBox("其他功能")
         files_layout = QVBoxLayout(files_group)
-        for box in (self.embed_metadata, self.playlist_subfolder, self.notify, self.open_folder, self.keep_history):
+        for box in (self.embed_metadata, self.playlist_subfolder, self.auto_paste, self.notify, self.open_folder,
+                    self.keep_history, self.check_updates):
             files_layout.addWidget(box)
 
         ffmpeg_group = QGroupBox("FFmpeg（通常不需更改）")
@@ -222,6 +240,9 @@ class SettingsDialog(QDialog):
             default_mp3_quality=self.mp3_quality.currentData(),
             open_folder_on_complete=self.open_folder.isChecked(),
             notify_on_complete=self.notify.isChecked(),
+            rate_limit_mbps=self.rate_limit.value(),
+            auto_paste_clipboard=self.auto_paste.isChecked(),
+            check_updates=self.check_updates.isChecked(),
             keep_history=self.keep_history.isChecked(),
             embed_metadata=self.embed_metadata.isChecked(),
             playlist_subfolder=self.playlist_subfolder.isChecked(),

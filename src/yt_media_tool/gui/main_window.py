@@ -7,17 +7,19 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt, QThreadPool, QTimer
-from PySide6.QtGui import QAction, QCloseEvent, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence
+from PySide6.QtCore import QByteArray, Qt, QThreadPool, QTimer, QUrl
+from PySide6.QtGui import (
+    QAction, QCloseEvent, QDesktopServices, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence,
+)
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSplitter,
     QSystemTrayIcon, QTextEdit, QVBoxLayout, QWidget,
 )
 
 from yt_media_tool import APP_DISPLAY_NAME, __version__
 from yt_media_tool.app_context import AppContext
-from yt_media_tool.core import converter
+from yt_media_tool.core import converter, updates
 from yt_media_tool.core.downloader import PlaylistEntry, PlaylistInfo
 from yt_media_tool.core.errors import explain_error
 from yt_media_tool.core.queue_manager import (
@@ -63,6 +65,9 @@ class MainWindow(QMainWindow):
         self._last_completed_dir: str | None = None
         self._batch_counts = {"completed": 0, "failed": 0}  # 自上次佇列全部結束以來的完成 / 失敗筆數
         self._tray: QSystemTrayIcon | None = None
+        self._update_job: BackgroundJob | None = None
+        self._update_manual = False
+        self._available_update: str | None = None
         self._jobs: set[BackgroundJob] = set()
         self._expand_context: tuple = ()
         self.setWindowTitle(APP_DISPLAY_NAME)
@@ -81,6 +86,12 @@ class MainWindow(QMainWindow):
 
         self._idle_timer = QTimer(self, singleShot=True, interval=800)
         self._idle_timer.timeout.connect(self._check_queue_idle)
+        # 切回程式時自動帶入剪貼簿中的 YouTube 網址；程式自己複製的內容不帶入
+        self._last_clipboard: str | None = None
+        QGuiApplication.clipboard().dataChanged.connect(self._on_clipboard_changed)
+        app = QGuiApplication.instance()
+        if app is not None:
+            app.applicationStateChanged.connect(self._on_application_state_changed)
         self._parse_timer = QTimer(self, singleShot=True, interval=250)
         self._parse_timer.timeout.connect(self._update_detection_summary)
         self.url_input.textChanged.connect(self._parse_timer.start)
@@ -113,6 +124,9 @@ class MainWindow(QMainWindow):
         notice = QAction("使用聲明", self)
         notice.triggered.connect(lambda: QMessageBox.information(self, "使用聲明", DISCLAIMER))
         help_menu.addAction(notice)
+        check_update = QAction("檢查新版本…", self)
+        check_update.triggered.connect(lambda: self.check_for_updates(manual=True))
+        help_menu.addAction(check_update)
         about = QAction("關於", self)
         about.triggered.connect(self._show_about)
         help_menu.addAction(about)
@@ -128,6 +142,15 @@ class MainWindow(QMainWindow):
         self.dependency_banner.setWordWrap(True)
         self.dependency_banner.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         root.addWidget(self.dependency_banner)
+
+        # 新版本提醒
+        self.update_banner = QLabel()
+        self.update_banner.setObjectName("infoLabel")
+        self.update_banner.setWordWrap(True)
+        self.update_banner.setTextFormat(Qt.TextFormat.RichText)
+        self.update_banner.linkActivated.connect(self._on_update_link)
+        self.update_banner.hide()
+        root.addWidget(self.update_banner)
 
         # ---- 網址輸入 ----
         url_group = QGroupBox("網址")
@@ -165,6 +188,12 @@ class MainWindow(QMainWindow):
         self.mp4_radio.toggled.connect(self._refresh_quality_combo)
         self.quality_combo = QComboBox()
         self.quality_combo.setMinimumWidth(150)
+        self.subtitles_check = QCheckBox("下載字幕")
+        self.subtitles_check.setToolTip("MP4 一併下載字幕，存成與影片同名的 .srt 檔（播放器會自動載入）。\n"
+                                        "優先順序：繁體中文 → 中文 → 簡體中文 → 英文；\n"
+                                        "影片沒有提供字幕時，使用 YouTube 自動產生的字幕。\n"
+                                        "對尚未開始下載的任務也會生效。")
+        self.subtitles_check.toggled.connect(self._on_subtitles_toggled)
         self.folder_edit = QLineEdit()
         browse = QPushButton("瀏覽…")
         browse.clicked.connect(self._browse_folder)
@@ -176,6 +205,7 @@ class MainWindow(QMainWindow):
         fmt_layout.addWidget(self.mp3_radio)
         fmt_layout.addWidget(QLabel("品質："))
         fmt_layout.addWidget(self.quality_combo)
+        fmt_layout.addWidget(self.subtitles_check)
         fmt_layout.addSpacing(16)
         fmt_layout.addWidget(QLabel("儲存至："))
         fmt_layout.addWidget(self.folder_edit, 1)
@@ -253,12 +283,20 @@ class MainWindow(QMainWindow):
             self._refresh_quality_combo()
         if previous is None or s.download_dir != previous.download_dir:
             self.folder_edit.setText(s.download_dir)
+        self.subtitles_check.blockSignals(True)
+        self.subtitles_check.setChecked(s.download_subtitles)
+        self.subtitles_check.blockSignals(False)
 
     def selected_format(self) -> MediaFormat:
         return MediaFormat.MP3 if self.mp3_radio.isChecked() else MediaFormat.MP4
 
+    def _on_subtitles_toggled(self, checked: bool) -> None:
+        if checked != self.ctx.settings.download_subtitles:
+            self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, download_subtitles=checked))
+
     def _refresh_quality_combo(self) -> None:
         fmt = self.selected_format()
+        self.subtitles_check.setVisible(fmt is MediaFormat.MP4)
         self.quality_combo.clear()
         for key, label in quality_options(fmt).items():
             self.quality_combo.addItem(label, key)
@@ -322,6 +360,52 @@ class MainWindow(QMainWindow):
         self._refresh_dependency_banner()
         QMessageBox.information(self, "相依元件檢查", report)
 
+    # ================= 新版本提醒 =================
+    def check_for_updates(self, manual: bool = False) -> None:
+        """在背景向 GitHub 查詢最新正式版；manual 為使用者從選單手動檢查（會顯示結果）。"""
+        if self._update_job is not None:
+            return
+        self._update_manual = manual
+        job = BackgroundJob(updates.fetch_latest_version)
+        job.signals.succeeded.connect(self._on_update_checked)
+        job.signals.failed.connect(self._on_update_failed)
+        self._update_job = job
+        QThreadPool.globalInstance().start(job)
+
+    def _on_update_checked(self, latest: str | None) -> None:
+        self._update_job = None
+        manual = self._update_manual
+        if self._closing:
+            return
+        if latest and updates.is_newer(latest):
+            if manual or latest != self.ctx.settings.skipped_update_version:
+                self.show_update_banner(latest)
+            if manual:
+                QMessageBox.information(self, "檢查新版本", f"有新版本 {latest} 可以下載（目前為 {__version__}）。")
+        elif manual:
+            QMessageBox.information(self, "檢查新版本", f"目前已是最新版本（{__version__}）。")
+
+    def _on_update_failed(self, exc: Exception) -> None:
+        self._update_job = None
+        if self._update_manual and not self._closing:
+            QMessageBox.warning(self, "檢查新版本", "無法連線到 GitHub 檢查新版本，請確認網路連線後再試。")
+
+    def show_update_banner(self, latest: str) -> None:
+        self._available_update = latest
+        self.update_banner.setText(
+            f"有新版本 <b>{latest}</b> 可以下載（目前為 {__version__}）。"
+            "YouTube 改版時舊版可能無法下載，建議更新。　"
+            '<a href="download">前往下載頁面</a>　<a href="skip">略過這個版本</a>')
+        self.update_banner.show()
+
+    def _on_update_link(self, link: str) -> None:
+        if link == "download":
+            QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
+        elif link == "skip" and self._available_update:
+            self.ctx.apply_settings(dataclasses.replace(self.ctx.settings,
+                                                        skipped_update_version=self._available_update))
+            self.update_banner.hide()
+
     def _show_about(self) -> None:
         QMessageBox.about(self, "關於", f"<b>{APP_DISPLAY_NAME}</b><br>版本 {__version__}<br><br>"
                           + DISCLAIMER.replace("\n", "<br>"))
@@ -330,6 +414,33 @@ class MainWindow(QMainWindow):
     def _append_urls(self, text: str) -> None:
         current = self.url_input.toPlainText().rstrip()
         self.url_input.setPlainText(f"{current}\n{text}".strip() if current else text.strip())
+
+    def _on_clipboard_changed(self) -> None:
+        if QGuiApplication.applicationState() == Qt.ApplicationState.ApplicationActive:
+            # 在本程式中複製的（例如右鍵「複製網址」）：記為已處理，切回程式時不再帶入
+            self._last_clipboard = QGuiApplication.clipboard().text()
+
+    def _on_application_state_changed(self, state: Qt.ApplicationState) -> None:
+        if state == Qt.ApplicationState.ApplicationActive:
+            self.auto_paste_clipboard()
+
+    def auto_paste_clipboard(self) -> int:
+        """把剪貼簿中新的 YouTube 網址附加到輸入框（不自動加入佇列）。回傳帶入的網址數。"""
+        if not self.ctx.settings.auto_paste_clipboard or self._closing:
+            return 0
+        text = QGuiApplication.clipboard().text()
+        if not text or text == self._last_clipboard or len(text) > 100_000:
+            return 0
+        self._last_clipboard = text
+        present = {p.dedupe_key for p in parse_urls(self.url_input.toPlainText()).valid}
+        queued = {t.url for t in self.ctx.queue.tasks()}
+        new = [p.original for p in parse_urls(text).valid
+               if p.dedupe_key not in present and (p.video_url or p.playlist_url) not in queued]
+        if not new:
+            return 0
+        self._append_urls("\n".join(new))
+        self.statusBar().showMessage(f"已從剪貼簿帶入 {len(new)} 個網址，按「加入佇列」開始下載（可在設定關閉）", 8000)
+        return len(new)
 
     def _paste_clipboard(self) -> None:
         text = QGuiApplication.clipboard().text()

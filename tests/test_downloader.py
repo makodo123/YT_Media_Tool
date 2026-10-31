@@ -244,3 +244,46 @@ def test_task_dir_creation_gives_up_eventually(tmp_path, monkeypatch):
     monkeypatch.setattr(Path, "mkdir", always_denied)
     with pytest.raises(PermissionError):
         mod._make_task_dir(tmp_path / "x", attempts=3)
+
+
+def test_choose_subtitle_prefers_traditional_chinese_then_manual_then_automatic():
+    from yt_media_tool.core.downloader import choose_subtitle
+
+    sub = [{"url": "x", "ext": "vtt"}]
+    assert choose_subtitle({"subtitles": {"en": sub, "zh-Hant": sub, "zh-Hans": sub}}).lang == "zh-Hant"
+    assert choose_subtitle({"subtitles": {"en": sub, "zh-Hans": sub}}).label == "簡體中文"
+    # 上傳者提供的任何語言字幕優先於自動產生的字幕
+    info = {"subtitles": {"ja": sub, "live_chat": sub}, "automatic_captions": {"zh-Hant": sub}}
+    assert choose_subtitle(info).lang == "ja"
+    auto = choose_subtitle({"subtitles": {"live_chat": sub}, "automatic_captions": {"en": sub, "zh-Hant": sub}})
+    assert (auto.lang, auto.automatic, auto.label) == ("zh-Hant", True, "繁體中文（自動產生）")
+    assert choose_subtitle({"subtitles": {}, "automatic_captions": {"ja": sub}}) is None
+
+
+def test_rate_limit_is_passed_to_ytdlp(tmp_path):
+    from yt_media_tool.core.downloader import DownloadPreferences
+
+    captured = []
+
+    def on_download(ydl):
+        captured.append(ydl.params.get("ratelimit"))
+
+    d = Downloader(tools_provider=lambda: TOOLS, js_runtime_provider=lambda: JsRuntimeInfo(),
+                   ydl_factory=FakeYDL.factory(INFO, on_download), probe=fake_probe,
+                   preferences_provider=lambda: DownloadPreferences(rate_limit=512 * 1024))
+    d.download(make_task(tmp_path), CancelToken(), lambda u: None)
+    assert captured == [512 * 1024]
+    captured.clear()
+    make_downloader(on_download=on_download).download(make_task(tmp_path, task_id=8), CancelToken(), lambda u: None)
+    assert captured == [None]  # 預設不限制
+
+
+def test_rate_limit_is_shared_by_concurrent_tasks():
+    from yt_media_tool.storage.settings import AppSettings
+
+    assert AppSettings(rate_limit_mbps=0).download_preferences().rate_limit is None
+    assert AppSettings(rate_limit_mbps=3, max_concurrent=3).download_preferences().rate_limit == 1024 * 1024
+    assert AppSettings(rate_limit_mbps=-5).validated().rate_limit_mbps == 0
+    assert AppSettings(rate_limit_mbps="abc").validated().rate_limit_mbps == 0  # type: ignore[arg-type]
+    prefs = AppSettings(embed_metadata=False, download_subtitles=True).download_preferences()
+    assert (prefs.embed_metadata, prefs.subtitles) == (False, True)

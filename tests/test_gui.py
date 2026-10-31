@@ -66,6 +66,7 @@ def window(qtbot, tmp_path, db_path, fake, dialogs):
     ctx = create_context(db_path=db_path, downloader=fake, start_paused=True)
     ctx.tools = ToolInfo(ffmpeg=Path("/fake/ffmpeg"), ffprobe=Path("/fake/ffprobe"), source="test")
     ctx.settings.download_dir = str(tmp_path / "downloads")
+    ctx.settings.auto_paste_clipboard = False  # 避免剪貼簿內容影響其他測試；剪貼簿測試中再開啟
     win = MainWindow(ctx)
     qtbot.addWidget(win)
     win.show()
@@ -729,3 +730,118 @@ def test_settings_dialog_fits_screen(qtbot, window):
     qtbot.addWidget(dialog)
     available = dialog.screen().availableGeometry().height()
     assert dialog.height() <= available
+
+
+def test_subtitles_checkbox_only_for_mp4_and_saved(window):
+    window.mp4_radio.setChecked(True)
+    assert not window.subtitles_check.isHidden()
+    window.subtitles_check.setChecked(True)
+    assert window.ctx.settings.download_subtitles is True
+    from yt_media_tool.storage.settings import SettingsStore
+
+    assert SettingsStore(window.ctx.db).load().download_subtitles is True
+    window.mp3_radio.setChecked(True)
+    assert window.subtitles_check.isHidden()
+
+
+def test_settings_dialog_rate_limit(qtbot, window):
+    dialog = SettingsDialog(window.ctx.settings, window)
+    qtbot.addWidget(dialog)
+    assert dialog.rate_limit.text() == "不限制"
+    dialog.rate_limit.setValue(2.5)
+    assert dialog.result_settings().rate_limit_mbps == 2.5
+
+
+
+def test_auto_paste_clipboard_urls(window):
+    from PySide6.QtGui import QGuiApplication
+
+    window.ctx.settings.auto_paste_clipboard = True
+    window._last_clipboard = None
+    clipboard = QGuiApplication.clipboard()
+    clipboard.setText("看這個 https://youtu.be/aaaaaaaaaaa 和 https://example.com/x")
+    window._last_clipboard = None  # 模擬在其他程式中複製
+    assert window.auto_paste_clipboard() == 1
+    assert window.url_input.toPlainText() == "https://youtu.be/aaaaaaaaaaa"
+    assert "已從剪貼簿帶入 1 個網址" in window.statusBar().currentMessage()
+    assert window.auto_paste_clipboard() == 0  # 同一份剪貼簿內容只帶入一次
+
+    window.url_input.clear()
+    window._last_clipboard = None
+    clipboard.setText("https://www.youtube.com/watch?v=aaaaaaaaaaa")  # 與輸入框中重複 → 不帶入
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    window._last_clipboard = None
+    assert window.auto_paste_clipboard() == 0
+
+    window.ctx.settings.auto_paste_clipboard = False
+    clipboard.setText("https://youtu.be/bbbbbbbbbbb")
+    window._last_clipboard = None
+    assert window.auto_paste_clipboard() == 0
+
+
+def test_auto_paste_skips_urls_already_in_queue(window):
+    from PySide6.QtGui import QGuiApplication
+
+    window.url_input.setPlainText("https://youtu.be/ccccccccccc")
+    window.add_from_input()
+    window.ctx.settings.auto_paste_clipboard = True
+    QGuiApplication.clipboard().setText("https://youtu.be/ccccccccccc")
+    window._last_clipboard = None
+    assert window.auto_paste_clipboard() == 0
+
+
+def test_copy_inside_app_is_not_auto_pasted(window, monkeypatch):
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QGuiApplication
+
+    active = Qt.ApplicationState.ApplicationActive
+    monkeypatch.setattr(QGuiApplication, "applicationState", staticmethod(lambda: active))
+    window.ctx.settings.auto_paste_clipboard = True
+    QGuiApplication.clipboard().setText("https://youtu.be/ddddddddddd")  # 在程式中「複製網址」
+    window._on_clipboard_changed()
+    assert window.auto_paste_clipboard() == 0
+
+
+def test_update_banner_and_skip(window, dialogs, monkeypatch):
+    from PySide6.QtGui import QDesktopServices
+
+    from yt_media_tool.core import updates
+
+    assert window.update_banner.isHidden()
+    window._on_update_checked("99.0.0")
+    assert not window.update_banner.isHidden() and "99.0.0" in window.update_banner.text()
+    assert dialogs.messages == []  # 自動檢查不跳對話框
+
+    opened = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toString()))
+    window._on_update_link("download")
+    assert opened == [updates.RELEASES_PAGE]  # 固定網址，不使用 API 回傳的連結
+
+    window._on_update_link("skip")
+    assert window.update_banner.isHidden()
+    assert window.ctx.settings.skipped_update_version == "99.0.0"
+    window._on_update_checked("99.0.0")
+    assert window.update_banner.isHidden()  # 已略過的版本不再自動提醒
+    window._on_update_checked("99.0.1")
+    assert not window.update_banner.isHidden()  # 更新的版本仍會提醒
+
+
+def test_manual_update_check_reports_result(window, dialogs):
+    window._update_manual = True
+    window._on_update_checked("0.0.1")
+    assert "目前已是最新版本" in dialogs.text()
+    window._update_manual = True
+    window._on_update_failed(OSError("offline"))
+    assert "無法連線到 GitHub" in dialogs.text()
+    window._update_manual = False
+    window._on_update_failed(OSError("offline"))
+    assert dialogs.text().count("無法連線到 GitHub") == 1  # 自動檢查失敗時不打擾
+
+
+def test_check_for_updates_runs_in_background(window, qtbot, monkeypatch):
+    from yt_media_tool.core import updates
+
+    monkeypatch.setattr(updates, "fetch_latest_version", lambda: "99.1.0")
+    window.check_for_updates()
+    qtbot.waitUntil(lambda: not window.update_banner.isHidden(), timeout=3000)
+    assert window._update_job is None

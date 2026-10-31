@@ -70,6 +70,9 @@ def main(argv: list[str] | None = None) -> int:
         QTimer.singleShot(1500, window.close)
     else:
         window.restore_queue(ask=True)
+        if ctx.settings.check_updates:
+            # 啟動後稍候再檢查，不影響開啟速度；只在實際啟動程式時執行（不在測試或 smoke test 中連網）
+            QTimer.singleShot(3000, window.check_for_updates)
     code = app.exec()
     lock.unlock()
     log.info("程式結束，代碼 %s", code)

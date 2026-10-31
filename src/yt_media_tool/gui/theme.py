@@ -40,6 +40,8 @@ QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}
 QStatusBar {{ background: #1b1d22; }}
 QLabel#hintLabel {{ color: #9aa3ae; }}
 QLabel#warningLabel {{ color: #f0b85a; }}
+QLabel#infoLabel {{ color: #cfe3ff; background: #1f3350; border: 1px solid #2d4a73; border-radius: 4px;
+    padding: 4px 8px; }}
 QTreeView {{ background: #1b1d22; border: 1px solid #3a3f47; }}
 QTreeView::item {{ padding: 2px 0; }}
 QCheckBox::indicator, QTreeView::indicator {{ width: 14px; height: 14px; border: 1px solid #8a919c;

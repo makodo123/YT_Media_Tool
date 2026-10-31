@@ -260,7 +260,7 @@ class QueueTableView(QTableView):
         header.setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(COL_TITLE, QHeaderView.ResizeMode.Stretch)
         header.setHighlightSections(False)
-        for col, width in {COL_ID: 50, COL_FORMAT: 55, COL_QUALITY: 150, COL_PROGRESS: 120, COL_SPEED: 90,
+        for col, width in {COL_ID: 50, COL_FORMAT: 55, COL_QUALITY: 185, COL_PROGRESS: 120, COL_SPEED: 90,
                            COL_ETA: 75, COL_STATUS: 150, COL_ACTIONS: 150}.items():
             self.setColumnWidth(col, width)
 

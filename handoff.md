@@ -20,7 +20,7 @@
   不得把使用者輸入拼成 shell 指令；資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中；README.md 的「功能」表涵蓋全部功能（含後續新增）。
 
-最近兩輪的工作方式：使用者要求「**以使用者角度檢查文字與功能（及是否可新增功能）**」→ 修正並發測試版 →
+最近三輪的工作方式：使用者要求「**以使用者角度檢查文字與功能（及是否可新增功能）**」→ 修正並發測試版 →
 使用者實機測試回報 → 修正 → 使用者確認後發正式版。
 
 ---
@@ -29,13 +29,13 @@
 
 ### 2.1 目前狀態
 
+- **進行中：v2.4.0**（使用者第三次「使用者角度檢查」）。已推送到 `main`，等 Windows CI 通過後請使用者發布 `v2.4.0-beta.1`，
+  實測無誤再發 `v2.4.0`（流程見第 4 節）。
 - **最新正式版 `v2.3.0`**（標示為 Latest）：2026-10-31 發布，4 個附件與 `.sha256` 已核對；**使用者實測下載無誤**。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.3.0
-- v2.3.0 的程式碼與使用者實測無誤的 `v2.3.0-beta.1` 相同（之後只改 handoff.md）。
-- **沒有進行中的工作**。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0 皆回報無誤。
-- 測試：221 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：251 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
@@ -58,6 +58,22 @@
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.4.0**（未發布；使用者第三次「使用者角度檢查」：修正 4 個問題＋使用者選定的 4 項新功能）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 修正：等待中任務「開啟位置」跳錯誤 | `gui/main_window.py` `_reveal()`：播放清單子資料夾在開始下載前還不存在 → 開啟最近的上層資料夾 |
+| 修正：播放清單 / 歷史紀錄加入的任務先顯示網址 | `gui/main_window.py` `_finish_add(titles=...)`（`TaskSpec.title`）；`redownload(..., title)`；`gui/history_dialog.py` 回呼多傳影片名稱；`PASTED_VIDEO_TITLE` 佔位名稱不當成標題 |
+| 修正：選擇視窗不知道會存到哪 | `gui/playlist_dialog.py` `destination` 參數；`choose_playlist_entries(groups, output_dir)` |
+| 整理：設定對話框 | `gui/settings_dialog.py` 分成「下載」「其他功能」「FFmpeg（通常不需更改）」「YouTube 登入資訊」群組；「預設儲存資料夾」改為「下載資料夾」；內容放進 `QScrollArea`，`_fit_to_screen()` 最高為螢幕 90% |
+| 修正：品質欄截斷「320 kbps → 128 kbp…」 | `gui/queue_table.py` 品質欄寬 150 → 185 |
+| 新功能：下載速度上限 | `storage/settings.py` `rate_limit_mbps`（0＝不限制，上限 100）、`download_preferences()` 把合計上限平均分給 `max_concurrent`；`core/downloader.py` `DownloadPreferences.rate_limit` → yt-dlp `ratelimit`；設定對話框 `QDoubleSpinBox` |
+| 新功能：下載字幕（MP4） | `core/downloader.py` `choose_subtitle()`（上傳者字幕依 繁中→中文→簡中→英文，其次任何語言，最後才用自動產生字幕）、`_download_subtitle()`（影片完成後另跑一次 `skip_download` 的 yt-dlp，`FFmpegSubtitlesConvertor` 轉 srt；失敗只加附註）、`_move_subtitle()`（`影片名.srt`，已存在改 `影片名.<語言>.srt`，不覆蓋）；`actual_quality` 結尾附「；字幕：繁體中文」等；主視窗「下載字幕」勾選框（只在 MP4 顯示，存於設定 `download_subtitles`） |
+| 新功能：自動帶入剪貼簿網址 | `gui/main_window.py` `auto_paste_clipboard()`（`applicationStateChanged` 變為 Active 時）、`_on_clipboard_changed()`（程式在前景時複製的內容記為已處理）；略過輸入框或佇列中已有的網址；設定 `auto_paste_clipboard`（預設開） |
+| 新功能：新版本提醒 | 新檔 `core/updates.py`（`fetch_latest_version()` 讀 GitHub `releases/latest` 的 `tag_name`、`is_newer()`；下載頁用固定網址 `RELEASES_PAGE`）；`gui/main_window.py` `check_for_updates()`（背景 `BackgroundJob`）、`update_banner`（「前往下載頁面 / 略過這個版本」）、選單「說明 → 檢查新版本…」；`app.py` 啟動 3 秒後檢查（不在 smoke test）；設定 `check_updates`、`skipped_update_version`；`gui/theme.py` `QLabel#infoLabel` |
+| 重構 | `Downloader(metadata_provider=...)` 改為 `preferences_provider` → `DownloadPreferences(embed_metadata, rate_limit, subtitles)`，每個任務開始時讀取一次；`app_context.py` 對應修改 |
+| 測試與文件 | `tests/test_updates.py`（新）、`tests/test_downloader.py`、`tests/test_gui.py`、`tests/integration/test_local_pipeline.py`（字幕成功 / 失敗 / 沒有字幕三種情況，以真實 yt-dlp＋FFmpeg）；README、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（C18–C21） |
 
 **v2.3.0**（使用者第二次「使用者角度檢查」後選定的 4 項新功能＋歷史紀錄改善）
 
@@ -114,8 +130,9 @@ src/yt_media_tool/
   app_context.py                組合 DB / 設定 / Downloader（cookies、metadata provider）/ QueueManager
   core/task_models.py           任務模型與狀態機（等待中 / 下載中 / 轉檔中 / 已完成 / 失敗 / 已取消）
   core/url_parser.py            網址分類、正規化、去重、錯誤原因
-  core/downloader.py            yt-dlp 下載引擎（暫存隔離、取消、驗證、不覆蓋移動、播放清單讀取）
+  core/downloader.py            yt-dlp 下載引擎（暫存隔離、取消、驗證、不覆蓋移動、播放清單讀取、字幕、DownloadPreferences）
   core/converter.py             FFmpeg / FFprobe / Deno 偵測、ffprobe 驗證、格式選擇、後處理（含歌名與封面）
+  core/updates.py               新版本檢查（GitHub releases/latest）
   core/cookies.py               YouTube cookies 設定 → yt-dlp 參數（cookies.txt 只用副本）
   core/queue_manager.py         佇列排程、取消、重試、保存與恢復（不依賴 Qt）
   core/errors.py                例外 → 中文說明（yt-dlp、FFmpeg、cookies、磁碟、權限）
@@ -154,7 +171,7 @@ packaging/
   release.yml                   Run workflow / 推 tag / 推 release/v* 分支 → 測試、打包、安裝程式 → 建立 Release
   ffmpeg-verify.yml             manifest 變更時交叉驗證 FFmpeg SHA256
   ffmpeg-candidates.yml         比較 FFmpeg 候選建置的大小與 MP3 支援（只在修改此檔時執行）
-docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0 新功能）
+docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0，C18–C21 為 v2.4.0 新功能）
 docs/RELEASE_NOTES.md               Release 頁面說明（release.yml 會讀取）
 THIRD_PARTY_NOTICES.md              第三方授權
 ```
@@ -163,10 +180,18 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 3. 剛剛做的關鍵決定，以及為什麼這樣決定
 
-### 3.1 最近兩輪（v2.1.3～v2.3.0）的決定
+### 3.1 最近三輪（v2.1.3～v2.4.0）的決定
 
 | 決定 | 原因 |
 |---|---|
+| **字幕另外跑一次 yt-dlp（`skip_download`），不與影片一起下載** | yt-dlp 下載字幕失敗時，除非開 `ignoreerrors` 否則會讓整個下載失敗；開 `ignoreerrors` 又會吞掉真正的下載錯誤。分開處理後字幕只是附加項目，失敗只在詳細資訊加附註。 |
+| 字幕**只下載一種語言**，自己依偏好選，不用 yt-dlp 的 `subtitleslangs` 清單 | `subtitleslangs` 會下載清單中所有符合的語言；YouTube 自動翻譯字幕幾乎涵蓋所有語言，會產生一堆檔案。上傳者提供的字幕優先於自動產生字幕（品質較好）。 |
+| 字幕存成 `影片名.srt`（不嵌入 MP4） | 依使用者選項的說明；同名 .srt 播放器會自動載入，也方便另外編輯。 |
+| 「下載字幕」是**全域設定**（主視窗勾選框），不是每個任務各自記錄 | 每個任務記錄需要資料庫 migration；全域設定在任務開始時讀取，對尚未開始的任務也生效，提示文字已說明。 |
+| 速度上限是**全部任務合計**，平均分給同時下載數 | yt-dlp 的 `ratelimit` 以單一下載計算；使用者在意的是整體網路佔用。變更後對下一個開始的任務生效。 |
+| 自動帶入剪貼簿**只放進輸入框，不自動加入佇列** | 避免誤下載；使用者仍要按「加入佇列」。程式自己複製的網址（右鍵「複製網址」）不帶入，同一份剪貼簿只帶入一次。 |
+| 新版本提醒用**固定的下載頁網址**、只讀 `tag_name`，自動檢查失敗不顯示錯誤 | 不信任 API 回傳的連結；只取得版本號、不傳送個人資料；離線時不打擾使用者。只比較正式版（`releases/latest` 不含預先發行）。 |
+| 設定對話框加**捲動區域**並限制高度 | 群組化後內容變高，在小螢幕或 125% 縮放時「儲存」按鈕可能超出螢幕。 |
 | **移除「展開播放清單」勾選框**，含播放清單的網址一律開啟「選擇要下載的影片」對話框（v2.2.0） | 使用者回報「不勾選就無法加入」（最可能是貼了 `watch?v=…&list=…`，未勾選只加入單支），並要求能選歌。用一個選擇視窗同時解決兩件事，介面上不再有容易誤會的勾選框。 |
 | `watch?v=…&list=…` **只預勾貼上的那一支**；`playlist?list=` 預設全勾 | 從網址列複製時多半只想要正在播的那首；想要整個清單按「全選」即可。 |
 | MP3 降級顯示「**192 kbps → 124 kbps ⚠**」（v2.2.0-beta.2） | 使用者要求與 MP4 的「1080p → 720p ⚠」一致；原本只有「192 kbps ⚠」看不出實際音質。 |
@@ -212,11 +237,13 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-**目前沒有待辦的必要工作。** v2.3.0 已發布為 Latest；使用者有新需求或回報問題時，依下方流程以新版本號修正並發布。
+- **待辦**：v2.4.0 的 Windows CI 通過 → 請使用者發布 `v2.4.0-beta.1` → 確認附件 → 使用者實測（C18–C21 與第三次檢查的修正）
+  → 發布正式版 `v2.4.0` → 確認附件與 Latest → 更新本文件。
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
-- 使用者 2026-10-31 未選的小改進：記住上次在主視窗選的格式與品質、加入前提醒「歷史紀錄中已下載過」、同時下載上限從 3 提高到 5。
+- 使用者兩次都未選的項目：記住上次在主視窗選的格式與品質、加入前提醒「歷史紀錄中已下載過」、同時下載上限從 3 提高到 5、
+  只下載片段（指定開始 / 結束時間）、自訂檔名格式（例如「演出者 - 標題」）。
 - **多線程下載**（使用者詢問過，尚未決定）：
   - 已支援「同時下載多個影片」1–3 筆（原始規格上限 3）。
   - 選項 A：設定新增「單一影片分段同時下載數」（yt-dlp `concurrent_fragment_downloads`，建議 1–8、預設 4）；
@@ -248,7 +275,11 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `system_open.open_media()` 的副檔名白名單（.mp3 / .mp4）不要放寬。
 
 ### 近期新增功能的雷
-- `MainWindow.choose_playlist_entries()` 回傳 **`list[list[str]]`（依清單分組）或 `None`（取消）**；測試以 monkeypatch 取代它，改回傳格式要一起改測試。
+- **測試中的主視窗已關閉自動帶入剪貼簿**（`window` fixture 設 `auto_paste_clipboard = False`）；否則剪貼簿內容會跨測試影響輸入框。
+- **新版本檢查只能在 `app.py` 觸發**，不要放進 `MainWindow.__init__`（測試與 smoke test 會連網）。
+- 字幕步驟 `_download_subtitle()` 必須維持「任何例外都只回傳附註」；`actual_quality` 結尾的「；字幕：…」附註不可放在開頭（`quality_text()` 從開頭比對「Np」）。
+- `Downloader` 的偏好設定一律透過 `DownloadPreferences`，在 `download()` 開頭讀一次；不要在下載途中重新讀取。
+- `MainWindow.choose_playlist_entries(groups, output_dir)` 回傳 **`list[list[str]]`（依清單分組）或 `None`（取消）**；測試以 monkeypatch 取代它（`lambda groups, *_:`），改簽名或回傳格式要一起改測試。
 - 完成通知依賴 `_idle_timer` 延後判斷；**不要改成在 `_on_task_finished` 當下判斷**（會拆成多則通知，`test_notify_once_when_whole_queue_finishes` 守著）。
 - 深色主題下 Fusion 的勾選框未勾選時與背景同色，**看不到**；`gui/theme.py` 的 `::indicator` 樣式不要刪。新增有勾選框的元件（例如 QListView）也要套用。
 - `converter.probe_media()` 判斷影像串流時會略過 `attached_pic`（封面）；改這段會讓有封面的 MP3 被誤判為有影像、或 MP4 驗證錯誤。

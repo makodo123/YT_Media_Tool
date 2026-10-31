@@ -56,7 +56,7 @@ POSTPROCESSOR_STAGES = {
     "EmbedThumbnail": "嵌入封面中",
 }
 # 不改變任務狀態的後處理（下載前就會執行，例如轉換縮圖格式）
-SILENT_POSTPROCESSORS = {"MoveFiles", "ThumbnailsConvertor"}
+SILENT_POSTPROCESSORS = {"MoveFiles", "ThumbnailsConvertor", "SubtitlesConvertor"}
 
 
 class CancelToken:
@@ -106,6 +106,46 @@ class DownloadResult:
     title: str
     actual_quality: str
     media_info: MediaInfo | None = None
+
+
+@dataclass(frozen=True)
+class DownloadPreferences:
+    """每個任務開始時讀取一次的下載偏好設定。"""
+
+    embed_metadata: bool = False  # 寫入歌名、演出者並嵌入封面
+    rate_limit: int | None = None  # 每個任務的速度上限（bytes/s）；None 表示不限制
+    subtitles: bool = False  # MP4 一併下載字幕（.srt）
+
+
+@dataclass(frozen=True)
+class SubtitleChoice:
+    lang: str
+    automatic: bool  # True：YouTube 自動產生的字幕
+    label: str
+
+
+# 字幕語言優先順序：繁體中文 → 中文 → 簡體中文 → 英文
+SUBTITLE_PREFERENCES: list[tuple[str, str]] = [
+    ("zh-Hant", "繁體中文"), ("zh-TW", "繁體中文"), ("zh-HK", "繁體中文"), ("zh", "中文"),
+    ("zh-Hans", "簡體中文"), ("zh-CN", "簡體中文"), ("en", "英文"), ("en-US", "英文"), ("en-GB", "英文"),
+]
+
+
+def choose_subtitle(info: dict) -> SubtitleChoice | None:
+    """選一種字幕：優先使用上傳者提供的字幕（依語言優先順序，其次任何語言），
+    沒有時才使用 YouTube 自動產生的字幕（依語言優先順序）。"""
+    manual = {k: v for k, v in (info.get("subtitles") or {}).items() if v and k != "live_chat"}
+    automatic = {k: v for k, v in (info.get("automatic_captions") or {}).items() if v}
+    for lang, label in SUBTITLE_PREFERENCES:
+        if lang in manual:
+            return SubtitleChoice(lang, False, label)
+    if manual:
+        lang = next(iter(manual))
+        return SubtitleChoice(lang, False, lang)
+    for lang, label in SUBTITLE_PREFERENCES:
+        if lang in automatic:
+            return SubtitleChoice(lang, True, f"{label}（自動產生）")
+    return None
 
 
 @dataclass
@@ -201,7 +241,7 @@ class Downloader:
         extra_options: dict[str, Any] | None = None,
         probe: Callable[[Path, MediaFormat, Path], MediaInfo] = converter.verify_output,
         cookies_provider: Callable[[], CookieConfig] | None = None,
-        metadata_provider: Callable[[], bool] | None = None,
+        preferences_provider: Callable[[], DownloadPreferences] | None = None,
     ) -> None:
         self._tools_provider = tools_provider
         self._js_runtime_provider = js_runtime_provider or converter.find_js_runtime
@@ -210,7 +250,7 @@ class Downloader:
         self._extra_options = dict(extra_options or {})
         self._probe = probe
         self._cookies_provider = cookies_provider or CookieConfig
-        self._metadata_provider = metadata_provider or (lambda: False)
+        self._preferences_provider = preferences_provider or DownloadPreferences
 
     # ---- 共用設定 ----
     def _base_options(self, logger: _YdlLogger, tools: ToolInfo | None,
@@ -282,6 +322,7 @@ class Downloader:
             on_progress(ProgressUpdate(TaskStatus.DOWNLOADING, progress=0.0, stage="取得影片資訊中"))
             # cookies.txt 副本放在本任務暫存資料夾，任務結束時隨資料夾刪除
             cookie_options = ydl_cookie_options(self._cookies_provider(), temp_dir)
+            prefs = self._preferences_provider()
 
             info_opts = self._base_options(logger, tools, cookie_options)
             info_opts["format"] = converter.format_selector(task.media_format, task.quality)
@@ -302,7 +343,7 @@ class Downloader:
             self._check_disk_space(info, task, output_dir)
 
             produced, source_kbps = self._run_download(task, info, tools, logger, token, on_progress, temp_dir,
-                                                       cookie_options)
+                                                       cookie_options, prefs)
             token.raise_if_cancelled()
             if task.media_format is MediaFormat.MP3 and source_kbps and "未知" in actual:
                 actual = describe_mp3(task.quality, source_kbps)
@@ -311,6 +352,13 @@ class Downloader:
             on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=98.0, stage="檢查輸出檔案中"))
             media_info = self._probe(produced, task.media_format, tools.ffprobe)  # type: ignore[arg-type]
             token.raise_if_cancelled()
+
+            subtitle: tuple[Path, SubtitleChoice] | None = None
+            subtitle_note = ""
+            if prefs.subtitles and task.media_format is MediaFormat.MP4:
+                on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=98.5, stage="下載字幕中"))
+                subtitle, subtitle_note = self._download_subtitle(info, tools, logger, temp_dir, cookie_options)
+                token.raise_if_cancelled()
 
             on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=99.0, stage="移動檔案中"))
             ext = "mp4" if task.media_format is MediaFormat.MP4 else "mp3"
@@ -323,7 +371,9 @@ class Downloader:
                 self.reserver.release(reserved)
                 reserved = None
             final_path = reserved
-            actual = describe_result(media_info, task.media_format, task.quality, actual)
+            if subtitle is not None:
+                subtitle_note = _move_subtitle(subtitle[0], final_path, subtitle[1])
+            actual = describe_result(media_info, task.media_format, task.quality, actual) + subtitle_note
             success = True
             return DownloadResult(final_path, title, actual, media_info)
         except _YtdlpDownloadCancelled as exc:
@@ -344,7 +394,8 @@ class Downloader:
                 log.info("任務 %s 未成功，已清除暫存資料夾 %s", task.id, temp_dir)
 
     def _run_download(self, task, info, tools, logger, token, on_progress, temp_dir: Path,
-                      cookie_options: dict[str, Any] | None = None) -> tuple[Path, float | None]:
+                      cookie_options: dict[str, Any] | None = None,
+                      prefs: DownloadPreferences | None = None) -> tuple[Path, float | None]:
         """在暫存資料夾內完成下載與 FFmpeg 後處理，回傳（暫存資料夾中的成品路徑, 原始音訊 kbps）。
 
         yt-dlp 的 home 路徑設為任務專屬暫存資料夾，因此 yt-dlp 不會讀取、覆蓋或刪除
@@ -384,8 +435,11 @@ class Downloader:
                 on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=DOWNLOAD_PROGRESS_SHARE,
                                            speed=None, eta=None, stage=stage))
 
-        embed_metadata = bool(self._metadata_provider())
+        prefs = prefs or DownloadPreferences()
+        embed_metadata = prefs.embed_metadata
         opts = self._base_options(logger, tools, cookie_options)
+        if prefs.rate_limit:
+            opts["ratelimit"] = prefs.rate_limit
         opts.update({
             "format": converter.format_selector(task.media_format, task.quality),
             # 縮圖也寫在暫存資料夾（media.jpg），嵌入後由 yt-dlp 刪除，殘留的會隨暫存資料夾清除
@@ -412,6 +466,34 @@ class Downloader:
             if path.suffix.lower() == ext and path.is_file() and path.resolve().parent == temp_resolved:
                 return path, source_audio["kbps"]
         raise RuntimeError("下載程序結束但找不到輸出檔案")
+
+    def _download_subtitle(self, info: dict, tools: ToolInfo, logger, temp_dir: Path,
+                           cookie_options: dict[str, Any] | None) -> tuple[tuple[Path, SubtitleChoice] | None, str]:
+        """另外下載一種字幕並轉成 SRT（在暫存資料夾中）。字幕是附加項目：失敗只回傳附註，不影響影片。"""
+        choice = choose_subtitle(info)
+        if choice is None:
+            return None, "；此影片沒有可用字幕"
+        opts = self._base_options(logger, tools, cookie_options)
+        opts.update({
+            "skip_download": True,
+            "writesubtitles": not choice.automatic,
+            "writeautomaticsub": choice.automatic,
+            "subtitleslangs": [choice.lang],
+            "subtitlesformat": "srt/vtt/best",
+            "outtmpl": {"default": "media.%(ext)s"},
+            "paths": {"home": str(temp_dir)},
+            "postprocessors": [{"key": "FFmpegSubtitlesConvertor", "format": "srt", "when": "before_dl"}],
+        })
+        try:
+            with self._ydl_factory(opts) as ydl:
+                ydl.process_ie_result(dict(info), download=True)
+        except Exception:  # 字幕失敗不可讓整個任務失敗
+            log.warning("字幕下載失敗（%s）", choice.lang, exc_info=True)
+            return None, "；字幕下載失敗（影片不受影響）"
+        produced = temp_dir / f"media.{choice.lang}.srt"
+        if not produced.is_file():
+            return None, "；字幕下載失敗（影片不受影響）"
+        return (produced, choice), ""
 
     @staticmethod
     def _source_audio_kbps(info: dict, tools: ToolInfo) -> float | None:
@@ -515,6 +597,14 @@ def _make_task_dir(path: Path, attempts: int = 15) -> None:
             if attempt == attempts - 1:
                 raise
             time.sleep(0.2)
+
+
+def _move_subtitle(source: Path, video: Path, choice: SubtitleChoice) -> str:
+    """把字幕移到影片旁（同檔名 .srt，播放器會自動載入）；同名檔已存在時改用「檔名.語言.srt」，仍存在則不儲存。"""
+    for target in (video.with_suffix(".srt"), video.with_name(f"{video.stem}.{choice.lang}.srt")):
+        if move_no_overwrite(source, target):
+            return f"；字幕：{choice.label}"
+    return "；字幕檔名已被使用，未儲存字幕"
 
 
 def move_no_overwrite(src: Path, dst: Path) -> bool:

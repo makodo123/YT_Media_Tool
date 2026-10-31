@@ -63,7 +63,7 @@ def create_context(db_path: Path | str | None = None, downloader: Downloader | N
         downloader = Downloader(tools_provider=lambda: ctx_holder["ctx"].current_tools(),
                                 js_runtime_provider=lambda: ctx_holder["ctx"].js_runtime,
                                 cookies_provider=lambda: ctx_holder["ctx"].settings.cookie_config(),
-                                metadata_provider=lambda: ctx_holder["ctx"].settings.embed_metadata)
+                                preferences_provider=lambda: ctx_holder["ctx"].settings.download_preferences())
     queue = QueueManager(db, downloader, max_concurrent=settings.max_concurrent,
                          keep_history=settings.keep_history, paused=start_paused)
     ctx = AppContext(db, store, settings, downloader, queue, tools, js_runtime)
