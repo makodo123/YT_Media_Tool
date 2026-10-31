@@ -444,7 +444,7 @@ def test_single_selection_context_menu_unchanged(window, qtbot):
     (MediaFormat.MP4, "best", "2160p vp9/opus", "最高可用解析度 → 2160p"),
     (MediaFormat.MP4, "1080", "解析度未知", "1080p → 解析度未知"),
     (MediaFormat.MP3, "192", "MP3 192 kbps（原始音源約 130 kbps，輸出位元率高於原始音源，實際音質不會提升）",
-     "192 kbps ⚠"),
+     "192 kbps → 130 kbps ⚠"),
     (MediaFormat.MP3, "128", "MP3 128 kbps（原始音源約 130 kbps）", "128 kbps"),
     (MediaFormat.MP3, "320", "MP3 320 kbps（原始音源位元率未知）", "320 kbps"),
 ])

@@ -42,7 +42,8 @@ def status_text(task: DownloadTask) -> str:
 
 
 def quality_text(task: DownloadTask) -> str:
-    """品質欄文字：實際品質與目標相同時只顯示一次，低於目標或高於原始音源時加上 ⚠；
+    """品質欄文字：實際品質與目標相同時只顯示一次；低於目標時顯示「目標 → 實際 ⚠」
+    （MP3 的實際值為原始音源位元率，例如「192 kbps → 124 kbps ⚠」）；
     影片還有更高解析度時附上「（最高 1080p）」。
 
     完整說明（編碼、可用解析度、原始音源位元率）見儲存格提示。
@@ -51,7 +52,10 @@ def quality_text(task: DownloadTask) -> str:
     if not actual:
         return task.quality_text
     if task.media_format is MediaFormat.MP3:
-        return task.quality_text + (" ⚠" if "高於原始音源" in actual else "")
+        source = re.search(r"原始音源約 (\d+) kbps", actual)
+        if source and "高於原始音源" in actual:
+            return f"{task.quality_text} → {source.group(1)} kbps ⚠"
+        return task.quality_text
     match = re.match(r"(\d+)p", actual)
     if not match:
         return f"{task.quality_text} → {actual.split('（')[0].strip()}"
