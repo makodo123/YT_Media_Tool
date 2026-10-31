@@ -108,6 +108,8 @@ class DownloadResult:
 class PlaylistEntry:
     url: str
     title: str
+    video_id: str = ""
+    duration: float | None = None  # 秒；播放清單未提供時為 None
 
 
 @dataclass
@@ -248,7 +250,9 @@ class Downloader:
             if video_id and (not entry_url or not str(entry_url).startswith("http")):
                 entry_url = f"https://www.youtube.com/watch?v={video_id}"
             if entry_url:
-                entries.append(PlaylistEntry(str(entry_url), entry.get("title") or ""))
+                duration = entry.get("duration")
+                entries.append(PlaylistEntry(str(entry_url), entry.get("title") or "", str(video_id or ""),
+                                             float(duration) if isinstance(duration, (int, float)) else None))
         truncated = len(entries) > limit
         return PlaylistInfo(title=(info or {}).get("title") or "", entries=entries[:limit], truncated=truncated)
 

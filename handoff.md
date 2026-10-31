@@ -17,11 +17,14 @@
   資料寫在 `%LOCALAPPDATA%\YT_Media_Tool`，不可寫入程式目錄；同名檔案不可覆蓋。
 - 原始需求規格的完整內容在第一次對話中；README.md 的「功能」表已涵蓋全部要求。
 
-### 目前階段：`v2.1.3-beta.1` 已發布（預先發行），等使用者實測
+### 目前階段：v2.2.0（播放清單選擇）已推送到 `main`，等 CI 通過後請使用者發布 `v2.2.0-beta.1`
 
 - 使用者要求「以使用者角度檢查文字與功能」並同意全部修正（版本號 2.1.3），已合併到 `main`。
   `v2.1.3-beta.1` 已發布：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.3-beta.1
-  實測無誤後，請使用者以 tag `v2.1.3` 發布正式版（程式碼不必再改）。
+- 使用者實測 v2.1.3-beta.1 回報：(1) 播放清單「不勾選就無法加入」（程式碼中 `playlist?list=` 不需勾選；最可能是貼了
+  `watch?v=…&list=…`，未勾選時只加入單支影片）；(2) 想選擇播放清單中要下載的歌曲。
+  → 改為 **v2.2.0**：移除勾選框，任何含播放清單的網址都開啟「選擇要下載的影片」對話框（`gui/playlist_dialog.py`）。
+  v2.1.3 不另發正式版，直接以 v2.2.0 取代。
 
 - **最新正式版 `v2.1.2`**（標示為 Latest），提供安裝版（`-setup.exe`）與免安裝版（zip）：
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.1.2
@@ -47,7 +50,7 @@
 | v2.1.0 | f77af01 | 正式版，使用者實測無誤；程式碼同 68afd24；setup.exe 106.1 MB（`462e36e0…31fe97`）、zip 144.1 MB（`d7e4c9a5…58454c`），sha256 已核對 |
 | v2.1.1 | 1e6b4b0 | 正式版；品質欄修正；setup.exe 106.1 MB（`dd66c142…ff5f72`）、zip 144.1 MB（`f3f529b5…9687a`），sha256 已核對；變更已由 v2.1.2 實測涵蓋 |
 | **v2.1.2** | 230496f | **正式版（Latest）**；品質欄標示最高解析度、移除 Chrome / Edge；setup.exe 106.1 MB（`a6d6e99e…9bd21f`）、zip 144.1 MB（`53c8481c…dadc14`），sha256 已核對；**使用者實測下載無誤** |
-| v2.1.3-beta.1 | e133883 | 已發布（預先發行）；使用者角度的文字與操作修正；setup.exe 106.1 MB（`4c1caf4f…68e566`）、zip 144.1 MB（`6ec04c07…6e9fda`），sha256 已核對；待使用者實測 |
+| v2.1.3-beta.1 | e133883 | 已發布（預先發行）；使用者角度的文字與操作修正；setup.exe 106.1 MB（`4c1caf4f…68e566`）、zip 144.1 MB（`6ec04c07…6e9fda`），sha256 已核對；使用者實測回報播放清單問題 → 由 v2.2.0 取代 |
 
 各版重點：
 
@@ -57,7 +60,11 @@
 - v2.1.1：品質欄不再顯示「720p → 720p」：實際與目標相同只顯示一次；低於目標「1080p → 720p ⚠」；
   最高可用解析度「最高可用解析度 → 2160p」；MP3 高於原始音源「320 kbps ⚠」（`gui/queue_table.py` 的 `quality_text()`，
   以數字比較解析度；完整說明在儲存格提示）。發布流程同時改為自動去除 tag 前後空白。
-- v2.1.3（未發布）：使用者角度檢查後的修正——
+- v2.2.0（未發布）：播放清單選擇對話框——列出名稱與長度、可搜尋、全選 / 全不選（只影響目前顯示的項目）、
+  勾選清單本身＝整個清單；`playlist?list=` 預設全勾，`watch?v=…&list=…` 只預勾該影片（不在清單中時插在最前面）；
+  讀取失敗時退回只加入該影片。`PlaylistEntry` 新增 `video_id`、`duration`。深色主題的勾選框加上明顯外框
+  （原本 Fusion 未勾選的框與背景同色，看不到）。包含 v2.1.3 的所有修正。
+- v2.1.3（只發 beta.1）：使用者角度檢查後的修正——
   狀態名稱改為「等待中 / 已完成 / 已取消」（「取消」狀態易與「取消」按鈕混淆）；狀態欄直接顯示階段
   （「MP3 轉檔中」，不再顯示「轉檔中（MP3 轉檔中）」）；整體狀態加上「等待」筆數；詳細資訊把失敗原因放最前面；
   儲存設定時只套用有變更的項目（原本會把主視窗目前選的格式 / 品質 / 資料夾重設）；記住上次使用的下載資料夾
@@ -91,13 +98,14 @@ src/yt_media_tool/
   storage/database.py           SQLite（參數化 SQL、PRAGMA user_version migration，目前 v2）
   storage/settings.py           AppSettings（含 cookies_source / cookies_file）
   gui/main_window.py            主視窗（含批次移除、多選右鍵選單）
+  gui/playlist_dialog.py        播放清單選擇對話框（勾選要下載的影片）
   gui/queue_table.py            表格 model、進度條與操作按鈕 delegate
   gui/settings_dialog.py        設定（含「YouTube 登入資訊（選用）」）
   gui/history_dialog.py / qt_bridge.py / workers.py / theme.py / i18n.py
   utils/paths.py                AppData、隨附檔位置、安全檔名、FileNameReserver
   utils/win_job.py              Job Object（結束時終止子程序）、具名 mutex（供安裝程式偵測）
   utils/system_open.py / logging_utils.py
-tests/                          198 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
+tests/                          211 個測試 + 1 個僅 Windows 執行（單元、GUI、本機 HTTP 整合；不連線 YouTube）
 scripts/
   setup_windows.bat / run_dev.bat / build_exe.bat   Windows 開發與打包
   build_installer.py / .bat     以 Inno Setup 建立 setup.exe 與 .sha256
@@ -169,7 +177,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 下一步
 
-- **待辦**：使用者實測 `v2.1.3-beta.1` → 發布正式版 `v2.1.3` → 確認 Release 附件。
+- **待辦**：v2.2.0 CI 通過 → 使用者發布 `v2.2.0-beta.1` → 確認附件 → 使用者實測 → 發布正式版 `v2.2.0`。
 
 以下為之後可能的方向（皆需使用者決定）：
 

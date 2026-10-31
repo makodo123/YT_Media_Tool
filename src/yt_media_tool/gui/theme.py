@@ -40,6 +40,13 @@ QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}
 QStatusBar {{ background: #1b1d22; }}
 QLabel#hintLabel {{ color: #9aa3ae; }}
 QLabel#warningLabel {{ color: #f0b85a; }}
+QTreeView {{ background: #1b1d22; border: 1px solid #3a3f47; }}
+QTreeView::item {{ padding: 2px 0; }}
+QCheckBox::indicator, QTreeView::indicator {{ width: 14px; height: 14px; border: 1px solid #8a919c;
+    border-radius: 3px; background: #2a2e35; }}
+QCheckBox::indicator:hover, QTreeView::indicator:hover {{ border-color: {ACCENT}; }}
+QCheckBox::indicator:checked, QTreeView::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
+QTreeView::indicator:indeterminate {{ background: #2d4a73; border-color: {ACCENT}; }}
 """
 
 

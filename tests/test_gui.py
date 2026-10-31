@@ -124,45 +124,95 @@ def test_all_invalid_shows_warning_and_adds_nothing(window, dialogs):
     assert "頻道" in dialogs.text()
 
 
-def test_playlist_url_expands_without_checkbox(window, qtbot, monkeypatch):
-    window.expand_playlist.setChecked(False)
-    asked = []
-    monkeypatch.setattr(window, "confirm_playlist", lambda count, summary: asked.append(count) or True)
+def test_playlist_url_opens_picker_with_all_checked(window, qtbot, monkeypatch):
+    shown = []
+
+    def choose(groups):
+        shown.append(groups)
+        return [e.url for e in groups[0].entries[:2]]  # 使用者只勾選前兩部
+
+    monkeypatch.setattr(window, "choose_playlist_entries", choose)
     window.url_input.setPlainText(PLAYLIST)
     window.add_from_input()
-    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
-    assert asked == [3]
+    qtbot.waitUntil(lambda: rows(window) == 2, timeout=5000)
+    assert len(shown[0]) == 1 and shown[0][0].preselect_video_id is None
+    assert len(shown[0][0].entries) == 3
 
 
-def test_video_in_playlist_with_checkbox_adds_whole_list(window, qtbot, monkeypatch):
-    window.expand_playlist.setChecked(True)
-    monkeypatch.setattr(window, "confirm_playlist", lambda count, summary: True)
-    window.url_input.setPlainText("https://www.youtube.com/watch?v=aaaaaaaaaaa&list=PLabcdefghij123456")
-    window.add_from_input()
-    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
-
-
-def test_playlist_expansion_asks_before_adding(window, qtbot, monkeypatch):
-    asked = []
-    monkeypatch.setattr(window, "confirm_playlist", lambda count, summary: asked.append(count) or False)
+def test_playlist_picker_cancel_adds_nothing(window, qtbot, monkeypatch, dialogs):
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: None)
     window.url_input.setPlainText(PLAYLIST)
     window.add_from_input()
-    qtbot.waitUntil(lambda: asked == [3], timeout=5000)
-    qtbot.waitUntil(lambda: not window._busy_expanding)
+    qtbot.waitUntil(lambda: not window._busy_expanding, timeout=5000)
     assert rows(window) == 0
+    assert "已取消加入播放清單中的影片" in dialogs.text()
 
-    monkeypatch.setattr(window, "confirm_playlist", lambda count, summary: True)
-    window.url_input.setPlainText(PLAYLIST)
+
+def test_video_in_playlist_preselects_pasted_video(window, qtbot, monkeypatch):
+    shown = []
+
+    def choose(groups):
+        shown.append(groups)
+        return [e.url for e in groups[0].entries if e.video_id == groups[0].preselect_video_id]
+
+    monkeypatch.setattr(window, "choose_playlist_entries", choose)
+    window.url_input.setPlainText("https://www.youtube.com/watch?v=vid00000001&list=PLabcdefghij123456")
     window.add_from_input()
-    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
+    qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
+    assert shown[0][0].preselect_video_id == "vid00000001"
+    assert window.ctx.queue.tasks()[0].url == "https://www.youtube.com/watch?v=vid00000001"
 
 
-def test_video_in_playlist_without_expand_adds_single_video(window):
-    window.expand_playlist.setChecked(False)
+def test_pasted_video_missing_from_playlist_is_listed_first(window, qtbot, monkeypatch):
+    shown = []
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups: shown.append(groups) or [])
     window.url_input.setPlainText("https://www.youtube.com/watch?v=aaaaaaaaaaa&list=PLabcdefghij123456")
     window.add_from_input()
-    assert rows(window) == 1
-    assert window.ctx.queue.tasks()[0].url == "https://www.youtube.com/watch?v=aaaaaaaaaaa"
+    qtbot.waitUntil(lambda: bool(shown), timeout=5000)
+    first = shown[0][0].entries[0]
+    assert (first.video_id, first.url) == ("aaaaaaaaaaa", "https://www.youtube.com/watch?v=aaaaaaaaaaa")
+
+
+def test_playlist_read_failure_falls_back_to_single_video(window, qtbot, monkeypatch, fake, dialogs):
+    def broken(url, limit=500):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(fake, "extract_playlist", broken)
+    window.url_input.setPlainText("https://www.youtube.com/watch?v=aaaaaaaaaaa&list=PLabcdefghij123456")
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
+    assert "無法讀取播放清單" in dialogs.text()
+
+
+def test_playlist_picker_dialog(qtbot):
+    from PySide6.QtCore import Qt
+
+    from yt_media_tool.core.downloader import PlaylistEntry
+    from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
+
+    def entries(prefix):
+        return [PlaylistEntry(f"https://www.youtube.com/watch?v={prefix}{i:010d}", f"{prefix} 歌曲 {i}",
+                              f"{prefix}{i:010d}", 200.0) for i in range(3)]
+
+    dialog = PlaylistPickerDialog([PlaylistGroup("清單 A", entries("a")),
+                                   PlaylistGroup("清單 B", entries("b"), preselect_video_id="b0000000001")], 500)
+    qtbot.addWidget(dialog)
+    assert dialog.selected_urls() == [e.url for e in entries("a")] + ["https://www.youtube.com/watch?v=b0000000001"]
+    assert dialog.ok_button.text() == "加入 4 部" and dialog.count_label.text() == "已選 4 / 6 部"
+
+    dialog.search.setText("歌曲 2")  # 搜尋後「全不選」只影響符合的影片
+    dialog._set_visible_checked(False)
+    assert dialog.selected_urls() == ["https://www.youtube.com/watch?v=a0000000000",
+                                      "https://www.youtube.com/watch?v=a0000000001",
+                                      "https://www.youtube.com/watch?v=b0000000001"]
+    dialog.search.clear()
+    dialog._set_visible_checked(False)
+    assert dialog.selected_urls() == [] and not dialog.ok_button.isEnabled()
+
+    group_b = dialog.tree.topLevelItem(1)  # 勾選清單本身＝整個清單
+    group_b.setCheckState(0, Qt.CheckState.Checked)
+    assert len(dialog.selected_urls()) == 3 and dialog.ok_button.text() == "加入 3 部"
+    assert group_b.child(0).text(1) == "03:20"
 
 
 def test_missing_ffmpeg_blocks_adding_with_guide(window, dialogs, monkeypatch):

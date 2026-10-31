@@ -62,7 +62,8 @@ class FakeDownloader:
 
     def extract_playlist(self, url: str, limit: int = 500) -> PlaylistInfo:
         return self.playlists.get(url, PlaylistInfo("清單", [PlaylistEntry(
-            f"https://www.youtube.com/watch?v=vid{i:08d}", f"影片 {i}") for i in range(3)]))
+            f"https://www.youtube.com/watch?v=vid{i:08d}", f"影片 {i}", f"vid{i:08d}", 185.0 + i)
+            for i in range(3)]))
 
 
 class FakeYDL:

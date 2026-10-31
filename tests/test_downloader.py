@@ -202,7 +202,7 @@ def test_describe_selection_lists_available_resolutions():
 
 
 def test_extract_playlist_builds_watch_urls():
-    info = {"title": "我的清單", "entries": [{"id": "aaaaaaaaaaa", "url": "aaaaaaaaaaa", "title": "A"},
+    info = {"title": "我的清單", "entries": [{"id": "aaaaaaaaaaa", "url": "aaaaaaaaaaa", "title": "A", "duration": 212},
                                            {"id": "bbbbbbbbbbb", "url": "https://www.youtube.com/watch?v=bbbbbbbbbbb"},
                                            None]}
     d = make_downloader(info=info)
@@ -210,6 +210,7 @@ def test_extract_playlist_builds_watch_urls():
     assert result.title == "我的清單"
     assert [e.url for e in result.entries] == ["https://www.youtube.com/watch?v=aaaaaaaaaaa"]
     assert result.truncated
+    assert (result.entries[0].video_id, result.entries[0].duration) == ("aaaaaaaaaaa", 212.0)
 
 
 def test_task_dir_creation_retries_on_pending_delete(tmp_path, monkeypatch):

@@ -10,7 +10,7 @@ from pathlib import Path
 from PySide6.QtCore import QByteArray, Qt, QThreadPool, QTimer
 from PySide6.QtGui import QAction, QCloseEvent, QGuiApplication, QKeySequence
 from PySide6.QtWidgets import (
-    QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
+    QApplication, QButtonGroup, QComboBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel, QLineEdit,
     QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton, QRadioButton, QSplitter,
     QTextEdit, QVBoxLayout, QWidget,
 )
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 from yt_media_tool import APP_DISPLAY_NAME, __version__
 from yt_media_tool.app_context import AppContext
 from yt_media_tool.core import converter
-from yt_media_tool.core.downloader import PlaylistInfo
+from yt_media_tool.core.downloader import PlaylistEntry, PlaylistInfo
 from yt_media_tool.core.errors import explain_error
 from yt_media_tool.core.queue_manager import (
     QUEUE_STATE, TASK_ADDED, TASK_FINISHED, TASK_PROGRESS, TASK_REMOVED, TASK_UPDATED, TaskSpec,
@@ -28,6 +28,7 @@ from yt_media_tool.core.task_models import (
 )
 from yt_media_tool.core.url_parser import ParsedUrl, UrlKind, parse_urls
 from yt_media_tool.gui.history_dialog import HistoryDialog
+from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
 from yt_media_tool.gui.qt_bridge import QueueEventBridge
 from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RETRY, QueueTableView
 from yt_media_tool.gui.settings_dialog import SettingsDialog
@@ -126,7 +127,8 @@ class MainWindow(QMainWindow):
         url_layout = QVBoxLayout(url_group)
         self.url_input = QPlainTextEdit()
         self.url_input.setPlaceholderText(
-            "貼上 YouTube 影片、Shorts 或播放清單網址；可一次貼上多行，重複網址會自動去除。")
+            "貼上 YouTube 影片、Shorts 或播放清單網址；可一次貼上多行，重複網址會自動去除。\n"
+            "含有播放清單的網址會列出清單中的影片，讓您勾選要下載哪些。")
         self.url_input.setFixedHeight(90)
         url_layout.addWidget(self.url_input)
         row = QHBoxLayout()
@@ -134,16 +136,10 @@ class MainWindow(QMainWindow):
         paste_button.clicked.connect(self._paste_clipboard)
         clear_button = QPushButton("清空")
         clear_button.clicked.connect(self.url_input.clear)
-        self.expand_playlist = QCheckBox("影片網址含播放清單時，下載整個清單")
-        self.expand_playlist.setToolTip(
-            "例如 watch?v=…&list=… 這類網址：勾選時下載整個播放清單，未勾選時只下載這一支影片。\n"
-            "播放清單網址（playlist?list=…）一律讀取整個清單。加入前都會顯示影片數量並請您確認。")
         self.detection_label = QLabel()
         self.detection_label.setObjectName("hintLabel")
         row.addWidget(paste_button)
         row.addWidget(clear_button)
-        row.addSpacing(12)
-        row.addWidget(self.expand_playlist)
         row.addStretch(1)
         row.addWidget(self.detection_label)
         url_layout.addLayout(row)
@@ -382,10 +378,8 @@ class MainWindow(QMainWindow):
         singles: list[str] = []
         playlists: list[ParsedUrl] = []
         for item in result.valid:
-            if item.kind is UrlKind.PLAYLIST:
-                playlists.append(item)  # 加入前會顯示影片數量並確認
-            elif item.kind is UrlKind.VIDEO_IN_PLAYLIST and self.expand_playlist.isChecked():
-                playlists.append(item)
+            if item.kind in (UrlKind.PLAYLIST, UrlKind.VIDEO_IN_PLAYLIST):
+                playlists.append(item)  # 讀取清單後讓使用者勾選要下載的影片
             else:
                 singles.append(item.video_url)  # type: ignore[arg-type]
 
@@ -437,36 +431,35 @@ class MainWindow(QMainWindow):
         singles, fmt, quality, output_dir, notes = self._expand_context
         if self._closing:
             return
-        entries: list[str] = []
-        summary: list[str] = []
+        groups: list[PlaylistGroup] = []
         for item, outcome in results:
             if isinstance(outcome, Exception):
                 notes.append(f"• 無法讀取播放清單 {item.original}\n   {explain_error(outcome)}")
                 if item.kind is UrlKind.VIDEO_IN_PLAYLIST:
                     singles.append(item.video_url)
                 continue
-            title = outcome.title or item.playlist_id
-            extra = f"（僅取前 {MAX_PLAYLIST_ITEMS} 部）" if outcome.truncated else ""
-            summary.append(f"• {title}：{len(outcome.entries)} 部影片{extra}")
-            entries.extend(e.url for e in outcome.entries)
-        if entries:
-            answer = self.confirm_playlist(len(entries), summary)
-            if answer:
-                singles.extend(entries)
-            else:
+            title = outcome.title or item.playlist_id or ""
+            entries = list(outcome.entries)
+            preselect = item.video_id if item.kind is UrlKind.VIDEO_IN_PLAYLIST else None
+            if preselect and not any(e.video_id == preselect for e in entries):
+                # 貼上的影片不在讀到的清單中（例如超過上限）：放在最前面，避免使用者想要的影片消失
+                entries.insert(0, PlaylistEntry(item.video_url or "", "（您貼上的影片）", preselect))
+            if not entries:
+                notes.append(f"• 播放清單「{title}」中沒有可下載的影片。")
+                continue
+            groups.append(PlaylistGroup(title, entries, preselect, outcome.truncated))
+        if groups:
+            chosen = self.choose_playlist_entries(groups)
+            if chosen is None:
                 notes.append("已取消加入播放清單中的影片。")
+            else:
+                singles.extend(chosen)
         self._finish_add(singles, fmt, quality, output_dir, notes)
 
-    def confirm_playlist(self, count: int, summary: list[str]) -> bool:
-        box = QMessageBox(self)
-        box.setIcon(QMessageBox.Icon.Question)
-        box.setWindowTitle("加入播放清單")
-        box.setText(f"播放清單共有 {count} 部影片，確定要全部加入下載佇列嗎？")
-        box.setInformativeText("\n".join(summary))
-        add = box.addButton(f"加入 {count} 部", QMessageBox.ButtonRole.AcceptRole)
-        box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
-        box.exec()
-        return box.clickedButton() is add
+    def choose_playlist_entries(self, groups: list[PlaylistGroup]) -> list[str] | None:
+        """顯示播放清單選擇對話框；回傳勾選的影片網址，取消時回傳 None。"""
+        dialog = PlaylistPickerDialog(groups, MAX_PLAYLIST_ITEMS, self)
+        return dialog.selected_urls() if dialog.exec() else None
 
     def _finish_add(self, urls: list[str], fmt: MediaFormat, quality: str, output_dir: str,
                     notes: list[str]) -> list[DownloadTask]:
