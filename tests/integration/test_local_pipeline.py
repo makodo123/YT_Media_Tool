@@ -245,3 +245,24 @@ def test_no_subtitles_available_is_noted(media_server, tmp_path):
     result = _downloader_with_info(base, {"title": "沒字幕"}, DownloadPreferences(subtitles=True)).download(
         task(f"{base}/sample.mp4", tmp_path), CancelToken(), lambda u: None)
     assert result.actual_quality.endswith("；此影片沒有可用字幕")
+
+
+def test_clean_title_used_for_mp3_filename_and_tags(media_server, tmp_path):
+    base = media_server["fast"]
+    extra = {"title": "周杰倫 Jay Chou【晴天 Sunny Day】Official MV", "uploader": "周杰倫 Jay Chou",
+             "channel": "周杰倫 Jay Chou"}
+    prefs = DownloadPreferences(embed_metadata=True, clean_titles=True)
+    result = _downloader_with_info(base, extra, prefs).download(
+        task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP3, "192"), CancelToken(), lambda u: None)
+    assert result.output_path.name == "周杰倫 - 晴天.mp3"
+    assert result.title == "周杰倫 Jay Chou【晴天 Sunny Day】Official MV"  # 佇列仍顯示原標題
+    tags = {k.lower(): v for k, v in _probe_json(result.output_path)["format"].get("tags", {}).items()}
+    assert tags.get("title") == "晴天" and tags.get("artist") == "周杰倫"
+
+    # 關閉時維持原標題；MP4 不整理
+    off = _downloader_with_info(base, extra, DownloadPreferences(clean_titles=False)).download(
+        task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP3, "192", task_id=2), CancelToken(), lambda u: None)
+    assert off.output_path.name.startswith("周杰倫 Jay Chou【晴天 Sunny Day】Official MV")
+    mp4 = _downloader_with_info(base, extra, prefs).download(
+        task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP4, "720", task_id=3), CancelToken(), lambda u: None)
+    assert mp4.output_path.name.startswith("周杰倫 Jay Chou【晴天 Sunny Day】Official MV")

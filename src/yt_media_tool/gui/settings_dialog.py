@@ -82,6 +82,11 @@ class SettingsDialog(QDialog):
         self.embed_metadata.setToolTip("在 MP3 / MP4 檔案中寫入標題、演出者（頻道名稱）等資訊並嵌入封面，\n"
                                        "音樂播放器與手機會顯示歌名和封面。")
         self.embed_metadata.setChecked(settings.embed_metadata)
+        self.clean_titles = QCheckBox("MP3 自動整理歌名（例如「周杰倫 - 晴天」，去掉「Official MV」等字樣）")
+        self.clean_titles.setToolTip("檔名與歌曲資訊改用整理後的「演出者 - 歌名」；\n"
+                                     "佇列與歷史紀錄仍顯示 YouTube 原標題。優先使用 YouTube 提供的歌曲資訊；\n"
+                                     "整理不出合理結果時保留原標題。只影響之後下載的 MP3。")
+        self.clean_titles.setChecked(settings.clean_titles)
         self.playlist_subfolder = QCheckBox("播放清單存到以清單名稱命名的子資料夾")
         self.playlist_subfolder.setToolTip("例如「下載資料夾\\我的最愛歌單\\」；只下載貼上的那一支影片時不另建資料夾。")
         self.playlist_subfolder.setChecked(settings.playlist_subfolder)
@@ -114,8 +119,8 @@ class SettingsDialog(QDialog):
 
         files_group = QGroupBox("其他功能")
         files_layout = QVBoxLayout(files_group)
-        for box in (self.embed_metadata, self.playlist_subfolder, self.playlist_m3u, self.auto_paste, self.notify,
-                    self.open_folder, self.keep_history, self.check_updates):
+        for box in (self.embed_metadata, self.clean_titles, self.playlist_subfolder, self.playlist_m3u,
+                    self.auto_paste, self.notify, self.open_folder, self.keep_history, self.check_updates):
             files_layout.addWidget(box)
 
         ffmpeg_group = QGroupBox("FFmpeg（通常不需更改）")
@@ -249,6 +254,7 @@ class SettingsDialog(QDialog):
             check_updates=self.check_updates.isChecked(),
             keep_history=self.keep_history.isChecked(),
             embed_metadata=self.embed_metadata.isChecked(),
+            clean_titles=self.clean_titles.isChecked(),
             playlist_subfolder=self.playlist_subfolder.isChecked(),
             playlist_m3u=self.playlist_m3u.isChecked(),
             ffmpeg_dir=self.ffmpeg_dir.text().strip(),

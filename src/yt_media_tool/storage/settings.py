@@ -32,6 +32,7 @@ class AppSettings:
     embed_metadata: bool = True  # 寫入標題、演出者並以影片縮圖作為封面
     playlist_subfolder: bool = True  # 播放清單的影片存到以清單名稱命名的子資料夾
     playlist_m3u: bool = True  # 播放清單下載後產生依原順序排列的清單檔（.m3u8）
+    clean_titles: bool = True  # MP3 自動整理歌名（「演出者 - 歌名」）
     notify_on_complete: bool = True  # 佇列全部完成時通知（工作列閃爍、系統通知）
     rate_limit_mbps: float = 0.0  # 全部任務合計的下載速度上限（MB/s）；0 表示不限制
     download_subtitles: bool = False  # MP4 一併下載字幕
@@ -59,6 +60,7 @@ class AppSettings:
         s.embed_metadata = bool(s.embed_metadata)
         s.playlist_subfolder = bool(s.playlist_subfolder)
         s.playlist_m3u = bool(s.playlist_m3u)
+        s.clean_titles = bool(s.clean_titles)
         s.notify_on_complete = bool(s.notify_on_complete)
         try:
             s.rate_limit_mbps = min(MAX_RATE_LIMIT_MBPS, max(0.0, round(float(s.rate_limit_mbps), 1)))
@@ -79,7 +81,7 @@ class AppSettings:
         per_task = None
         if self.rate_limit_mbps:
             per_task = int(self.rate_limit_mbps * 1024 * 1024 / max(1, self.max_concurrent))
-        return DownloadPreferences(self.embed_metadata, per_task, self.download_subtitles)
+        return DownloadPreferences(self.embed_metadata, per_task, self.download_subtitles, self.clean_titles)
 
     def cookie_config(self) -> CookieConfig:
         return CookieConfig(self.cookies_source, self.cookies_file)

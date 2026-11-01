@@ -33,6 +33,7 @@ from yt_media_tool.core.converter import JsRuntimeInfo, MediaInfo, ToolInfo
 from yt_media_tool.core.cookies import CookieConfig, ydl_cookie_options
 from yt_media_tool.core.errors import DownloadCancelledError, InsufficientDiskSpaceError
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus
+from yt_media_tool.core.title_cleanup import clean_title
 from yt_media_tool.utils.paths import FileNameReserver, sanitize_filename
 
 log = logging.getLogger(__name__)
@@ -115,6 +116,7 @@ class DownloadPreferences:
     embed_metadata: bool = False  # 寫入歌名、演出者並嵌入封面
     rate_limit: int | None = None  # 每個任務的速度上限（bytes/s）；None 表示不限制
     subtitles: bool = False  # MP4 一併下載字幕（.srt）
+    clean_titles: bool = False  # MP3 自動整理歌名（檔名「演出者 - 歌名」，並寫入歌曲資訊）
 
 
 @dataclass(frozen=True)
@@ -337,6 +339,16 @@ class Downloader:
                 raise RuntimeError("此任務為播放清單，請重新貼上播放清單網址加入佇列")
 
             title = str(info.get("title") or info.get("id") or "untitled")
+            file_stem = title
+            if prefs.clean_titles and task.media_format is MediaFormat.MP3:
+                cleaned = clean_title(info)
+                if cleaned is not None:
+                    # 歌曲資訊（FFmpegMetadata 優先使用 track / artist）與檔名都用整理後的名稱；佇列仍顯示原標題
+                    info["track"] = cleaned.track
+                    if cleaned.artist:
+                        info["artist"] = cleaned.artist
+                        info["artists"] = [cleaned.artist]
+                    file_stem = cleaned.display
             actual = describe_selection(info, task.media_format, task.quality)
             on_progress(ProgressUpdate(TaskStatus.DOWNLOADING, progress=0.0, stage="下載中",
                                        title=title, actual_quality=actual))
@@ -362,7 +374,7 @@ class Downloader:
 
             on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=99.0, stage="移動檔案中"))
             ext = "mp4" if task.media_format is MediaFormat.MP4 else "mp3"
-            stem = sanitize_filename(title)
+            stem = sanitize_filename(file_stem)
             while True:
                 reserved = self.reserver.reserve(output_dir, stem, ext)
                 if move_no_overwrite(produced, reserved):

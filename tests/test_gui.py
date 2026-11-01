@@ -346,10 +346,13 @@ def test_settings_dialog_returns_validated_settings(qtbot, window):
     dialog.mp3_quality.setCurrentIndex(dialog.mp3_quality.findData("320"))
     dialog.keep_history.setChecked(False)
     dialog.embed_metadata.setChecked(False)
+    assert dialog.clean_titles.isChecked()  # 預設開啟
+    dialog.clean_titles.setChecked(False)
     result = dialog.result_settings()
     assert result.max_concurrent == 3 and result.default_format == "mp3"
     assert result.default_mp3_quality == "320" and result.keep_history is False
     assert result.embed_metadata is False
+    assert result.clean_titles is False and result.download_preferences().clean_titles is False
     window.ctx.apply_settings(result)
     assert window.ctx.queue.max_concurrent == 3
     assert window.ctx.queue.keep_history is False
