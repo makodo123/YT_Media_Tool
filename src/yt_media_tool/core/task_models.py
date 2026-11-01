@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, UTC
 from enum import Enum
@@ -108,6 +109,9 @@ class DownloadTask:
     created_at: str = field(default_factory=now_iso)
     updated_at: str = field(default_factory=now_iso)
     completed_at: str = ""
+    file_name: str = ""  # 使用者在選歌視窗修改的檔名（不含副檔名）；空白時依標題自動決定
+    clip_start: float | None = None  # 只下載片段：開始秒數（None 表示從頭）
+    clip_end: float | None = None  # 只下載片段：結束秒數（None 表示到結尾）
     # 以下為執行期資訊，不寫入資料庫
     progress: float = 0.0  # 0~100
     speed: float | None = None  # bytes/s
@@ -127,6 +131,15 @@ class DownloadTask:
     @property
     def quality_text(self) -> str:
         return quality_label(self.media_format, self.quality)
+
+    @property
+    def is_clip(self) -> bool:
+        return self.clip_start is not None or self.clip_end is not None
+
+    @property
+    def clip_text(self) -> str:
+        """例如「片段 1:20～4:35」；不是片段時回傳空字串。"""
+        return clip_text(self.clip_start, self.clip_end)
 
     def can_transition(self, new_status: TaskStatus) -> bool:
         return new_status == self.status or new_status in ALLOWED_TRANSITIONS[self.status]
@@ -156,6 +169,40 @@ class DownloadTask:
 
     def snapshot(self) -> DownloadTask:
         return dataclasses.replace(self)
+
+
+def format_clock(seconds: float) -> str:
+    """秒數 → 「1:05」「1:02:05」「1:05.5」（片段時間顯示用）。"""
+    whole, tenth = divmod(round(seconds * 10), 10)
+    hours, rem = divmod(whole, 3600)
+    minutes, secs = divmod(rem, 60)
+    text = f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+    return f"{text}.{tenth}" if tenth else text
+
+
+def clip_text(start: float | None, end: float | None) -> str:
+    if start is None and end is None:
+        return ""
+    return f"片段 {format_clock(start or 0)}～{format_clock(end) if end is not None else '結尾'}"
+
+
+_CLOCK = re.compile(r"^(?:(\d+):)?(?:(\d+):)?(\d+(?:\.\d+)?)$")
+
+
+def parse_clock(text: str) -> float | None:
+    """「90」「1:30」「1:02:30」「1:30.5」→ 秒數；空白回傳 None；格式錯誤時 ValueError。"""
+    text = (text or "").strip().replace("：", ":")
+    if not text:
+        return None
+    match = _CLOCK.match(text)
+    if not match:
+        raise ValueError(f"時間格式不正確：「{text}」（例如 1:30 或 1:02:30）")
+    first, second, last = match.groups()
+    hours, minutes = (int(first), int(second)) if second is not None else (0, int(first or 0))
+    seconds = float(last)
+    if (first is not None and (seconds >= 60 or (second is not None and minutes >= 60))):
+        raise ValueError(f"時間格式不正確：「{text}」（分、秒不可超過 59）")
+    return hours * 3600 + minutes * 60 + seconds
 
 
 def format_speed(speed: float | None) -> str:

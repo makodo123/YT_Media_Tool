@@ -25,7 +25,8 @@ SETTING_KEY = "playlist_files.batches"
 MAX_BATCHES = 50  # 只保留最近的批次，避免設定無限增長
 
 
-def _same_folder(a: str, b: str) -> bool:
+def same_folder(a: str, b: str) -> bool:
+    """兩個資料夾路徑是否相同（Windows 不分大小寫與斜線方向）。"""
     return os.path.normcase(os.path.abspath(a)) == os.path.normcase(os.path.abspath(b))
 
 
@@ -40,14 +41,30 @@ class PlaylistFileStore:
     def _save(self, batches: list[dict[str, Any]]) -> None:
         self._db.set_setting(SETTING_KEY, batches[-MAX_BATCHES:])
 
-    def add_batch(self, folder: str, title: str, media_format: str, urls: list[str]) -> bool:
-        """記錄一個播放清單批次；少於 2 部影片時不需要清單檔。"""
+    def add_batch(self, folder: str, title: str, media_format: str, urls: list[str],
+                  known_files: dict[str, str] | None = None) -> bool:
+        """記錄一個播放清單批次；少於 2 部影片時不需要清單檔。
+
+        known_files：同一資料夾中之前已下載的歌（網址 → 檔名）。同一個資料夾、清單名稱與格式已有批次時
+        （再次加入同一個播放清單，只下載新歌），沿用該批次與它的清單檔，不另外產生「清單名稱 (1).m3u8」。
+        """
         urls = list(dict.fromkeys(urls))
         if len(urls) < 2:
             return False
+        title = title or "播放清單"
         batches = self._load()
-        batches.append({"id": uuid.uuid4().hex, "folder": folder, "title": title or "播放清單",
-                        "format": media_format, "urls": urls, "files": {}, "m3u": ""})
+        for batch in reversed(batches):
+            if (batch.get("title") == title and batch.get("format") == media_format
+                    and same_folder(batch.get("folder", ""), folder)):
+                batches.remove(batch)
+                files = batch.setdefault("files", {})
+                files.update(known_files or {})
+                batch["urls"] = urls  # 依播放清單目前的順序
+                batches.append(batch)  # 移到最後，避免被 MAX_BATCHES 淘汰
+                break
+        else:
+            batches.append({"id": uuid.uuid4().hex, "folder": folder, "title": title, "format": media_format,
+                            "urls": urls, "files": dict(known_files or {}), "m3u": ""})
         self._save(batches)
         return True
 
@@ -59,7 +76,7 @@ class PlaylistFileStore:
         written = []
         for batch in batches:
             if (batch.get("format") == task.media_format.value and task.url in batch.get("urls", [])
-                    and _same_folder(batch.get("folder", ""), task.output_dir)):
+                    and same_folder(batch.get("folder", ""), task.output_dir)):
                 batch.setdefault("files", {})[task.url] = Path(task.output_path).name
                 path = self._write(batch)
                 if path is not None:
@@ -73,7 +90,7 @@ class PlaylistFileStore:
         batches = self._load()
         changed = False
         for batch in batches:
-            if _same_folder(batch.get("folder", ""), folder):
+            if same_folder(batch.get("folder", ""), folder):
                 files = batch.get("files", {})
                 for url, name in files.items():
                     if name == old_name:

@@ -69,3 +69,24 @@ def test_ignores_single_song_other_format_and_other_folder(db, music):
     other.mkdir()
     assert store.on_task_completed(done(other, 0, "一.mp3")) == []
     assert not list(music.glob("*.m3u8"))
+
+
+def test_same_playlist_again_reuses_m3u_and_keeps_known_songs(db, music):
+    store = PlaylistFileStore(db)
+    store.add_batch(str(music), "我的最愛", "mp3", URLS[:2])
+    store.on_task_completed(done(music, 0, "晴天.mp3"))
+    store.on_task_completed(done(music, 1, "稻香.mp3"))
+    # 清單新增了第 3 首；再次加入時只下載新歌，已下載的兩首以 known_files 帶入
+    assert store.add_batch(str(music), "我的最愛", "mp3", URLS, known_files={URLS[0]: "晴天.mp3", URLS[1]: "稻香.mp3"})
+    [m3u] = store.on_task_completed(done(music, 2, "七里香.mp3"))
+    assert m3u == music / "我的最愛.m3u8"  # 沿用同一個清單檔，不產生「我的最愛 (1).m3u8」
+    assert [line for line in read(m3u) if not line.startswith("#")] == ["晴天.mp3", "稻香.mp3", "七里香.mp3"]
+    assert len(db.get_setting("playlist_files.batches")) == 1
+
+
+def test_known_files_for_new_batch(db, music):
+    (music / "晴天.mp3").write_bytes(b"x")
+    store = PlaylistFileStore(db)
+    store.add_batch(str(music), "清單", "mp3", URLS[:2], known_files={URLS[0]: "晴天.mp3"})
+    [m3u] = store.on_task_completed(done(music, 1, "稻香.mp3"))
+    assert [line for line in read(m3u) if not line.startswith("#")] == ["晴天.mp3", "稻香.mp3"]

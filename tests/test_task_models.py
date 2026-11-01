@@ -66,3 +66,34 @@ def test_format_helpers():
     assert format_eta(None) == ""
     assert format_eta(75) == "01:15"
     assert format_eta(3725) == "1:02:05"
+
+
+@pytest.mark.parametrize("text,seconds", [
+    ("90", 90.0), ("1:30", 90.0), ("01:30", 90.0), ("1:02:30", 3750.0), ("1:30.5", 90.5), ("1：30", 90.0),
+    (" 0:59 ", 59.0), ("", None), ("  ", None),
+])
+def test_parse_clock(text, seconds):
+    from yt_media_tool.core.task_models import parse_clock
+
+    assert parse_clock(text) == seconds
+
+
+@pytest.mark.parametrize("text", ["1:60", "1:60:00", "abc", "1:2:3:4", "-5", "1:"])
+def test_parse_clock_rejects_bad_input(text):
+    from yt_media_tool.core.task_models import parse_clock
+
+    with pytest.raises(ValueError, match="時間格式不正確"):
+        parse_clock(text)
+
+
+def test_clip_text_and_format_clock():
+    from yt_media_tool.core.task_models import clip_text, format_clock
+
+    assert [format_clock(s) for s in (0, 65.97, 2.5, 3725.5, 59.96)] == ["0:00", "1:06", "0:02.5", "1:02:05.5", "1:00"]
+    assert clip_text(80, 275) == "片段 1:20～4:35"
+    assert clip_text(None, 30) == "片段 0:00～0:30"
+    assert clip_text(60, None) == "片段 1:00～結尾"
+    assert clip_text(None, None) == ""
+    task = make_task(clip_start=80.0)
+    assert task.is_clip and task.clip_text == "片段 1:20～結尾"
+    assert not make_task().is_clip

@@ -41,6 +41,9 @@ class TaskSpec:
     quality: str
     output_dir: str
     title: str = ""
+    file_name: str = ""
+    clip_start: float | None = None
+    clip_end: float | None = None
 
 
 @dataclass
@@ -168,7 +171,8 @@ class QueueManager:
             order = self._db.next_sort_order()
             for spec in specs:
                 task = DownloadTask(url=spec.url, media_format=spec.media_format, quality=spec.quality,
-                                    output_dir=spec.output_dir, title=spec.title, sort_order=order)
+                                    output_dir=spec.output_dir, title=spec.title, sort_order=order,
+                                    file_name=spec.file_name, clip_start=spec.clip_start, clip_end=spec.clip_end)
                 order += 1
                 self._db.insert_task(task)
                 self._tasks[task.id] = task  # type: ignore[index]

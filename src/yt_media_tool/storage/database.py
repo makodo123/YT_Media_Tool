@@ -70,12 +70,21 @@ MIGRATIONS: list[tuple[int, list[str]]] = [
         "CREATE INDEX idx_tasks_status_order ON download_tasks (status, sort_order)",
         "CREATE INDEX idx_history_finished ON download_history (finished_at)",
     ]),
+    (3, [
+        # 選歌視窗修改的檔名、只下載片段的開始 / 結束秒數
+        "ALTER TABLE download_tasks ADD COLUMN file_name TEXT NOT NULL DEFAULT ''",
+        "ALTER TABLE download_tasks ADD COLUMN clip_start REAL",
+        "ALTER TABLE download_tasks ADD COLUMN clip_end REAL",
+        # 片段不算「已下載過」整部影片
+        "ALTER TABLE download_history ADD COLUMN is_clip INTEGER NOT NULL DEFAULT 0",
+    ]),
 ]
 SCHEMA_VERSION = MIGRATIONS[-1][0]
 
 _TASK_COLUMNS = (
     "url", "media_format", "quality", "output_dir", "status", "title", "sort_order",
     "error_message", "output_path", "actual_quality", "attempts", "created_at", "updated_at", "completed_at",
+    "file_name", "clip_start", "clip_end",
 )
 _UPDATABLE_TASK_COLUMNS = frozenset(_TASK_COLUMNS) - {"created_at"}
 
@@ -157,6 +166,9 @@ class Database:
             "created_at": task.created_at,
             "updated_at": task.updated_at,
             "completed_at": task.completed_at,
+            "file_name": task.file_name,
+            "clip_start": task.clip_start,
+            "clip_end": task.clip_end,
         }
 
     def next_sort_order(self) -> int:
@@ -227,10 +239,11 @@ class Database:
         with self.transaction() as conn:
             cur = conn.execute(
                 """INSERT INTO download_history
-                   (task_id, url, title, media_format, quality, output_path, status, error_message, finished_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (task_id, url, title, media_format, quality, output_path, status, error_message, finished_at,
+                    is_clip)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (task.id, task.url, task.title, task.media_format.value, task.quality,
-                 task.output_path, task.status.value, task.error_message, now_iso()),
+                 task.output_path, task.status.value, task.error_message, now_iso(), int(task.is_clip)),
             )
             return int(cur.lastrowid)
 
@@ -267,6 +280,13 @@ class Database:
                     conn.execute("UPDATE download_history SET output_path = ? WHERE id = ?", (new_path, row["id"]))
                     updated += 1
         return updated
+
+    def completed_downloads(self) -> list[dict[str, Any]]:
+        """所有下載完成的整部影片紀錄（新 → 舊，不含片段）：判斷「已下載過」用。"""
+        rows = self._query("SELECT url, media_format, output_path FROM download_history "
+                           "WHERE status = ? AND output_path != '' AND is_clip = 0 ORDER BY id DESC",
+                           (TaskStatus.COMPLETED.value,))
+        return [dict(row) for row in rows]
 
     def list_history(self, limit: int = 500) -> list[dict[str, Any]]:
         rows = self._query("SELECT * FROM download_history ORDER BY id DESC LIMIT ?", (int(limit),))

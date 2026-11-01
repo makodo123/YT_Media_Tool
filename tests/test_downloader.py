@@ -287,3 +287,38 @@ def test_rate_limit_is_shared_by_concurrent_tasks():
     assert AppSettings(rate_limit_mbps="abc").validated().rate_limit_mbps == 0  # type: ignore[arg-type]
     prefs = AppSettings(embed_metadata=False, download_subtitles=True).download_preferences()
     assert (prefs.embed_metadata, prefs.subtitles) == (False, True)
+
+
+def test_clip_passes_download_ranges_and_names_file(tmp_path):
+    captured = []
+
+    def factory(params):
+        captured.append(params)
+        return FakeYDL(params, INFO)
+
+    d = Downloader(tools_provider=lambda: TOOLS, js_runtime_provider=lambda: JsRuntimeInfo(),
+                   ydl_factory=factory, probe=fake_probe)
+    task = make_task(tmp_path, MediaFormat.MP3, "192")
+    task.clip_start, task.clip_end = 2.0, 30.0  # 結束超過影片長度（10 秒）：下載到結尾
+    result = d.download(task, CancelToken(), lambda u: None)
+    ranges = list(captured[-1]["download_ranges"]({}, None))
+    assert ranges == [{"start_time": 2.0, "end_time": float("inf")}]
+    assert "download_ranges" not in captured[0]  # 取得影片資訊時不需要
+    assert result.output_path.name == "測試_ 影片_標題_（片段 0.02-結尾）.mp3"
+    assert result.actual_quality.endswith("；片段 0:02～結尾")
+
+
+@pytest.mark.parametrize("start,end,message", [(10.0, None, "超過影片長度 0:10"), (5.0, 3.0, "結束時間必須晚於")])
+def test_invalid_clip_fails_before_download(tmp_path, start, end, message):
+    task = make_task(tmp_path)
+    task.clip_start, task.clip_end = start, end
+    with pytest.raises(RuntimeError, match=message):
+        make_downloader().download(task, CancelToken(), lambda u: None)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_extract_playlist_keeps_channel_for_name_preview():
+    info = {"title": "清單", "entries": [{"id": "aaaaaaaaaaa", "title": "A", "channel": "周杰倫 Jay Chou"},
+                                         {"id": "bbbbbbbbbbb", "title": "B", "uploader": "五月天"}]}
+    entries = make_downloader(info=info).extract_playlist("https://www.youtube.com/playlist?list=PLxxxxxxxxxx").entries
+    assert [e.channel for e in entries] == ["周杰倫 Jay Chou", "五月天"]

@@ -42,6 +42,12 @@ def status_text(task: DownloadTask) -> str:
 
 
 def quality_text(task: DownloadTask) -> str:
+    """品質欄文字；只下載片段時附上「｜片段 1:20～4:35」。"""
+    text = _quality_text(task)
+    return f"{text}｜{task.clip_text}" if task.is_clip else text
+
+
+def _quality_text(task: DownloadTask) -> str:
     """品質欄文字：實際品質與目標相同時只顯示一次；低於目標時顯示「目標 → 實際 ⚠」
     （MP3 的實際值為原始音源位元率，例如「192 kbps → 124 kbps ⚠」）；
     影片還有更高解析度時附上「（最高 1080p）」。

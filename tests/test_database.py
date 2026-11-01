@@ -119,3 +119,45 @@ def test_settings_round_trip_and_validation(db):
     assert loaded.max_concurrent == 3
     assert loaded.default_mp3_quality == "192"
     assert loaded.default_format == "mp4"
+
+
+def test_clip_and_file_name_round_trip(db):
+    task = DownloadTask(url="https://youtu.be/dQw4w9WgXcQ", media_format=MediaFormat.MP3, quality="192",
+                        output_dir="D:/music", file_name="五月天 - 倔強", clip_start=80.0, clip_end=None)
+    db.insert_task(task)
+    loaded = db.load_tasks()[0]
+    assert (loaded.file_name, loaded.clip_start, loaded.clip_end) == ("五月天 - 倔強", 80.0, None)
+
+
+def test_completed_downloads_excludes_clips_and_failures(db):
+    def finished(url, status, is_clip=False, path="D:/m/a.mp3"):
+        t = DownloadTask(url=url, media_format=MediaFormat.MP3, quality="192", output_dir="D:/m", status=status,
+                         output_path=path, clip_start=5.0 if is_clip else None)
+        db.add_history(t)
+
+    finished("https://youtu.be/aaaaaaaaaaa", TaskStatus.COMPLETED)
+    finished("https://youtu.be/bbbbbbbbbbb", TaskStatus.COMPLETED, is_clip=True)
+    finished("https://youtu.be/ccccccccccc", TaskStatus.FAILED, path="")
+    finished("https://youtu.be/ddddddddddd", TaskStatus.COMPLETED, path="D:/m/new.mp3")
+    assert [r["url"][-11:] for r in db.completed_downloads()] == ["ddddddddddd", "aaaaaaaaaaa"]  # 新 → 舊
+
+
+def test_migrates_v2_database_to_add_clip_columns(tmp_path):
+    path = tmp_path / "v2.sqlite3"
+    conn = sqlite3.connect(path)
+    for _, statements in MIGRATIONS[:2]:
+        for statement in statements:
+            conn.execute(statement)
+    conn.execute(
+        "INSERT INTO download_history (url, title, media_format, quality, output_path, status, finished_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("https://youtu.be/dQw4w9WgXcQ", "舊歌", "mp3", "192", "D:/m/舊歌.mp3", "completed", "2026-01-01"))
+    conn.execute("PRAGMA user_version = 2")
+    conn.commit()
+    conn.close()
+    database = Database(path)
+    try:
+        assert database.schema_version == SCHEMA_VERSION == 3
+        assert [r["output_path"] for r in database.completed_downloads()] == ["D:/m/舊歌.mp3"]  # 舊紀錄不是片段
+    finally:
+        database.close()

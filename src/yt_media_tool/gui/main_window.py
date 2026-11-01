@@ -22,16 +22,17 @@ from PySide6.QtWidgets import (
 from yt_media_tool import APP_DISPLAY_NAME, APP_NAME, __version__
 from yt_media_tool.app_context import AppContext
 from yt_media_tool.core import converter, updates
+from yt_media_tool.core.download_index import DownloadedIndex
 from yt_media_tool.core.downloader import PlaylistEntry, PlaylistInfo
 from yt_media_tool.core.local_convert import is_media_file
-from yt_media_tool.core.playlist_files import PlaylistFileStore
-from yt_media_tool.core.title_cleanup import clean_playlist_title
+from yt_media_tool.core.playlist_files import PlaylistFileStore, same_folder
+from yt_media_tool.core.title_cleanup import clean_playlist_title, clean_title
 from yt_media_tool.core.errors import explain_error
 from yt_media_tool.core.queue_manager import (
     QUEUE_STATE, TASK_ADDED, TASK_FINISHED, TASK_PROGRESS, TASK_REMOVED, TASK_UPDATED, TaskSpec,
 )
 from yt_media_tool.core.task_models import (
-    DownloadTask, MediaFormat, TaskStatus, format_speed, quality_options,
+    DownloadTask, MediaFormat, TaskStatus, format_speed, parse_clock, quality_options,
 )
 from yt_media_tool.core.url_parser import ParsedUrl, UrlKind, parse_urls
 from yt_media_tool.gui.convert_dialog import ConvertDialog
@@ -95,6 +96,7 @@ class MainWindow(QMainWindow):
         self._update_signals.finished.connect(self._on_update_downloaded)
         self._jobs: set[BackgroundJob] = set()
         self._expand_context: tuple = ()
+        self._custom_names: dict[str, str] = {}  # 選歌視窗中修改過的檔名（網址 → 檔名）
         self.setWindowTitle(APP_DISPLAY_NAME)
         self.resize(1180, 760)
         self.setAcceptDrops(True)  # 可把瀏覽器的網址拖曳到視窗任何位置
@@ -202,8 +204,28 @@ class MainWindow(QMainWindow):
         clear_button.clicked.connect(self.url_input.clear)
         self.detection_label = QLabel()
         self.detection_label.setObjectName("hintLabel")
+        self.clip_check = QCheckBox("只下載片段：")
+        self.clip_check.setToolTip(
+            "只下載影片中的一段（例如從演唱會或節目中截出一首歌），一次用於一部影片。\n"
+            "時間格式：1:30、1:02:30 或秒數；開始留白表示從頭，結束留白表示到結尾。\n"
+            "檔名會加上「（片段 開始-結束）」；MP4 的開頭可能提早 1～2 秒（從最近的關鍵畫面開始）。\n"
+            "加入佇列後會自動取消勾選。")
+        self.clip_start_edit = QLineEdit()
+        self.clip_start_edit.setPlaceholderText("開始 0:00")
+        self.clip_end_edit = QLineEdit()
+        self.clip_end_edit.setPlaceholderText("結束（結尾）")
+        for edit in (self.clip_start_edit, self.clip_end_edit):
+            edit.setFixedWidth(96)
+            edit.setEnabled(False)
+            edit.returnPressed.connect(self.add_from_input)
+        self.clip_check.toggled.connect(self._on_clip_toggled)
         row.addWidget(paste_button)
         row.addWidget(clear_button)
+        row.addSpacing(16)
+        row.addWidget(self.clip_check)
+        row.addWidget(self.clip_start_edit)
+        row.addWidget(QLabel("～"))
+        row.addWidget(self.clip_end_edit)
         row.addStretch(1)
         row.addWidget(self.detection_label)
         url_layout.addLayout(row)
@@ -648,6 +670,31 @@ class MainWindow(QMainWindow):
             parts.append(f"重複 {len(result.duplicates)}")
         self.detection_label.setText("偵測到：" + "、".join(parts))
 
+    def _on_clip_toggled(self, checked: bool) -> None:
+        for edit in (self.clip_start_edit, self.clip_end_edit):
+            edit.setEnabled(checked)
+        if checked:
+            self.clip_start_edit.setFocus()
+
+    def _reset_clip(self) -> None:
+        self.clip_check.setChecked(False)
+        self.clip_start_edit.clear()
+        self.clip_end_edit.clear()
+
+    def clip_range(self) -> tuple[float | None, float | None] | None:
+        """「只下載片段」的時間範圍；未勾選時回傳 None。格式錯誤時 ValueError（訊息可直接顯示）。"""
+        if not self.clip_check.isChecked():
+            return None
+        start = parse_clock(self.clip_start_edit.text())
+        end = parse_clock(self.clip_end_edit.text())
+        if start is None and end is None:
+            raise ValueError("請輸入片段的開始或結束時間（例如 1:30），或取消勾選「只下載片段」。")
+        if start is not None and end is not None and end <= start:
+            raise ValueError("片段的結束時間必須晚於開始時間。")
+        if start == 0:
+            start = None
+        return start, end
+
     def _ensure_output_dir(self) -> str | None:
         folder = self.folder_edit.text().strip()
         if not folder:
@@ -677,6 +724,16 @@ class MainWindow(QMainWindow):
         if not result.valid:
             QMessageBox.warning(self, "無法加入", "\n\n".join(notes) or "請先輸入 YouTube 網址。")
             return
+        try:
+            clip = self.clip_range()
+        except ValueError as exc:
+            QMessageBox.warning(self, "只下載片段", str(exc))
+            return
+        if clip is not None and (len(result.valid) != 1 or result.valid[0].kind is UrlKind.PLAYLIST):
+            QMessageBox.warning(self, "只下載片段",
+                                "「只下載片段」一次只能用於一部影片（不能用於整個播放清單）。\n"
+                                "請只貼上一個影片網址，或取消勾選「只下載片段」。")
+            return
         if not self.ctx.current_tools().available:
             self._refresh_dependency_banner()
             QMessageBox.warning(self, "缺少 FFmpeg", converter.FFMPEG_INSTALL_GUIDE)
@@ -694,6 +751,12 @@ class MainWindow(QMainWindow):
                 singles.append(item.video_url)  # type: ignore[arg-type]
 
         fmt, quality = self.selected_format(), self.quality_combo.currentData()
+        if clip is not None:
+            # 片段：只下載貼上的那一部影片（網址含播放清單時也不展開清單）
+            if self._finish_add([result.valid[0].video_url], fmt, quality, output_dir, notes,  # type: ignore[list-item]
+                                clip=clip):
+                self._reset_clip()
+            return
         if playlists:
             self._expand_playlists(playlists, singles, fmt, quality, output_dir, notes)
         else:
@@ -758,9 +821,18 @@ class MainWindow(QMainWindow):
                 notes.append(f"• 播放清單「{title}」中沒有可下載的影片。")
                 continue
             groups.append(PlaylistGroup(title, entries, preselect, outcome.truncated))
+        index = self.downloaded_index() if groups else None
+        for group in groups:
+            group.names = {e.url: self.planned_name(e, fmt) for e in group.entries if e.title != PASTED_VIDEO_TITLE}
+            for entry in group.entries:
+                found = index.find(entry.url, fmt) if index is not None else None
+                if found is not None:
+                    group.downloaded[entry.url] = str(found)
         folders: dict[str, str] = {}
         titles = {e.url: e.title for g in groups for e in g.entries if e.title and e.title != PASTED_VIDEO_TITLE}
+        picked: set[str] = set()
         if groups:
+            self._custom_names = {}
             chosen = self.choose_playlist_entries(groups, output_dir)
             if chosen is None:
                 notes.append("已取消加入播放清單中的影片。")
@@ -769,11 +841,44 @@ class MainWindow(QMainWindow):
                     folder = self._playlist_folder(output_dir, group, urls)
                     for url in urls:
                         singles.append(url)
+                        picked.add(url)
                         if folder:
                             folders.setdefault(url, folder)
                     if self.ctx.settings.playlist_m3u:
-                        self._playlist_files.add_batch(folder or output_dir, group.title, fmt.value, urls)
-        self._finish_add(singles, fmt, quality, output_dir, notes, folders=folders, titles=titles)
+                        self._add_playlist_batch(group, urls, folder or output_dir, fmt)
+        self._finish_add(singles, fmt, quality, output_dir, notes, folders=folders, titles=titles,
+                         names=self._custom_names, confirmed=picked)
+
+    def downloaded_index(self) -> DownloadedIndex:
+        try:
+            return DownloadedIndex(self.ctx.db.completed_downloads())
+        except Exception:  # 判斷「已下載過」只是輔助功能，失敗時當作都沒下載過
+            log.warning("無法讀取下載紀錄", exc_info=True)
+            return DownloadedIndex([])
+
+    def planned_name(self, entry: PlaylistEntry, fmt: MediaFormat) -> str:
+        """選歌視窗顯示的預計檔名（與下載時的歌名整理規則相同；下載時有 YouTube 歌曲資訊會以其為準）。"""
+        if not entry.title:
+            return ""
+        if self.ctx.settings.clean_titles:
+            cleaned = clean_title({"title": entry.title, "channel": entry.channel},
+                                  channel_fallback=fmt is MediaFormat.MP3)
+            if cleaned is not None:
+                return sanitize_filename(cleaned.display)
+        return sanitize_filename(entry.title)
+
+    def _add_playlist_batch(self, group: PlaylistGroup, urls: list[str], folder: str, fmt: MediaFormat) -> None:
+        """記錄播放清單檔（.m3u8）批次；同一個資料夾中已下載過的歌也列入，清單才會完整（播放清單同步）。"""
+        chosen = set(urls)
+        known = {}
+        for url, path in group.downloaded.items():
+            if url not in chosen and same_folder(str(Path(path).parent), folder):
+                known[url] = Path(path).name
+        ordered = [e.url for e in group.entries if e.url in chosen or e.url in known]
+        try:
+            self._playlist_files.add_batch(folder, group.title, fmt.value, ordered, known_files=known)
+        except Exception:
+            log.warning("無法記錄播放清單檔", exc_info=True)
 
     def _playlist_folder(self, output_dir: str, group: PlaylistGroup, urls: list[str]) -> str | None:
         """播放清單的影片存到以清單名稱命名的子資料夾；只下載貼上的那一支影片時不另建資料夾。"""
@@ -794,7 +899,10 @@ class MainWindow(QMainWindow):
         else:
             destination = f"儲存位置：{folder}"
         dialog = PlaylistPickerDialog(groups, MAX_PLAYLIST_ITEMS, self, destination=destination)
-        return dialog.selected_by_group() if dialog.exec() else None
+        if not dialog.exec():
+            return None
+        self._custom_names = dialog.custom_names()
+        return dialog.selected_by_group()
 
     def open_converter(self, files: list[Path] | None = None) -> ConvertDialog:
         """開啟「本機檔案轉 MP3」（非強制回應視窗，轉檔時仍可操作主視窗）。"""
@@ -854,16 +962,21 @@ class MainWindow(QMainWindow):
         if output_dir is None:
             return []
         return self._finish_add([url], fmt, quality, output_dir, [], clear_input=False,
-                                titles={url: title} if title else None)
+                                titles={url: title} if title else None, check_downloaded=False)
 
     def _finish_add(self, urls: list[str], fmt: MediaFormat, quality: str, output_dir: str,
                     notes: list[str], clear_input: bool = True, folders: dict[str, str] | None = None,
-                    titles: dict[str, str] | None = None) -> list[DownloadTask]:
+                    titles: dict[str, str] | None = None, names: dict[str, str] | None = None,
+                    clip: tuple[float | None, float | None] | None = None, check_downloaded: bool = True,
+                    confirmed: set[str] | None = None) -> list[DownloadTask]:
         """加入佇列；folders 可為個別網址指定儲存資料夾（例如播放清單子資料夾），
-        titles 為已知的影片名稱（下載開始前就能在佇列中顯示，開始下載後以實際名稱更新）。"""
+        titles 為已知的影片名稱（下載開始前就能在佇列中顯示，開始下載後以實際名稱更新），
+        names 為使用者修改過的檔名，clip 為只下載片段的（開始, 結束）秒數。
+        check_downloaded：已下載過（檔案還在）的影片先詢問；confirmed 中的網址（已在選歌視窗確認）不再詢問。"""
+        clip_start, clip_end = clip or (None, None)
         # 去除重複（播放清單展開後可能與單一網址重複）並略過佇列中尚未完成的相同任務
-        existing = {(t.url, t.media_format, t.quality, t.output_dir) for t in self.ctx.queue.tasks()
-                    if not t.status.is_finished}
+        existing = {(t.url, t.media_format, t.quality, t.output_dir, t.clip_start, t.clip_end)
+                    for t in self.ctx.queue.tasks() if not t.status.is_finished}
         seen: set[str] = set()
         specs: list[TaskSpec] = []
         skipped = 0
@@ -874,13 +987,23 @@ class MainWindow(QMainWindow):
                 continue
             seen.add(key)
             target = (folders or {}).get(url, output_dir)
-            if (url, fmt, quality, target) in existing:
+            if (url, fmt, quality, target, clip_start, clip_end) in existing:
                 skipped += 1
                 continue
             specs.append(TaskSpec(url=url, media_format=fmt, quality=quality, output_dir=target,
-                                  title=(titles or {}).get(url, "")))
+                                  title=(titles or {}).get(url, ""), file_name=(names or {}).get(url, ""),
+                                  clip_start=clip_start, clip_end=clip_end))
         if skipped:
             notes.append(f"已略過 {skipped} 個已在佇列中的相同任務。")
+        if check_downloaded and clip is None and specs:
+            unchecked = [s for s in specs if s.url not in (confirmed or set())]
+            if unchecked:
+                decided = self._confirm_already_downloaded(unchecked, fmt)
+                if decided is None:
+                    return []
+                specs = [s for s in specs if s not in decided]
+                if decided:
+                    notes.append(f"已略過 {len(decided)} 部已經下載過的影片。")
         added = self.ctx.queue.add_tasks(specs) if specs else []
         if added:
             if clear_input:
@@ -892,6 +1015,33 @@ class MainWindow(QMainWindow):
         if notes:
             QMessageBox.information(self, "加入佇列", "\n\n".join(notes))
         return added
+
+    def _confirm_already_downloaded(self, specs: list[TaskSpec], fmt: MediaFormat) -> list[TaskSpec] | None:
+        """已下載過（同格式、檔案還在）的影片先詢問。回傳要略過的任務；按「取消」時回傳 None。"""
+        index = self.downloaded_index()
+        found = [(s, index.find(s.url, fmt)) for s in specs]
+        found = [(s, path) for s, path in found if path is not None]
+        if not found:
+            return []
+        answer = self.ask_already_downloaded([path for _, path in found], fmt)
+        if answer == "skip":
+            return [s for s, _ in found]
+        return [] if answer == "again" else None
+
+    def ask_already_downloaded(self, files: list[Path], fmt: MediaFormat) -> str | None:
+        """詢問已下載過的影片要怎麼處理：回傳 "skip"（略過）、"again"（仍要下載）或 None（取消加入）。"""
+        listed = "\n".join(f"• {path.name}" for path in files[:5])
+        more = f"\n…等共 {len(files)} 部" if len(files) > 5 else ""
+        box = QMessageBox(QMessageBox.Icon.Question, "已經下載過",
+                          f"以下 {len(files)} 部影片之前已經下載成 {fmt.label}，檔案還在：\n\n{listed}{more}\n\n"
+                          "要略過這些影片，還是再下載一次？（再下載一次不會覆蓋原檔，新檔名會加上編號）", parent=self)
+        skip = box.addButton("略過已下載的", QMessageBox.ButtonRole.AcceptRole)
+        again = box.addButton("仍要下載", QMessageBox.ButtonRole.DestructiveRole)
+        box.addButton("取消", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(skip)
+        box.exec()
+        clicked = box.clickedButton()
+        return "skip" if clicked is skip else "again" if clicked is again else None
 
     # ================= 佇列操作 =================
     def _on_row_action(self, task_id: int, action: str) -> None:
@@ -1139,6 +1289,10 @@ class MainWindow(QMainWindow):
             f"網址：{task.url}",
             f"格式 / 目標品質：{task.media_format.label} {task.quality_text}",
         ]
+        if task.is_clip:
+            lines.append(f"只下載片段：{task.clip_text.removeprefix('片段 ')}")
+        if task.file_name:
+            lines.append(f"指定檔名：{task.file_name}")
         if task.actual_quality:
             lines.append(f"實際取得：{task.actual_quality}")
         lines.append(f"狀態：{task.status.label}" + (f"（{task.stage}）" if task.stage else ""))

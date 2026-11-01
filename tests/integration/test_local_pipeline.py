@@ -49,6 +49,9 @@ def media_server(tmp_path_factory):
     subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=3:size=640x360:rate=25",
                     "-f", "lavfi", "-i", "sine=frequency=440:duration=3", "-c:v", "libx264", "-pix_fmt", "yuv420p",
                     "-c:a", "aac", "-b:a", "128k", "-shortest", str(root / "sample.mp4")], check=True)
+    # 只下載片段：FFmpeg 會跳到指定時間讀取；本機伺服器不支援 Range，索引需放在檔案開頭（YouTube 支援 Range）
+    subprocess.run([ffmpeg, "-v", "error", "-i", str(root / "sample.mp4"), "-c", "copy", "-movflags", "+faststart",
+                    str(root / "clip.mp4")], check=True)
     # 較大的檔案供取消測試使用
     subprocess.run([ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc=duration=20:size=1280x720:rate=30",
                     "-c:v", "libx264", "-preset", "ultrafast", "-b:v", "4M", "-pix_fmt", "yuv420p",
@@ -271,3 +274,36 @@ def test_clean_title_used_for_mp3_filename_and_tags(media_server, tmp_path):
     kept = _downloader_with_info(base, vlog, prefs).download(
         task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP4, "720", task_id=4), CancelToken(), lambda u: None)
     assert kept.output_path.name == "我的日常 vlog.mp4"
+
+
+@pytest.mark.parametrize("fmt,quality", [(MediaFormat.MP3, "192"), (MediaFormat.MP4, "720")])
+def test_clip_downloads_only_the_requested_range(media_server, real_downloader, tmp_path, fmt, quality):
+    t = task(f"{media_server['fast']}/clip.mp4", tmp_path, fmt, quality)
+    t.clip_start, t.clip_end = 1.0, 2.5
+    result = real_downloader.download(t, CancelToken(), lambda u: None)
+    duration = float(_probe_json(result.output_path)["format"]["duration"])
+    assert 1.0 <= duration <= 2.2  # 約 1.5 秒（MP4 從關鍵影格開始，可能稍長）
+    assert result.output_path.name == f"clip（片段 0.01-0.02.5）.{fmt.value}"
+    assert result.actual_quality.endswith("；片段 0:01～0:02.5")
+    assert not (tmp_path / TEMP_ROOT_NAME).exists()
+
+
+def test_clip_start_after_end_of_video_fails_clearly(media_server, tmp_path):
+    base = media_server["fast"]
+    t = task(f"{base}/clip.mp4", tmp_path, MediaFormat.MP3, "192")
+    t.clip_start = 10.0
+    with pytest.raises(RuntimeError, match="超過影片長度 0:03"):
+        _downloader_with_info(base, {"duration": 3.0}, DownloadPreferences()).download(t, CancelToken(), lambda u: None)
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_custom_file_name_sets_filename_and_tags(media_server, tmp_path):
+    base = media_server["fast"]
+    prefs = DownloadPreferences(embed_metadata=True, clean_titles=True)
+    t = task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP3, "192")
+    t.file_name = "五月天 - 倔強 (2024 live)"
+    result = _downloader_with_info(base, {"title": "亂七八糟的標題"}, prefs).download(t, CancelToken(), lambda u: None)
+    assert result.output_path.name == "五月天 - 倔強 (2024 live).mp3"
+    assert result.title == "亂七八糟的標題"
+    tags = {k.lower(): v for k, v in _probe_json(result.output_path)["format"].get("tags", {}).items()}
+    assert tags.get("title") == "倔強 (2024 live)" and tags.get("artist") == "五月天"

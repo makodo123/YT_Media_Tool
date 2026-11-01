@@ -238,7 +238,7 @@ def test_playlist_picker_dialog(qtbot):
     group_b = dialog.tree.topLevelItem(1)  # 勾選清單本身＝整個清單
     group_b.setCheckState(0, Qt.CheckState.Checked)
     assert len(dialog.selected_urls()) == 3 and dialog.ok_button.text() == "加入 3 部"
-    assert group_b.child(0).text(1) == "03:20"
+    assert group_b.child(0).text(2) == "03:20"
 
 
 def test_missing_ffmpeg_blocks_adding_with_guide(window, dialogs, monkeypatch):
@@ -1209,3 +1209,222 @@ def test_successful_auto_update_shows_status(qtbot, db_path, fake, dialogs):
     assert win.update_banner.isHidden() and "已更新到" in win.statusBar().currentMessage()
     assert ctx.settings.pending_update_version == ""
     win.close()
+
+
+# ---- v2.8.0：只下載片段、已下載過提醒、播放清單同步、選歌時修改檔名 ----
+
+VIDEO = "https://www.youtube.com/watch?v=aaaaaaaaaaa"
+
+
+def _history(window, url, fmt, path, is_clip=False):
+    from yt_media_tool.core.task_models import DownloadTask
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"x")
+    done = DownloadTask(url=url, media_format=fmt, quality="192" if fmt is MediaFormat.MP3 else "720",
+                        output_dir=str(path.parent), status=TaskStatus.COMPLETED, output_path=str(path))
+    if is_clip:
+        done.clip_start = 10.0
+    window.ctx.db.add_history(done)
+
+
+def test_clip_adds_one_task_with_range_and_resets(window, dialogs):
+    window.url_input.setPlainText(VIDEO)
+    window.clip_check.setChecked(True)
+    assert window.clip_start_edit.isEnabled()
+    window.clip_start_edit.setText("1:20")
+    window.clip_end_edit.setText("4:35")
+    window.add_from_input()
+    task = window.ctx.queue.tasks()[0]
+    assert (task.clip_start, task.clip_end) == (80.0, 275.0)
+    model = window.table.queue_model
+    assert model.data(model.index(0, COL_QUALITY)).endswith("｜片段 1:20～4:35")
+    assert not window.clip_check.isChecked() and window.clip_start_edit.text() == ""
+    # 同一部影片的完整版不算重複
+    window.url_input.setPlainText(VIDEO)
+    window.add_from_input()
+    assert rows(window) == 2 and window.ctx.queue.tasks()[1].clip_start is None
+
+
+def test_clip_with_only_end_starts_from_beginning(window):
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    window.clip_check.setChecked(True)
+    window.clip_end_edit.setText("90")
+    window.add_from_input()
+    task = window.ctx.queue.tasks()[0]
+    assert (task.clip_start, task.clip_end) == (None, 90.0)
+    assert task.clip_text == "片段 0:00～1:30"
+
+
+@pytest.mark.parametrize("start,end,urls,message", [
+    ("", "", VIDEO, "請輸入片段的開始或結束時間"),
+    ("1:61", "", VIDEO, "時間格式不正確"),
+    ("2:00", "1:00", VIDEO, "結束時間必須晚於開始時間"),
+    ("0:10", "", f"{VIDEO}\nhttps://youtu.be/bbbbbbbbbbb", "一次只能用於一部影片"),
+    ("0:10", "", PLAYLIST, "一次只能用於一部影片"),
+])
+def test_invalid_clip_is_rejected(window, dialogs, start, end, urls, message):
+    window.url_input.setPlainText(urls)
+    window.clip_check.setChecked(True)
+    window.clip_start_edit.setText(start)
+    window.clip_end_edit.setText(end)
+    window.add_from_input()
+    assert rows(window) == 0 and message in dialogs.text()
+    assert window.clip_check.isChecked()  # 讓使用者修正，不清除
+
+
+def test_clip_of_video_in_playlist_does_not_open_picker(window, monkeypatch):
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda *a: pytest.fail("片段不展開播放清單"))
+    window.url_input.setPlainText("https://www.youtube.com/watch?v=vid00000001&list=PLabcdefghij123456")
+    window.clip_check.setChecked(True)
+    window.clip_start_edit.setText("30")
+    window.add_from_input()
+    task = window.ctx.queue.tasks()[0]
+    assert task.url == "https://www.youtube.com/watch?v=vid00000001" and task.clip_start == 30.0
+
+
+@pytest.mark.parametrize("answer,expected_rows", [("skip", 1), ("again", 2), (None, 0)])
+def test_already_downloaded_asks_before_adding(window, tmp_path, monkeypatch, dialogs, answer, expected_rows):
+    _history(window, "https://youtu.be/aaaaaaaaaaa", MediaFormat.MP3, tmp_path / "music" / "歌手 - 歌.mp3")
+    asked = []
+    monkeypatch.setattr(window, "ask_already_downloaded", lambda files, fmt: asked.append(files) or answer)
+    window.mp3_radio.setChecked(True)
+    window.url_input.setPlainText(f"{VIDEO}&t=30s\nhttps://youtu.be/bbbbbbbbbbb")
+    window.add_from_input()
+    assert [p.name for p in asked[0]] == ["歌手 - 歌.mp3"]
+    assert rows(window) == expected_rows
+    assert (window.url_input.toPlainText() == "") is (answer is not None)  # 取消時保留輸入的網址
+    if answer == "skip":
+        assert "已略過 1 部已經下載過的影片" in dialogs.text()
+
+
+def test_already_downloaded_ignores_other_format_deleted_files_and_clips(window, tmp_path, monkeypatch):
+    monkeypatch.setattr(window, "ask_already_downloaded", lambda *a: pytest.fail("不應詢問"))
+    _history(window, VIDEO, MediaFormat.MP4, tmp_path / "v" / "影片.mp4")  # 格式不同
+    _history(window, VIDEO, MediaFormat.MP3, tmp_path / "v" / "片段.mp3", is_clip=True)  # 只下載過片段
+    gone = tmp_path / "v" / "已刪除.mp3"
+    _history(window, VIDEO, MediaFormat.MP3, gone)
+    gone.unlink()  # 檔案已被使用者刪除
+    window.mp3_radio.setChecked(True)
+    window.url_input.setPlainText(VIDEO)
+    window.add_from_input()
+    assert rows(window) == 1
+
+
+def test_redownload_from_history_does_not_ask(window, tmp_path, monkeypatch):
+    _history(window, VIDEO, MediaFormat.MP3, tmp_path / "m" / "歌.mp3")
+    monkeypatch.setattr(window, "ask_already_downloaded", lambda *a: pytest.fail("重新下載不應詢問"))
+    assert len(window.redownload(VIDEO, MediaFormat.MP3, "192")) == 1
+
+
+def test_playlist_sync_marks_downloaded_and_skips_question(window, qtbot, tmp_path, monkeypatch):
+    folder = Path(window.folder_edit.text()) / "清單"
+    _history(window, "https://www.youtube.com/watch?v=vid00000001", MediaFormat.MP3, folder / "影片 1.mp3")
+    window.mp3_radio.setChecked(True)
+    shown = []
+
+    def choose(groups, *_):
+        shown.append(groups)
+        return [[e.url for e in groups[0].entries]]  # 使用者仍勾選全部（包含已下載的）
+
+    monkeypatch.setattr(window, "choose_playlist_entries", choose)
+    monkeypatch.setattr(window, "ask_already_downloaded", lambda *a: pytest.fail("選歌視窗已確認，不再詢問"))
+    window.url_input.setPlainText(PLAYLIST)
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
+    group = shown[0][0]
+    assert group.downloaded == {"https://www.youtube.com/watch?v=vid00000001": str(folder / "影片 1.mp3")}
+    assert group.names["https://www.youtube.com/watch?v=vid00000000"] == "影片 0"
+
+
+def test_playlist_sync_keeps_downloaded_songs_in_m3u(window, qtbot, tmp_path, monkeypatch):
+    folder = Path(window.folder_edit.text()) / "清單"
+    _history(window, "https://www.youtube.com/watch?v=vid00000001", MediaFormat.MP3, folder / "舊的歌.mp3")
+    window.mp3_radio.setChecked(True)
+    monkeypatch.setattr(window, "choose_playlist_entries",
+                        lambda groups, *_: [[e.url for e in groups[0].entries if e.url not in groups[0].downloaded]])
+    window.url_input.setPlainText(PLAYLIST)
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 2, timeout=5000)
+    window.ctx.queue.resume()
+    qtbot.waitUntil(lambda: all(t.status is TaskStatus.COMPLETED for t in window.ctx.queue.tasks()), timeout=5000)
+    m3u = folder / "清單.m3u8"
+
+    def names():
+        lines = m3u.read_text(encoding="utf-8").splitlines() if m3u.is_file() else []
+        return [line for line in lines if not line.startswith("#")]
+
+    qtbot.waitUntil(lambda: len(names()) == 3, timeout=5000)
+    assert names()[1] == "舊的歌.mp3"  # 依播放清單順序，已下載的歌也在清單中
+
+
+def test_custom_names_from_picker_become_task_file_names(window, qtbot, monkeypatch):
+    def choose(groups, *_):
+        window._custom_names = {groups[0].entries[0].url: "五月天 - 倔強"}
+        return [[e.url for e in groups[0].entries[:2]]]
+
+    monkeypatch.setattr(window, "choose_playlist_entries", choose)
+    window.url_input.setPlainText(PLAYLIST)
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 2, timeout=5000)
+    tasks = window.ctx.queue.tasks()
+    assert [t.file_name for t in tasks] == ["五月天 - 倔強", ""]
+    window.table.selectRow(0)
+    window._update_details()
+    assert "指定檔名：五月天 - 倔強" in window.details.toPlainText()
+
+
+def test_planned_name_follows_title_cleanup_setting(window):
+    from yt_media_tool.core.downloader import PlaylistEntry
+
+    entry = PlaylistEntry(VIDEO, "周杰倫 Jay Chou【晴天 Sunny Day】Official MV", "aaaaaaaaaaa", None, "周杰倫")
+    vlog = PlaylistEntry(VIDEO, "我的日常 vlog", "aaaaaaaaaaa", None, "某某頻道")
+    window.ctx.settings.clean_titles = True
+    assert window.planned_name(entry, MediaFormat.MP3) == "周杰倫 - 晴天"
+    assert window.planned_name(vlog, MediaFormat.MP3) == "某某 - 我的日常 vlog"  # 頻道名稱去掉「頻道」等字
+    assert window.planned_name(vlog, MediaFormat.MP4) == "我的日常 vlog"  # MP4 不用頻道名稱補
+    window.ctx.settings.clean_titles = False
+    assert window.planned_name(entry, MediaFormat.MP3) == "周杰倫 Jay Chou【晴天 Sunny Day】Official MV"
+
+
+def test_picker_names_downloaded_and_select_new(qtbot):
+    from PySide6.QtCore import Qt
+
+    from yt_media_tool.core.downloader import PlaylistEntry
+    from yt_media_tool.gui.playlist_dialog import COL_NAME, COL_STATUS, PlaylistGroup, PlaylistPickerDialog
+
+    urls = [f"https://www.youtube.com/watch?v=v{i:010d}" for i in range(3)]
+    entries = [PlaylistEntry(u, f"歌曲 {i} Official MV", u[-11:], 200.0) for i, u in enumerate(urls)]
+    group = PlaylistGroup("清單", entries, names={u: f"歌手 - 歌曲 {i}" for i, u in enumerate(urls)},
+                          downloaded={urls[1]: "D:\\音樂\\歌手 - 歌曲 1.mp3"})
+    dialog = PlaylistPickerDialog([group], 500)
+    qtbot.addWidget(dialog)
+    item = dialog.tree.topLevelItem(0).child
+    assert dialog.selected_urls() == [urls[0], urls[2]]  # 已下載的預設不勾選
+    assert item(1).text(COL_STATUS) == "✓ 已下載" and item(0).text(COL_NAME) == "歌手 - 歌曲 0"
+    assert dialog.select_new.isVisibleTo(dialog)
+
+    dialog._set_visible_checked(True)
+    assert len(dialog.selected_urls()) == 3
+    dialog._select_not_downloaded()
+    assert dialog.selected_urls() == [urls[0], urls[2]]
+
+    # 修改檔名：只回傳勾選且真的改過的
+    item(0).setText(COL_NAME, "五月天 - 倔強")
+    item(2).setText(COL_NAME, "  歌手 - 歌曲 2 ")
+    item(1).setText(COL_NAME, "沒勾選的")
+    assert dialog.custom_names() == {urls[0]: "五月天 - 倔強"}
+    item(0).setCheckState(0, Qt.CheckState.Unchecked)
+    assert dialog.custom_names() == {}
+
+    dialog.search.setText("倔強")  # 也能搜尋預計檔名
+    assert not item(0).isHidden() and item(1).isHidden()
+
+
+def test_picker_hides_select_new_without_downloaded(qtbot):
+    from yt_media_tool.core.downloader import PlaylistEntry
+    from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
+
+    dialog = PlaylistPickerDialog([PlaylistGroup("清單", [PlaylistEntry(VIDEO, "歌")])], 500)
+    qtbot.addWidget(dialog)
+    assert not dialog.select_new.isVisibleTo(dialog)

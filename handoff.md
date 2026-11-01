@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.7.1 正式版使用者實測無誤）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.8.0 開發完成，等待 Windows CI 與測試版）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -22,6 +22,7 @@
 
 使用者詢問「還能做什麼實用小工具」後，選了「本機檔案轉 MP3」與「產生播放清單檔」（v2.5.0），之後又選了「歌名自動整理」與「自動下載並安裝更新」（v2.6.0），再選了「整理舊檔案的歌名」（v2.7.0）。
 v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗，找出原因並修正。
+之後第三次「實用小工具」建議中，使用者選了「播放清單同步」「已下載過提醒」「只下載片段」「選歌時先看整理後歌名」（v2.8.0）。
 
 最近幾輪的工作方式：使用者要求「**以使用者角度檢查文字與功能（及是否可新增功能）**」→ 修正並發測試版 →
 使用者實機測試回報 → 修正 → 使用者確認後發正式版。
@@ -32,6 +33,7 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 
 ### 2.1 目前狀態
 
+- **開發中 v2.8.0（尚未發布）**：四個新功能已完成並推送，版本號已改為 2.8.0；等 Windows CI 通過後請使用者 Run `v2.8.0-beta.1`。
 - **最新正式版 `v2.7.1`**（標示為 Latest）：2026-11-01 發布（4f08730），4 個附件與 `.sha256` 已核對（安裝程式的 GitHub digest 與 `.sha256` 一致）。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.7.1
 - v2.7.1 的程式碼與使用者實測無誤的 `v2.7.1-beta.1`（86fa6ac）相同，之後只改 handoff.md。
@@ -44,12 +46,13 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 - **從 v2.6.0 起才有自動更新，但 v2.6.0 / v2.7.0 的自動更新會失敗**；v2.7.1 之後的下一個正式版才是第一次能實際驗證成功的自動更新（C27）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0、v2.7.0-beta.2、v2.7.1-beta.1、v2.7.1 皆回報無誤。
-- 測試：348 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：398 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
 | 版本 | commit | 狀態 |
 |---|---|---|
+| v2.8.0（開發中） | — | 播放清單同步、已下載過提醒、只下載片段、選歌時的預計檔名；等 Windows CI 通過後請使用者 Run `v2.8.0-beta.1` |
 | **v2.7.1** | 4f08730 | **正式版（Latest）**；程式碼同 v2.7.1-beta.1；setup.exe 106.2 MB（`375108b7…77e014fb`）、zip 144.2 MB（`47abe6f5…6bdbee75`），sha256 已核對；**使用者實測無誤** |
 | v2.7.1-beta.1 | 86fa6ac | 預先發行；自動更新修正（Job Object 延伸旗標、安裝紀錄、失敗提示）；setup.exe 106.2 MB（`cd431120…62c8d0`）、zip 144.2 MB（`17746ef7…f842d8e`），sha256 已核對；Windows CI 程式內自動更新端到端測試通過；**使用者手動安裝實測無誤** |
 | v2.7.0 | ce659f2 | 正式版（自動更新有錯，見 v2.7.1）；程式碼同 v2.7.0-beta.2；setup.exe 106.2 MB（`092d10a3…cec8f7e5`）、zip 144.2 MB（`19dd347d…6225140`），sha256 已核對 |
@@ -81,6 +84,17 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.8.0**（使用者從第三次「實用小工具」建議中選了四項）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 資料庫 v3 | `storage/database.py` MIGRATIONS 新增版本 3：`download_tasks` 加 `file_name`、`clip_start`、`clip_end`；`download_history` 加 `is_clip`；新增 `completed_downloads()`（已完成、非片段、新 → 舊）。`core/task_models.py`：`DownloadTask.file_name / clip_start / clip_end`、`is_clip`、`clip_text`；新函式 `parse_clock()`（「90」「1:30」「1:02:30」「1:30.5」、全形冒號）、`format_clock()`、`clip_text()`。`core/queue_manager.py` `TaskSpec` 同步新增三個欄位 |
+| 只下載片段 | `core/downloader.py`：`clip_range()`（依影片長度檢查：開始超過長度 → 錯誤；結束超過長度 → 到結尾）、`clip_file_suffix()`（檔名加「（片段 1.20-4.35）」，Windows 檔名不能有「:」）；`_run_download(..., clip)` 設 `download_ranges`（`yt_dlp.utils.download_range_func`）且 `force_keyframes_at_cuts=False`；片段不下載字幕；實際品質附「；片段 …」。`gui/main_window.py`：網址列下方「只下載片段：開始～結束」、`clip_range()`、`_reset_clip()`（加入後自動取消勾選）；只允許一部影片（含 `watch?v=…&list=…` 時只下載該影片、不展開清單）。`gui/queue_table.py` 品質欄附「｜片段 …」；詳細資訊顯示片段 |
+| 已下載過提醒 | 新檔 `core/download_index.py`：`video_key()`（同一影片的各種網址視為相同）、`DownloadedIndex`（同影片同格式取最新且檔案仍存在的紀錄）。`gui/main_window.py` `_finish_add(..., check_downloaded, confirmed)` → `_confirm_already_downloaded()` → `ask_already_downloaded()`（「略過已下載的」/「仍要下載」/「取消」；測試以 monkeypatch 取代 `ask_already_downloaded`）。從歷史紀錄重新下載、片段、選歌視窗勾選的影片不詢問 |
+| 播放清單同步 | `gui/playlist_dialog.py` 重寫：`PlaylistGroup.names / downloaded`，欄位「影片名稱｜預計檔名｜長度｜已下載」；已下載的預設不勾選（從清單中某支影片加入時仍只勾選該影片）、「只選未下載的」按鈕、搜尋也比對預計檔名。`gui/main_window.py` `_on_playlists_expanded` 填入 names / downloaded；`_add_playlist_batch()` 把同資料夾已下載的歌以 `known_files` 帶入。`core/playlist_files.py` `add_batch(..., known_files)`：同資料夾＋清單名稱＋格式已有批次時沿用（同一個 .m3u8），`_same_folder` 改名為公開的 `same_folder` |
+| 選歌時的預計檔名 | `core/downloader.py` `PlaylistEntry.channel`（extract_playlist 讀 channel / uploader）；`MainWindow.planned_name()`（與下載時相同的 `clean_title` 規則：MP3 用頻道補演出者、MP4 不補；設定關閉時原標題）。對話框點兩下只能編輯「預計檔名」欄（`itemDoubleClicked` → `editItem`）；`custom_names()` 只回傳勾選且改過的；`choose_playlist_entries()` 仍回傳 `list[list[str]]`，修改的檔名放在 `self._custom_names`。下載時 `task.file_name` 優先：檔名直接採用，「演出者 - 歌名」拆成歌曲資訊 |
+| 測試與文件 | `tests/test_gui.py`（片段、已下載提醒三種回答、格式不同 / 檔案刪除 / 片段不算、重新下載不問、同步、m3u 包含舊歌、預計檔名、對話框）、`tests/test_download_index.py`（新）、`tests/test_database.py`（v2 → v3 migration）、`tests/test_task_models.py`、`tests/test_downloader.py`、`tests/test_playlist_files.py`、`tests/integration/test_local_pipeline.py`（真實 yt-dlp / FFmpeg 片段 MP3 / MP4、指定檔名寫入歌曲資訊）；README（功能表、專案架構補齊）、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（C30–C33） |
 
 **v2.7.1**（修正：使用者回報 v2.6.0 → v2.7.0 的「立即安裝並重新開啟」後程式沒有重新開啟、版本仍是 2.6.0）
 
@@ -199,17 +213,18 @@ src/yt_media_tool/
   core/updates.py               新版本檢查、下載與驗證安裝程式、啟動安裝（自動更新；脫離 Job、安裝紀錄 updates\install.log）
   core/title_cleanup.py         歌名自動整理（演出者 - 歌名）
   core/batch_rename.py          舊檔案批次改名（字幕、.m3u8 同步；不覆蓋；可復原）
+  core/download_index.py        已下載過的影片（依歷史紀錄；已下載過提醒、播放清單同步）
   core/local_convert.py         本機影音檔轉 MP3（暫存檔→驗證→不覆蓋移動、進度、取消）
   core/playlist_files.py        播放清單檔（.m3u8）批次記錄與產生
   core/cookies.py               YouTube cookies 設定 → yt-dlp 參數（cookies.txt 只用副本）
   core/queue_manager.py         佇列排程、取消、重試、保存與恢復（不依賴 Qt）
   core/errors.py                例外 → 中文說明（yt-dlp、FFmpeg、cookies、磁碟、權限）
-  storage/database.py           SQLite（參數化 SQL、PRAGMA user_version migration，目前 v2）
+  storage/database.py           SQLite（參數化 SQL、PRAGMA user_version migration，目前 v3）
   storage/settings.py           AppSettings（cookies、embed_metadata、playlist_subfolder、notify_on_complete、rate_limit_mbps、
                                 download_subtitles、auto_paste_clipboard、check_updates、auto_download_updates、skipped_update_version、
                                 pending_update_version、playlist_m3u、clean_titles 等）
   gui/main_window.py            主視窗（加入佇列、播放清單、拖曳、剪貼簿帶入、字幕勾選、雙擊播放、批次操作、完成通知、新版本提醒）
-  gui/playlist_dialog.py        播放清單選擇對話框（勾選要下載的影片，可依清單分組取得）
+  gui/playlist_dialog.py        播放清單選擇對話框（勾選、預計檔名可修改、已下載標示與「只選未下載的」）
   gui/history_dialog.py         下載歷史（搜尋、在檔案總管中顯示、重新下載）
   gui/rename_dialog.py          整理舊檔案的歌名（預覽、改名、復原）
   gui/convert_dialog.py         本機檔案轉 MP3 視窗
@@ -244,7 +259,7 @@ packaging/
   release.yml                   Run workflow / 推 tag / 推 release/v* 分支 → 測試、打包、安裝程式 → 建立 Release
   ffmpeg-verify.yml             manifest 變更時交叉驗證 FFmpeg SHA256
   ffmpeg-candidates.yml         比較 FFmpeg 候選建置的大小與 MP3 支援（只在修改此檔時執行）
-docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0，C18–C21 為 v2.4.0，C22–C25 為 v2.5.0，C26–C28 為 v2.6.0，C29 為 v2.7.0 新功能；C27 註明 v2.7.1 起才能自動更新成功）
+docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0，C18–C21 為 v2.4.0，C22–C25 為 v2.5.0，C26–C28 為 v2.6.0，C29 為 v2.7.0，C30–C33 為 v2.8.0 新功能；C27 註明 v2.7.1 起才能自動更新成功）
 docs/RELEASE_NOTES.md               Release 頁面說明（release.yml 會讀取）
 THIRD_PARTY_NOTICES.md              第三方授權
 ```
@@ -253,10 +268,18 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 3. 剛剛做的關鍵決定，以及為什麼這樣決定
 
-### 3.1 最近幾輪（v2.1.3～v2.7.1）的決定
+### 3.1 最近幾輪（v2.1.3～v2.8.0）的決定
 
 | 決定 | 原因 |
 |---|---|
+| 片段用 yt-dlp 的 `download_ranges`（只抓需要的部分），不重新編碼（`force_keyframes_at_cuts=False`） | 從兩小時的演唱會截一首歌時不必下載整部影片；重新編碼影片很慢。代價是 MP4 開頭可能提早 1～2 秒（從前一個關鍵畫面開始），已寫在提示中；MP3 不受影響。 |
+| 片段**一次只用於一部影片**，加入後自動取消勾選 | 多部影片很少需要同一段時間；忘記取消勾選會讓之後的下載都被截短。 |
+| 片段檔名加「（片段 開始-結束）」、歷史紀錄標記 `is_clip` | 避免與完整版同名；片段不能算「已下載過整部影片」。 |
+| 「已下載過」只看**同格式且檔案還在**的紀錄 | 使用者刪掉檔案或要另一種格式時，再下載是合理的，不該打擾。 |
+| 選歌視窗勾選的影片不再跳「已下載過」詢問 | 選歌視窗已標示「✓ 已下載」並預設不勾選；使用者刻意勾選代表要再下載。 |
+| 播放清單同步沿用**同一個 .m3u8**（同資料夾＋清單名稱＋格式），並把資料夾中已下載的歌一起列入 | 只下載新歌時若另建清單檔，會出現只有新歌的「清單 (1).m3u8」，音樂播放器裡清單就不完整。 |
+| 預計檔名只在**使用者修改過**時才指定檔名；沒改的仍在下載時以完整資訊整理 | 選歌視窗只有標題與頻道，下載時有 YouTube 歌曲資訊（影片中的音樂）更準確。 |
+| 資料庫升到 v3（新增欄位，舊資料預設空白） | 片段與指定檔名必須跟著任務保存，重新開啟程式、重試都不會遺失。 |
 | 自動更新的安裝程式**脫離 Job Object**（`BREAKAWAY_OK` ＋ `CREATE_BREAKAWAY_FROM_JOB`），而不是乾脆不用 Job | Job 仍需要：關閉程式時一併結束 ffmpeg，避免殘留程式鎖住檔案。只有自動更新那一刻放行安裝程式。 |
 | 新增 `--install-update` 隱藏參數讓 CI **經過程式本身**啟動安裝程式 | v2.6.0 的錯誤只在「由程式啟動、程式隨即結束」時出現；CI 直接執行安裝程式測不到。 |
 | 寫安裝紀錄檔＋下次開啟比對版本 | 安裝程式是靜默執行，失敗時使用者什麼都看不到；至少要告訴使用者沒更新成功、給手動下載與紀錄檔。 |
@@ -337,18 +360,17 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- 目前沒有進行中的開發；v2.7.1 正式版已發布且使用者實測無誤。
-- **待辦**：自動更新的完整流程（C27）要等 **v2.7.1 已安裝後的下一個正式版**才能實測（v2.6.0 / v2.7.0 的自動更新有錯）。
+- **待辦 1**：v2.8.0 已推送，等 Windows CI 通過 → 請使用者 Run `v2.8.0-beta.1` → 實測 C30–C33 → 正式版 v2.8.0。
+- **待辦 2**：自動更新的完整流程（C27）要等 **v2.7.1 已安裝後的下一個正式版**才能實測（v2.6.0 / v2.7.0 的自動更新有錯）。
   下一次發版時請使用者開啟已安裝的 v2.7.1 確認 C27；若失敗，請使用者按「查看安裝紀錄」並提供 `install.log` 最後幾行。
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
 - 提出過但使用者未選的項目（2026-10-31～11-01）：
-  - 兩次都未選：記住上次在主視窗選的格式與品質、加入前提醒「歷史紀錄中已下載過」。
+  - 多次未選：記住上次在主視窗選的格式與品質。
   - 第二次檢查（v2.3.0）未選：同時下載上限從 3 提高到 5。
-  - 第三次檢查（v2.4.0）未選：只下載片段（指定開始 / 結束時間）、自訂檔名格式（例如「演出者 - 標題」）。
-  - 「實用小工具」建議中仍未選：播放清單同步（只下載新歌）、依章節分割成多首、音量平衡、
-    全部下載完成後自動睡眠 / 關機、另存影片縮圖、選歌視窗先顯示整理後的歌名並可修改。
+  - 第三次檢查（v2.4.0）未選：自訂檔名格式（例如「演出者 - 標題」）。
+  - 「實用小工具」建議中仍未選：依章節分割成多首、音量平衡、全部下載完成後自動睡眠 / 關機、另存影片縮圖。
 - **多線程下載**（使用者詢問過，尚未決定）：
   - 已支援「同時下載多個影片」1–3 筆（原始規格上限 3）。
   - 選項 A：設定新增「單一影片分段同時下載數」（yt-dlp `concurrent_fragment_downloads`，建議 1–8、預設 4）；
@@ -384,6 +406,12 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - **任何改檔名的功能都要呼叫 `MainWindow.on_files_renamed()`**（或同等的 `queue.rename_output_path` 與 `PlaylistFileStore.rename_file`），否則佇列、歷史與播放清單紀錄會指向不存在的檔案。
 - 有勾選框的表格 / 清單一定要有 `::indicator` 樣式（`gui/theme.py` 已涵蓋 QCheckBox、QTreeView、QTableView），否則深色主題下未勾選的框看不到。
 - **YouTube「合輯」（`list=RD…`）不能用 `playlist?list=` 讀取**；讀取清單一律用 `ParsedUrl.playlist_source_url`。
+- **資料庫 schema 已是 v3**：新增欄位只能在 `MIGRATIONS` 附加新版本，不可修改既有版本；舊版程式（v2.7.1 以前）開啟 v3 資料庫會顯示「資料庫版本比程式支援的版本新」（降版時會遇到）。
+- `_TASK_COLUMNS` 與 `_task_values()`、`TaskSpec`、`QueueManager.add_tasks()` 要一起改，否則新欄位不會被保存。
+- **片段的整合測試需要「索引在開頭」的 MP4**（`clip.mp4` 以 `-movflags +faststart` 產生）：測試用的本機 HTTP 伺服器不支援 Range，FFmpeg 跳到中間讀取會失敗（YouTube 支援 Range，實際使用沒問題）。不要改回用 `sample.mp4` 測片段。
+- 片段的檔名後綴與 `actual_quality` 附註以 `clip_range()` 的實際範圍為準（結束超過影片長度時為「結尾」）。
+- `MainWindow.ask_already_downloaded()` 是自訂按鈕的 QMessageBox（`exec()`），測試的 `Dialogs` 攔截不到；**測試一律 monkeypatch `ask_already_downloaded`**，否則會卡住。
+- `PlaylistPickerDialog` 欄位順序改為「影片名稱｜預計檔名｜長度｜已下載」（`COL_*` 常數），長度在第 2 欄；預計檔名欄只能用 `itemDoubleClicked` 編輯（`NoEditTriggers`）。
 - **Job Object 的 `KILL_ON_JOB_CLOSE`、`BREAKAWAY_OK` 是延伸旗標，一律用 `JobObjectExtendedLimitInformation`（class 9）設定**；
   用 Basic（class 2）不會報錯但旗標不會改，v2.6.0 的自動更新就是這樣失敗的。`win_job._set_job_flags()` 不要改回 Basic。
 - 自動更新的驗證**必須經過程式本身**（`--install-update` → `verify_update_from_app()`）；只直接執行安裝程式的測試抓不到 Job 問題。

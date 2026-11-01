@@ -32,7 +32,7 @@ from yt_media_tool.core import converter
 from yt_media_tool.core.converter import JsRuntimeInfo, MediaInfo, ToolInfo
 from yt_media_tool.core.cookies import CookieConfig, ydl_cookie_options
 from yt_media_tool.core.errors import DownloadCancelledError, InsufficientDiskSpaceError
-from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus
+from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus, clip_text, format_clock
 from yt_media_tool.core.title_cleanup import clean_title
 from yt_media_tool.utils.paths import FileNameReserver, sanitize_filename
 
@@ -157,6 +157,7 @@ class PlaylistEntry:
     title: str
     video_id: str = ""
     duration: float | None = None  # 秒；播放清單未提供時為 None
+    channel: str = ""  # 頻道名稱（歌名整理時補演出者用）
 
 
 @dataclass
@@ -301,7 +302,8 @@ class Downloader:
             if entry_url:
                 duration = entry.get("duration")
                 entries.append(PlaylistEntry(str(entry_url), entry.get("title") or "", str(video_id or ""),
-                                             float(duration) if isinstance(duration, (int, float)) else None))
+                                             float(duration) if isinstance(duration, (int, float)) else None,
+                                             str(entry.get("channel") or entry.get("uploader") or "")))
         truncated = len(entries) > limit
         return PlaylistInfo(title=(info or {}).get("title") or "", entries=entries[:limit], truncated=truncated)
 
@@ -351,13 +353,24 @@ class Downloader:
                         info["artist"] = cleaned.artist
                         info["artists"] = [cleaned.artist]
                     file_stem = cleaned.display
+            if task.file_name.strip():
+                # 使用者在選歌視窗修改的名稱：「演出者 - 歌名」拆成歌曲資訊，否則整個當歌名
+                file_stem = task.file_name.strip()
+                artist, sep, track = file_stem.partition(" - ")
+                info["track"] = track.strip() if sep and track.strip() else file_stem
+                if sep and artist.strip() and track.strip():
+                    info["artist"] = artist.strip()
+                    info["artists"] = [artist.strip()]
+            clip = clip_range(task, info.get("duration"))
+            if clip is not None and not task.file_name.strip():
+                file_stem += clip_file_suffix(*clip)
             actual = describe_selection(info, task.media_format, task.quality)
             on_progress(ProgressUpdate(TaskStatus.DOWNLOADING, progress=0.0, stage="下載中",
                                        title=title, actual_quality=actual))
             self._check_disk_space(info, task, output_dir)
 
             produced, source_kbps = self._run_download(task, info, tools, logger, token, on_progress, temp_dir,
-                                                       cookie_options, prefs)
+                                                       cookie_options, prefs, clip)
             token.raise_if_cancelled()
             if task.media_format is MediaFormat.MP3 and source_kbps and "未知" in actual:
                 actual = describe_mp3(task.quality, source_kbps)
@@ -369,7 +382,9 @@ class Downloader:
 
             subtitle: tuple[Path, SubtitleChoice] | None = None
             subtitle_note = ""
-            if prefs.subtitles and task.media_format is MediaFormat.MP4:
+            if prefs.subtitles and task.media_format is MediaFormat.MP4 and clip is not None:
+                subtitle_note = "；字幕：片段不下載字幕"
+            elif prefs.subtitles and task.media_format is MediaFormat.MP4:
                 on_progress(ProgressUpdate(TaskStatus.PROCESSING, progress=98.5, stage="下載字幕中"))
                 subtitle, subtitle_note = self._download_subtitle(info, tools, logger, temp_dir, cookie_options)
                 token.raise_if_cancelled()
@@ -388,6 +403,8 @@ class Downloader:
             if subtitle is not None:
                 subtitle_note = _move_subtitle(subtitle[0], final_path, subtitle[1])
             actual = describe_result(media_info, task.media_format, task.quality, actual) + subtitle_note
+            if clip is not None:
+                actual += f"；{clip_text(*clip)}"  # 實際下載的範圍（超過影片長度時為「結尾」）
             success = True
             return DownloadResult(final_path, title, actual, media_info)
         except _YtdlpDownloadCancelled as exc:
@@ -409,7 +426,8 @@ class Downloader:
 
     def _run_download(self, task, info, tools, logger, token, on_progress, temp_dir: Path,
                       cookie_options: dict[str, Any] | None = None,
-                      prefs: DownloadPreferences | None = None) -> tuple[Path, float | None]:
+                      prefs: DownloadPreferences | None = None,
+                      clip: tuple[float, float | None] | None = None) -> tuple[Path, float | None]:
         """在暫存資料夾內完成下載與 FFmpeg 後處理，回傳（暫存資料夾中的成品路徑, 原始音訊 kbps）。
 
         yt-dlp 的 home 路徑設為任務專屬暫存資料夾，因此 yt-dlp 不會讀取、覆蓋或刪除
@@ -467,6 +485,12 @@ class Downloader:
         })
         if task.media_format is MediaFormat.MP4:
             opts["merge_output_format"] = "mp4"
+        if clip is not None:
+            # 只下載片段：yt-dlp 交給 FFmpeg 只抓指定時間範圍（不必下載整部影片）
+            start, end = clip
+            opts["download_ranges"] = yt_dlp.utils.download_range_func(
+                None, [(start, end if end is not None else float("inf"))])
+            opts["force_keyframes_at_cuts"] = False  # 不重新編碼影片，速度快；MP4 開頭可能提早到前一個關鍵影格
 
         with self._ydl_factory(opts) as ydl:
             result = ydl.process_ie_result(info, download=True)
@@ -550,6 +574,32 @@ class Downloader:
             needed = MIN_FREE_BYTES
         if free < needed:
             raise InsufficientDiskSpaceError(needed, free, str(directory))
+
+
+def clip_range(task: DownloadTask, duration: object) -> tuple[float, float | None] | None:
+    """任務的片段範圍（開始, 結束或 None=到結尾）；不是片段時回傳 None。依影片長度檢查並修正。"""
+    if not task.is_clip:
+        return None
+    start = max(0.0, float(task.clip_start or 0))
+    end = float(task.clip_end) if task.clip_end is not None else None
+    length = float(duration) if isinstance(duration, (int, float)) and duration > 0 else None
+    if length is not None:
+        if start >= length:
+            raise RuntimeError(f"片段的開始時間 {format_clock(start)} 超過影片長度 {format_clock(length)}")
+        if end is not None and end >= length:
+            end = None  # 超過影片長度：下載到結尾
+    if end is not None and end <= start:
+        raise RuntimeError("片段的結束時間必須晚於開始時間")
+    return start, end
+
+
+def _clock_for_filename(seconds: float) -> str:
+    return format_clock(seconds).replace(":", ".")  # Windows 檔名不能有「:」
+
+
+def clip_file_suffix(start: float, end: float | None) -> str:
+    """片段的檔名後綴，例如「（片段 1.20-4.35）」，避免與完整版同名。"""
+    return f"（片段 {_clock_for_filename(start)}-{_clock_for_filename(end) if end is not None else '結尾'}）"
 
 
 def describe_selection(info: dict, media_format: MediaFormat, quality: str) -> str:
