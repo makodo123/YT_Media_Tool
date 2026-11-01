@@ -38,7 +38,9 @@
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.1 ；等使用者實測，無誤再以 tag `v2.6.0` 發布正式版。
   已確認實際 Release 的安裝程式有 GitHub `digest`，且與 `.sha256` 一致（自動更新的雙重檢查可用）。
 - 使用者實測 beta.1 回報（2026-11-01）：YouTube「合輯」（Mix，`list=RD…`）網址讀取失敗「This playlist type is unviewable」。
-  修正以 `v2.6.0-beta.2` 發布（版本號仍 2.6.0）：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.2 ；等使用者實測。
+  修正以 `v2.6.0-beta.2` 發布（版本號仍 2.6.0）：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.2
+- 使用者實測 beta.2（截圖 3 個 MP4 檔名）：MP4 沒有整理歌名（原設計只整理 MP3）；新寫法「[ 歌名 ] 5525版 Official Stage Video | 說明」、
+  「周深《歌名》_ 描述」整理不對。修正已推送到 `main`，CI 通過後請使用者發布 `v2.6.0-beta.3`。
 - v2.5.0 開發中使用者回報（beta.1 實測時）：標題「YT Media Tool V2.0」與版本不一致 → beta.2 改由 `__version__` 產生；
   2.4.0 檢查不到 2.5.0 → 因當時只有測試版（設計如此），已改寫訊息說明。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
@@ -49,7 +51,7 @@
 
 | 版本 | commit | 狀態 |
 |---|---|---|
-| v2.6.0-beta.2 | 5e71822 | 預先發行；合輯網址修正、歌名整理支援「歌手 [ 歌名 ]」與合唱；setup.exe 106.1 MB（`fe645706…5bf46c`）、zip 144.2 MB（`2a31a330…bd9b1d`），sha256 已核對；待使用者實測 |
+| v2.6.0-beta.2 | 5e71822 | 預先發行；合輯網址修正、歌名整理支援「歌手 [ 歌名 ]」與合唱；setup.exe 106.1 MB（`fe645706…5bf46c`）、zip 144.2 MB（`2a31a330…bd9b1d`），sha256 已核對；使用者回報 MP4 未整理 → beta.3 |
 | v2.6.0-beta.1 | d67afc0 | 預先發行；歌名自動整理、自動下載並安裝更新；setup.exe 106.1 MB（`3ddc1a30…b63759`）、zip 144.2 MB（`7d9b6966…c925e59`），sha256 已核對；使用者回報合輯網址讀不到 → beta.2 |
 | **v2.5.0** | dba2aa7 | **正式版（Latest）**；程式碼同 v2.5.0-beta.2；setup.exe 106.1 MB（`cd2314ba…a4edc67`）、zip 144.1 MB（`665fd29c…2ca060`），sha256 已核對；**使用者實測無誤** |
 | v2.5.0-beta.2 | e5ddb36 | 預先發行；標題顯示實際版本、檢查新版本的說明；setup.exe 106.1 MB（`c962ac44…4828edb`）、zip 144.2 MB（`c46e0958…01fd121`），sha256 已核對；**使用者實測無誤** |
@@ -78,6 +80,7 @@
 
 | 項目 | 修改的檔案與重點 |
 |---|---|
+| beta.3 修正：MP4 也整理、更多標題寫法 | `core/title_cleanup.py`：`clean_title(info, channel_fallback)`，MP4 傳 `False`——只在 YouTube 歌曲資訊或標題中找得到演出者時整理，否則回傳 None（vlog 等維持原標題）；歌名括號（含中文的 `[ ]`）改由 `_from_title_bracket()` 處理：演出者取括號**前**的文字（括號在最前面時取括號後到第一個分隔符），括號後緊接的「…版」（`_VERSION_MARK`，例如 5525版、5525+2版）接在歌名後，其餘（Official Stage Video、`|` 說明、`_` 描述）丟棄；`_plausible_artist()`：不含句子標點（含 ：＋）、每位中文演出者不超過 8 字；「Official Stage / Performance Video」視為雜訊。`core/downloader.py`：MP4 也套用。使用者截圖的 3 個標題已加入測試 |
 | beta.2 修正：YouTube「合輯」讀不到 | `core/url_parser.py` 新增 `ParsedUrl.playlist_source_url`：清單 ID 以 `RD` 開頭（YouTube 自動產生的合輯）時改用播放頁面網址 `watch?v=…&list=RD…`（`playlist?list=RD<影片ID>` 也從 ID 推回影片），yt-dlp 會從播放頁面讀取合輯；一般清單仍用 `playlist?list=`。`gui/main_window.py` `_expand_playlists` 改用它。`core/errors.py`：「unviewable」錯誤改為中文說明 |
 | beta.2 修正：相信音樂等的標題寫法 | `core/title_cleanup.py`：`[ ]` 內含中文時視為歌名（「歌手 [ 歌名 ]」）；合唱以 ╳ × ＆ 連接時每位演出者分別去掉英文（`_drop_translations`）；中英文之間沒有空格（「MAYDAY五月天」）也能拆（頻道名稱不拆，避免「SMG音乐」變「音乐」）；「Official Live Video」「纯享」視為雜訊；✦★♪ 等裝飾符號去掉；括號外是一句話（含，。！？或超過 40 字）時不當演出者。使用者合輯的 8 個標題已加入 `tests/test_title_cleanup.py` |
 | 歌名自動整理（MP3） | 新檔 `core/title_cleanup.py`：`clean_title(info)` 優先用 YouTube 的 `track`＋`artists`；否則移除含雜訊字（Official、MV、Lyrics、動態歌詞、4K…）的括號與前後雜訊字，`【】《》「」『』` 內的文字視為歌名、括號外為演出者，否則以「 - 」「｜」拆成演出者與歌名（頻道名出現在哪邊，哪邊就是演出者），沒有演出者時用 `clean_channel()`（去掉 - Topic、VEVO、官方頻道…）；中文後的英文翻譯（以大寫開頭）去掉，但 Remix / Live / Acoustic 等版本字保留；`( )`、`[ ]` 中非雜訊的內容保留在歌名後。`core/downloader.py`：MP3 且 `DownloadPreferences.clean_titles` 時設定 `info["track"]`、`info["artist"]`、`info["artists"]`（供 FFmpegMetadata），檔名用 `演出者 - 歌名`；`DownloadResult.title` 仍為原標題。設定 `clean_titles`（預設開） |
@@ -229,7 +232,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 | 安裝程式需**同時符合** GitHub API 的 `digest` 與 Release 的 `.sha256` | 兩個來源互相核對，下載不完整或被竄改時不會執行；網址由程式固定組成，不採用 API 回傳的連結。 |
 | 安裝**一定先詢問**，不在背景自動安裝 | 安裝要關閉程式，會中斷下載與轉檔；由使用者決定時機（轉檔進行中直接拒絕）。 |
 | 安裝程式用 **`/WAITPID` 等舊程式結束**，程式先**取消 Job Object 的子程序終止並釋放 mutex** | 程式的 Job Object 會在結束時終止所有子程序（包括安裝程式）；安裝程式偵測到 mutex 會停止；舊程式未結束時覆蓋會遇到檔案使用中。三者都處理後才能「關閉 → 安裝 → 重開」。 |
-| 歌名整理**只用在 MP3**，佇列與歷史仍顯示原標題 | MP4 多半不是歌曲（vlog、教學），套用「演出者 - 標題」反而奇怪；保留原標題讓使用者能對照、整理錯也看得出來。 |
+| 歌名整理：MP3 一律整理；**MP4 只在標題中找得到演出者時整理**（beta.3 起）；佇列與歷史仍顯示原標題 | 使用者下載的音樂 MP4 也希望整理（beta.2 實測）；但 MP4 常是 vlog、教學，用頻道名稱補演出者會很奇怪，所以 MP4 只做有把握的整理。保留原標題讓使用者能對照。 |
 | 歌名整理**優先用 YouTube 提供的歌曲資訊**，規則整理不出合理結果時保留原標題 | YouTube 的「影片中的音樂」資訊最準確；標題寫法五花八門，寧可不整理也不要整理錯。 |
 | 標題**不再寫死「V2.0」**，`APP_DISPLAY_NAME` 由 `__version__` 產生 | 使用者發現標題「V2.0」與實際版本 2.4.0 不一致；原始規格的名稱「YT Media Tool V2.0」只是產品名，改為顯示實際版本以免誤會。安裝程式與捷徑使用 `APP_NAME`（不含版本），升級不受影響。 |
 | 新版本提醒**不提醒測試版**（維持） | 測試版給使用者自己試用；一般使用者只該收到正式版提醒。訊息已說明此事。 |
@@ -292,7 +295,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦**：使用者實測 `v2.6.0-beta.2`（合輯網址、C26、C28）
+- **待辦**：v2.6.0-beta.3 的 Windows CI 通過 → 請使用者發布 `v2.6.0-beta.3` → 確認附件 → 使用者實測（MP4 / MP3 歌名、合輯、C26、C28）
   → 發布正式版 `v2.6.0` → 確認附件與 Latest → 更新本文件。
 - **自動更新的完整流程（C27）要等 v2.6.0 之後的下一個正式版才能實測**：必須先裝有 v2.6.0（含自動更新功能），
   再發布更新的正式版。2.5.0 以前的版本沒有自動更新，只會顯示提醒。下一次發版時請使用者特別確認 C27。

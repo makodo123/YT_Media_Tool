@@ -42,6 +42,12 @@ from yt_media_tool.core.title_cleanup import clean_channel, clean_title
     ("Simon & Garfunkel - The Sound of Silence (Audio)", "Simon & Garfunkel",
      "Simon & Garfunkel - The Sound of Silence"),
     ("Queen - Bohemian Rhapsody [Remastered 2011]", "Queen Official", "Queen - Bohemian Rhapsody (Remastered 2011)"),
+    # 使用者實測的 MP4（2026-11-01）：版本標記「5525版」保留，「Official Stage Video」與「| 說明」去掉
+    ("白敬亭 BAI JINGTING × MAYDAY五月天 [  任性 Willful  ] 5525版 Official Stage Video "
+     "| Theme Song of “The First Frost”", "相信音樂BinMusic", "白敬亭 × 五月天 - 任性 (5525版)"),
+    ("周深 ZHOU SHEN × MAYDAY 五月天 [ 如煙 Like Smoke ] 5525+2版 Official Stage Video", "相信音樂BinMusic",
+     "周深 × 五月天 - 如煙 (5525+2版)"),
+    ("周深《听见下雨的声音》_ 方文山盛赞：天籁！+ 唱哭听众 + 超感动 + 超震撼！", "某綜藝頻道", "周深 - 听见下雨的声音"),
 ])
 def test_clean_title_examples(title, channel, expected):
     result = clean_title({"title": title, "channel": channel})
@@ -65,3 +71,14 @@ def test_nothing_left_returns_none(title):
 ])
 def test_clean_channel(channel, expected):
     assert clean_channel(channel) == expected
+
+
+@pytest.mark.parametrize(("title", "channel", "expected"), [
+    ("周杰倫 Jay Chou【晴天 Sunny Day】Official MV", "周杰倫 Jay Chou", "周杰倫 - 晴天"),  # 標題中有演出者：整理
+    ("Ed Sheeran - Shape of You (Official Music Video)", "Ed Sheeran", "Ed Sheeran - Shape of You"),
+    ("我的日常 vlog", "某某頻道", None),  # 只能用頻道名稱當演出者：MP4 不整理
+    ("Hello (Lyrics)", "Adele - Topic", None),
+])
+def test_without_channel_fallback_only_confident_results(title, channel, expected):
+    result = clean_title({"title": title, "channel": channel}, channel_fallback=False)
+    assert (result.display if result else None) == expected

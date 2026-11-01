@@ -259,10 +259,15 @@ def test_clean_title_used_for_mp3_filename_and_tags(media_server, tmp_path):
     tags = {k.lower(): v for k, v in _probe_json(result.output_path)["format"].get("tags", {}).items()}
     assert tags.get("title") == "晴天" and tags.get("artist") == "周杰倫"
 
-    # 關閉時維持原標題；MP4 不整理
+    # 關閉時維持原標題
     off = _downloader_with_info(base, extra, DownloadPreferences(clean_titles=False)).download(
         task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP3, "192", task_id=2), CancelToken(), lambda u: None)
     assert off.output_path.name.startswith("周杰倫 Jay Chou【晴天 Sunny Day】Official MV")
+    # MP4：標題中找得到演出者時整理；只能用頻道名稱時（vlog 等）維持原標題
     mp4 = _downloader_with_info(base, extra, prefs).download(
         task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP4, "720", task_id=3), CancelToken(), lambda u: None)
-    assert mp4.output_path.name.startswith("周杰倫 Jay Chou【晴天 Sunny Day】Official MV")
+    assert mp4.output_path.name == "周杰倫 - 晴天.mp4"
+    vlog = {"title": "我的日常 vlog", "uploader": "某某頻道", "channel": "某某頻道"}
+    kept = _downloader_with_info(base, vlog, prefs).download(
+        task(f"{base}/sample.mp4", tmp_path, MediaFormat.MP4, "720", task_id=4), CancelToken(), lambda u: None)
+    assert kept.output_path.name == "我的日常 vlog.mp4"

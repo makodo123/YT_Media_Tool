@@ -82,10 +82,12 @@ class SettingsDialog(QDialog):
         self.embed_metadata.setToolTip("在 MP3 / MP4 檔案中寫入標題、演出者（頻道名稱）等資訊並嵌入封面，\n"
                                        "音樂播放器與手機會顯示歌名和封面。")
         self.embed_metadata.setChecked(settings.embed_metadata)
-        self.clean_titles = QCheckBox("MP3 自動整理歌名（例如「周杰倫 - 晴天」，去掉「Official MV」等字樣）")
+        self.clean_titles = QCheckBox("自動整理歌名（例如「周杰倫 - 晴天」，去掉「Official MV」等字樣）")
         self.clean_titles.setToolTip("檔名與歌曲資訊改用整理後的「演出者 - 歌名」；\n"
-                                     "佇列與歷史紀錄仍顯示 YouTube 原標題。優先使用 YouTube 提供的歌曲資訊；\n"
-                                     "整理不出合理結果時保留原標題。只影響之後下載的 MP3。")
+                                     "佇列與歷史紀錄仍顯示 YouTube 原標題。MP3 一律整理；\n"
+                                     "MP4 只在標題中找得到演出者時整理（vlog、教學等影片維持原標題）。\n"
+                                     "優先使用 YouTube 提供的歌曲資訊；整理不出合理結果時保留原標題。\n"
+                                     "只影響之後的下載。")
         self.clean_titles.setChecked(settings.clean_titles)
         self.playlist_subfolder = QCheckBox("播放清單存到以清單名稱命名的子資料夾")
         self.playlist_subfolder.setToolTip("例如「下載資料夾\\我的最愛歌單\\」；只下載貼上的那一支影片時不另建資料夾。")

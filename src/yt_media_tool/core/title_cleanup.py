@@ -25,7 +25,7 @@ _NOISE_BRACKET = re.compile(_BRACKETS)
 _NOISE_IN_BRACKET = re.compile(rf"(?i)(^|[^a-z])({_NOISE_WORDS})([^a-z]|$)")
 # 不在括號內、位於開頭或結尾的雜訊
 _TRAILING_NOISE = re.compile(
-    r"(?i)[\s\-–—|｜]*(official\s+(music\s+|live\s+)?video|official\s+mv|official\s+audio|official\s+lyric\s+video|"
+    r"(?i)[\s\-–—|｜]*(official\s+(music\s+|live\s+|stage\s+|performance\s+)?video|official\s+mv|official\s+audio|official\s+lyric\s+video|"
     r"lyric\s+video|music\s+video|官方\s*mv|官方完整版\s*mv|官方版|\bmv\b|\bm/v\b|\b4k\b|\bhd\b)[\s\-–—|｜]*$")
 _LEADING_NOISE = re.compile(r"(?i)^\s*(官方\s*mv|official\s+mv|\bmv\b)[\s\-–—|｜:：]*")
 _SEPARATORS = re.compile(r"\s+[-–—]\s+|\s*[|｜]\s*")
@@ -36,7 +36,11 @@ _LATIN_WITH_CJK = re.compile(rf"^([A-Z][A-Za-z0-9 .'&!?,-]+?)\s*([{_CJK}][{_CJK}
 # 合唱：每位演出者分別去掉翻譯，例如「周深 ZHOU SHEN ╳ MAYDAY 五月天」→「周深 ╳ 五月天」
 _COLLAB = re.compile(r"\s*([╳×✕＆])\s*")
 _DECORATION = re.compile(r"[✦★☆♪♫♬♡♥]")
-_SENTENCE = re.compile(r"[，。！？!?；;]")
+_SENTENCE = re.compile(r"[，。！？!?；;：:+]")
+# 歌名括號後緊接的版本標記，例如「5525版」「5525+2版」「鋼琴版」：保留在歌名後
+_VERSION_MARK = re.compile(r"^\s*([^\s|｜_]{1,12}版)(?=\s|$|[|｜_])")
+# 括號前後文字的分隔（歌名括號之外通常接說明）
+_AFTER_CUT = re.compile(r"\s+[-–—]\s+|\s*[|｜_]\s*")
 # 這些字代表不同版本，不是翻譯，不可去掉
 _VERSION_WORDS = re.compile(r"(?i)\b(remix|live|acoustic|cover|ver|version|instrumental|inst|demo|edit|mix|feat|ft|"
                             r"remaster(ed)?|unplugged|piano|orchestra)\b")
@@ -114,7 +118,41 @@ def _strip_noise(title: str) -> tuple[str, list[str]]:
     return _squash(text), kept
 
 
-def clean_title(info: dict) -> CleanTitle | None:
+def _plausible_artist(text: str) -> bool:
+    """看起來像演出者名稱：不是一句話；中文名稱每位不超過 8 個字（「光良联手陈卓璇对唱」這類描述不算）。"""
+    if not text or _SENTENCE.search(text) or len(text) > 60:
+        return False
+    for piece in _COLLAB.split(text)[::2]:
+        name = _drop_translation(piece)
+        if _HAS_CJK.search(name) and not re.search(r"[A-Za-z]", name) and len(name.replace(" ", "")) > 8:
+            return False
+    return True
+
+
+def _from_title_bracket(text: str, kept: list[str], index: int) -> tuple[str, str]:
+    """「演出者【歌名】其他」或「【歌名】演出者 其他」→（演出者, 歌名）。"""
+    marker = f"\x00{index}\x00"
+    before, _, after = text.partition(marker)
+    before = _squash(re.sub(r"\x00\d+\x00", " ", before))
+    after = re.sub(r"\x00\d+\x00", " ", after)
+    song = _drop_translation(kept[index])  # 先去掉翻譯，再接版本標記
+    version = _VERSION_MARK.match(after)
+    if version:
+        song = f"{song} ({version.group(1)})"
+        after = after[version.end():]
+    artist = ""
+    if _plausible_artist(before):
+        artist = before
+    elif not before:
+        # 歌名括號在最前面：演出者在括號後、到第一個分隔符號為止
+        candidate = _squash(_AFTER_CUT.split(after, maxsplit=1)[0])
+        if _plausible_artist(candidate):
+            artist = candidate
+    return artist, song
+
+
+def clean_title(info: dict, channel_fallback: bool = True) -> CleanTitle | None:
+    """channel_fallback=False 時，標題中找不到演出者就回傳 None（不用頻道名稱補），供 MP4 只做有把握的整理。"""
     track = str(info.get("track") or "").strip()
     artists = info.get("artists") or ([info["artist"]] if info.get("artist") else [])
     if track and artists:
@@ -129,11 +167,10 @@ def clean_title(info: dict) -> CleanTitle | None:
     artist, song = "", ""
     placeholders = re.findall(r"\x00(\d+)\x00", text)
     outside = _squash(re.sub(r"\x00\d+\x00", " ", text))
-    if placeholders and outside and not _SEPARATORS.search(outside):
-        # 「周杰倫 Jay Chou【晴天 Sunny Day】」：括號外是演出者、括號內是歌名；
-        # 括號外是一句話（例如節目描述）時不當成演出者
-        song = kept[int(placeholders[0])]
-        artist = "" if _SENTENCE.search(outside) or len(outside) > 40 else outside
+    if placeholders and outside:
+        # 「周杰倫 Jay Chou【晴天 Sunny Day】」「歌手 [ 歌名 ] 5525版 Official Stage Video | 說明」：
+        # 歌名在括號內，演出者在括號前（或括號後）；看起來不像名稱（例如節目描述）時不當演出者
+        artist, song = _from_title_bracket(text, kept, int(placeholders[0]))
     else:
         text = _squash(re.sub(r"\x00(\d+)\x00", lambda m: kept[int(m.group(1))], text))
         parts = [p for p in (_squash(x) for x in _SEPARATORS.split(text)) if p]
@@ -146,9 +183,9 @@ def clean_title(info: dict) -> CleanTitle | None:
                 artist, song = left, right
         elif parts:
             song = parts[0]
-            artist = channel
+            artist = channel if channel_fallback else ""
     artist, song = _drop_translations(artist), _drop_translation(song)
-    if not song or len(song) > 120:
+    if not song or len(song) > 120 or (not channel_fallback and not artist):
         return None
     if artist and artist == song:
         artist = ""

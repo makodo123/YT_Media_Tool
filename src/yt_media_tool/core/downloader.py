@@ -116,7 +116,8 @@ class DownloadPreferences:
     embed_metadata: bool = False  # 寫入歌名、演出者並嵌入封面
     rate_limit: int | None = None  # 每個任務的速度上限（bytes/s）；None 表示不限制
     subtitles: bool = False  # MP4 一併下載字幕（.srt）
-    clean_titles: bool = False  # MP3 自動整理歌名（檔名「演出者 - 歌名」，並寫入歌曲資訊）
+    # 自動整理歌名（檔名「演出者 - 歌名」，並寫入歌曲資訊）；MP4 只在標題中找得到演出者時整理
+    clean_titles: bool = False
 
 
 @dataclass(frozen=True)
@@ -340,8 +341,9 @@ class Downloader:
 
             title = str(info.get("title") or info.get("id") or "untitled")
             file_stem = title
-            if prefs.clean_titles and task.media_format is MediaFormat.MP3:
-                cleaned = clean_title(info)
+            if prefs.clean_titles:
+                # MP4 常不是歌曲（vlog、教學）：只在標題或 YouTube 歌曲資訊中找得到演出者時才整理，不用頻道名稱補
+                cleaned = clean_title(info, channel_fallback=task.media_format is MediaFormat.MP3)
                 if cleaned is not None:
                     # 歌曲資訊（FFmpegMetadata 優先使用 track / artist）與檔名都用整理後的名稱；佇列仍顯示原標題
                     info["track"] = cleaned.track
