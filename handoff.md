@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.6.0 發布後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.6.0 發布並經使用者實測後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -80,7 +80,7 @@
 | beta.3 修正：MP4 也整理、更多標題寫法 | `core/title_cleanup.py`：`clean_title(info, channel_fallback)`，MP4 傳 `False`——只在 YouTube 歌曲資訊或標題中找得到演出者時整理，否則回傳 None（vlog 等維持原標題）；歌名括號（含中文的 `[ ]`）改由 `_from_title_bracket()` 處理：演出者取括號**前**的文字（括號在最前面時取括號後到第一個分隔符），括號後緊接的「…版」（`_VERSION_MARK`，例如 5525版、5525+2版）接在歌名後，其餘（Official Stage Video、`|` 說明、`_` 描述）丟棄；`_plausible_artist()`：不含句子標點（含 ：＋）、每位中文演出者不超過 8 字；「Official Stage / Performance Video」視為雜訊。`core/downloader.py`：MP4 也套用。使用者截圖的 3 個標題已加入測試 |
 | beta.2 修正：YouTube「合輯」讀不到 | `core/url_parser.py` 新增 `ParsedUrl.playlist_source_url`：清單 ID 以 `RD` 開頭（YouTube 自動產生的合輯）時改用播放頁面網址 `watch?v=…&list=RD…`（`playlist?list=RD<影片ID>` 也從 ID 推回影片），yt-dlp 會從播放頁面讀取合輯；一般清單仍用 `playlist?list=`。`gui/main_window.py` `_expand_playlists` 改用它。`core/errors.py`：「unviewable」錯誤改為中文說明 |
 | beta.2 修正：相信音樂等的標題寫法 | `core/title_cleanup.py`：`[ ]` 內含中文時視為歌名（「歌手 [ 歌名 ]」）；合唱以 ╳ × ＆ 連接時每位演出者分別去掉英文（`_drop_translations`）；中英文之間沒有空格（「MAYDAY五月天」）也能拆（頻道名稱不拆，避免「SMG音乐」變「音乐」）；「Official Live Video」「纯享」視為雜訊；✦★♪ 等裝飾符號去掉；括號外是一句話（含，。！？或超過 40 字）時不當演出者。使用者合輯的 8 個標題已加入 `tests/test_title_cleanup.py` |
-| 歌名自動整理（MP3） | 新檔 `core/title_cleanup.py`：`clean_title(info)` 優先用 YouTube 的 `track`＋`artists`；否則移除含雜訊字（Official、MV、Lyrics、動態歌詞、4K…）的括號與前後雜訊字，`【】《》「」『』` 內的文字視為歌名、括號外為演出者，否則以「 - 」「｜」拆成演出者與歌名（頻道名出現在哪邊，哪邊就是演出者），沒有演出者時用 `clean_channel()`（去掉 - Topic、VEVO、官方頻道…）；中文後的英文翻譯（以大寫開頭）去掉，但 Remix / Live / Acoustic 等版本字保留；`( )`、`[ ]` 中非雜訊的內容保留在歌名後。`core/downloader.py`：MP3 且 `DownloadPreferences.clean_titles` 時設定 `info["track"]`、`info["artist"]`、`info["artists"]`（供 FFmpegMetadata），檔名用 `演出者 - 歌名`；`DownloadResult.title` 仍為原標題。設定 `clean_titles`（預設開） |
+| 歌名自動整理（beta.1 只有 MP3；beta.3 起 MP4 也套用，見上） | 新檔 `core/title_cleanup.py`：`clean_title(info)` 優先用 YouTube 的 `track`＋`artists`；否則移除含雜訊字（Official、MV、Lyrics、動態歌詞、4K…）的括號與前後雜訊字，`【】《》「」『』` 內的文字視為歌名、括號外為演出者，否則以「 - 」「｜」拆成演出者與歌名（頻道名出現在哪邊，哪邊就是演出者），沒有演出者時用 `clean_channel()`（去掉 - Topic、VEVO、官方頻道…）；中文後的英文翻譯（以大寫開頭）去掉，但 Remix / Live / Acoustic 等版本字保留；`( )`、`[ ]` 中非雜訊的內容保留在歌名後。`core/downloader.py`：MP3 且 `DownloadPreferences.clean_titles` 時設定 `info["track"]`、`info["artist"]`、`info["artists"]`（供 FFmpegMetadata），檔名用 `演出者 - 歌名`；`DownloadResult.title` 仍為原標題。設定 `clean_titles`（預設開） |
 | 自動下載並安裝更新 | `core/updates.py`：`fetch_latest_release()`（版本＋安裝程式在 API 的 `digest`）、`LatestRelease`（下載網址由固定的 `DOWNLOAD_BASE`＋tag 組成）、`download_update()`（先取 `.sha256`，與 API digest 不一致即停止；下載到 `.part` 邊算 SHA256，相符才改名；已下載且驗證過則沿用；清除舊檔；可取消；大小上限 1 GB）、`is_installed_build()`（frozen 且有 `unins000.exe`）、`launch_installer()`（`win_job.allow_children_to_outlive()`＋`release_app_mutex()` 後以 `/SILENT /SUPPRESSMSGBOXES /NORESTART /WAITPID=<pid> /RESTARTAPP=1` 啟動）；`_request()` 只允許 GitHub 的 https 網址。`gui/main_window.py`：`_on_update_checked` 接 `LatestRelease`、`start_update_download()`（背景執行緒＋`_UpdateSignals`）、`show_update_banner()`（下載中 / 已下載 / 失敗重試 / 安裝版 / 免安裝版五種狀態）、`install_update()`（確認、轉檔中拒絕、`_closing_for_update` 略過關閉時的下載詢問）。`utils/win_job.py`：`allow_children_to_outlive()`、`release_app_mutex()`。`packaging/installer.iss`：`InitializeSetup` 依 `/WAITPID` 用 OpenProcess＋WaitForSingleObject 等待（最多 60 秒）、`[Run]` 依 `/RESTARTAPP=1` 以 `runasoriginaluser` 重新開啟。設定 `auto_download_updates`（預設開）。下載位置 `%LOCALAPPDATA%\YT_Media_Tool\updates` |
 | 測試與文件 | `tests/test_title_cleanup.py`（新，26 種標題）、`tests/test_updates.py`（下載驗證、檢查碼不符、不完整、取消、網址限制、安裝版判斷）、`tests/test_gui.py`（橫幅各狀態、安裝流程）、`tests/integration/test_local_pipeline.py`（整理後的檔名與 MP3 標籤）；`scripts/verify_installer.py` 新增 `verify_self_update()`：CI 實測覆蓋安裝會等待執行中的程序、完成後重新開啟程式；README、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（C26–C28） |
 
@@ -221,10 +221,13 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 3. 剛剛做的關鍵決定，以及為什麼這樣決定
 
-### 3.1 最近幾輪（v2.1.3～v2.5.0）的決定
+### 3.1 最近幾輪（v2.1.3～v2.6.0）的決定
 
 | 決定 | 原因 |
 |---|---|
+| YouTube「合輯」（`list=RD…`）改從**播放頁面網址**讀取（v2.6.0-beta.2） | 合輯沒有獨立的清單頁面，用 `playlist?list=` 會得到「unviewable」；yt-dlp 對 `watch?v=…&list=…` 會從播放頁面讀出合輯，一般清單則轉到清單頁面（查 yt-dlp `_extract_from_playlist` 原始碼確認）。只對 `RD` 開頭的清單改，降低影響範圍。 |
+| 含中文的 `[ ]` 視為歌名括號；歌名括號後的「…版」**保留為版本**（v2.6.0-beta.2／beta.3） | 使用者常下載的相信音樂（五月天等）寫法是「歌手 [ 歌名 ] 5525版 Official Stage Video」；同一首歌有多個版本（5525版、5525+2版），保留才分得出來。英文標題的 `[Acoustic]`、`[Remastered]` 不含中文，仍接在歌名後。 |
+| 演出者需「像名稱」才採用（不含句子標點、每位中文演出者不超過 8 字） | 中國節目頻道的標題常是「周深《歌名》_ 某人盛赞：…」或「光良联手陈卓璇对唱《勇气》，…」，括號外是描述句；寧可只留歌名。 |
 | 自動更新**只在安裝版**自動下載與安裝，免安裝版導向下載頁 | 免安裝版沒有安裝程式可執行，也不能保證有權限覆寫資料夾；安裝版由 Inno Setup 處理升級（清除舊 `_internal`、捷徑、登錄）最可靠。 |
 | 安裝程式需**同時符合** GitHub API 的 `digest` 與 Release 的 `.sha256` | 兩個來源互相核對，下載不完整或被竄改時不會執行；網址由程式固定組成，不採用 API 回傳的連結。 |
 | 安裝**一定先詢問**，不在背景自動安裝 | 安裝要關閉程式，會中斷下載與轉檔；由使用者決定時機（轉檔進行中直接拒絕）。 |
@@ -298,7 +301,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
-- 提出過但使用者未選的項目（2026-10-31）：
+- 提出過但使用者未選的項目（2026-10-31～11-01）：
   - 兩次都未選：記住上次在主視窗選的格式與品質、加入前提醒「歷史紀錄中已下載過」。
   - 第二次檢查（v2.3.0）未選：同時下載上限從 3 提高到 5。
   - 第三次檢查（v2.4.0）未選：只下載片段（指定開始 / 結束時間）、自訂檔名格式（例如「演出者 - 標題」）。
@@ -419,7 +422,11 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 公開發布（Run workflow）由使用者親自按；本環境無法推 tag 或建立 Release。
 - 使用者為 **Claude Pro 方案**，已確認「Usage credits（額外用量）」為**關閉**，不會產生額外費用；儲存庫為公開，GitHub Actions 不收費。
 - 所有 beta 版本保留，不刪除。
-- 每次發布後要更新 handoff.md，且須包含本文件的五大項。
+- 每次發布後要更新 handoff.md，且須包含本文件的五大項；使用者也會直接要求「更新 handoff.md」，此時要通讀全文修正過時描述。
+- 使用者下載的多為**華語音樂**（五月天、周深等，常見頻道「相信音樂BinMusic」），MP3 與 MP4 都會下載；
+  歌名整理的新規則請以使用者回報的實際標題為測試案例（`tests/test_title_cleanup.py`）。
+- 回報問題時**常只貼截圖、不附文字**：先從截圖判斷問題（例如檔名沒整理、錯誤訊息），再說明原因與修正。
+- 會問版本相關的問題（例如「從幾版開始可以自動更新」）：回答時說明版本界線與條件（安裝版 / 免安裝版、正式版 / 測試版）。
 
 ## 附錄 B：常用指令（Linux 雲端環境）
 
