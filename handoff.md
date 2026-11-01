@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.7.1 發布後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.7.1 正式版使用者實測無誤）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -21,6 +21,7 @@
 - 原始需求規格的完整內容在第一次對話中；README.md 的「功能」表涵蓋全部功能（含後續新增）。
 
 使用者詢問「還能做什麼實用小工具」後，選了「本機檔案轉 MP3」與「產生播放清單檔」（v2.5.0），之後又選了「歌名自動整理」與「自動下載並安裝更新」（v2.6.0），再選了「整理舊檔案的歌名」（v2.7.0）。
+v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗，找出原因並修正。
 
 最近幾輪的工作方式：使用者要求「**以使用者角度檢查文字與功能（及是否可新增功能）**」→ 修正並發測試版 →
 使用者實機測試回報 → 修正 → 使用者確認後發正式版。
@@ -35,7 +36,7 @@
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.7.1
 - v2.7.1 的程式碼與使用者實測無誤的 `v2.7.1-beta.1`（86fa6ac）相同，之後只改 handoff.md。
 - **第一次實機自動更新（v2.6.0 → v2.7.0）失敗**：使用者回報「點選立即安裝並重新開啟後沒開啟且版本還是卡在 2.6.0」。
-  原因與修正見 2.3 的 v2.7.1；**`v2.7.1-beta.1` 已發布**（86fa6ac，Windows CI 的程式內自動更新端到端測試通過），使用者手動安裝實測無誤；正式版 v2.7.1 已發布。
+  原因與修正見 2.3 的 v2.7.1；Windows CI 新增的「程式內自動更新」端到端測試通過；`v2.7.1-beta.1` 與 `v2.7.1` 使用者手動安裝實測無誤。
   已安裝 v2.6.0 / v2.7.0 的使用者**必須手動安裝 v2.7.1 一次**（錯誤在舊版自己的程式碼裡，舊版無法自行更新成功）。
 - v2.7.0 開發中使用者回報與修正：beta.1 → 安裝說明「%LOCALAPPDATA%」不白話、選「Mix - …」資料夾「沒反應」（實為檔案已整理好、資料夾名稱亂）→ beta.2 修正；beta.2 實測無誤。
 - v2.6.0 開發中使用者回報與修正：beta.1 → YouTube「合輯」（`list=RD…`）讀不到「This playlist type is unviewable」（beta.2 修正）；
@@ -43,7 +44,7 @@
 - **從 v2.6.0 起才有自動更新，但 v2.6.0 / v2.7.0 的自動更新會失敗**；v2.7.1 之後的下一個正式版才是第一次能實際驗證成功的自動更新（C27）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0、v2.7.0-beta.2、v2.7.1-beta.1、v2.7.1 皆回報無誤。
-- 測試：347 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：348 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
@@ -188,13 +189,14 @@ requirements.txt / -dev.txt     全部固定版本（已確認皆有 win_amd64 /
 pyproject.toml                  套件資訊、版本號、pytest、ruff 設定（Apache-2.0）
 src/yt_media_tool/
   __init__.py                   __version__（版本號唯一來源；EXE / 安裝程式自動取用）
-  app.py                        進入點：日誌、Job Object、具名 mutex、單一執行個體鎖、Qt 中文翻譯、--smoke-test / --version
+  app.py                        進入點：日誌、Job Object、具名 mutex、單一執行個體鎖、Qt 中文翻譯、--smoke-test / --version、
+                                --install-update <setup.exe>（隱藏參數，只供 CI 驗證程式內自動更新）
   app_context.py                組合 DB / 設定 / Downloader（cookies_provider、preferences_provider）/ QueueManager
   core/task_models.py           任務模型與狀態機（等待中 / 下載中 / 轉檔中 / 已完成 / 失敗 / 已取消）
   core/url_parser.py            網址分類、正規化、去重、錯誤原因
   core/downloader.py            yt-dlp 下載引擎（暫存隔離、取消、驗證、不覆蓋移動、播放清單讀取、字幕、DownloadPreferences）
   core/converter.py             FFmpeg / FFprobe / Deno 偵測、ffprobe 驗證、格式選擇、後處理（含歌名與封面）
-  core/updates.py               新版本檢查、下載與驗證安裝程式、啟動安裝（自動更新）
+  core/updates.py               新版本檢查、下載與驗證安裝程式、啟動安裝（自動更新；脫離 Job、安裝紀錄 updates\install.log）
   core/title_cleanup.py         歌名自動整理（演出者 - 歌名）
   core/batch_rename.py          舊檔案批次改名（字幕、.m3u8 同步；不覆蓋；可復原）
   core/local_convert.py         本機影音檔轉 MP3（暫存檔→驗證→不覆蓋移動、進度、取消）
@@ -205,7 +207,7 @@ src/yt_media_tool/
   storage/database.py           SQLite（參數化 SQL、PRAGMA user_version migration，目前 v2）
   storage/settings.py           AppSettings（cookies、embed_metadata、playlist_subfolder、notify_on_complete、rate_limit_mbps、
                                 download_subtitles、auto_paste_clipboard、check_updates、auto_download_updates、skipped_update_version、
-                                playlist_m3u、clean_titles 等）
+                                pending_update_version、playlist_m3u、clean_titles 等）
   gui/main_window.py            主視窗（加入佇列、播放清單、拖曳、剪貼簿帶入、字幕勾選、雙擊播放、批次操作、完成通知、新版本提醒）
   gui/playlist_dialog.py        播放清單選擇對話框（勾選要下載的影片，可依清單分組取得）
   gui/history_dialog.py         下載歷史（搜尋、在檔案總管中顯示、重新下載）
@@ -215,14 +217,15 @@ src/yt_media_tool/
   gui/settings_dialog.py        設定（含「YouTube 登入資訊（選用）」）
   gui/qt_bridge.py / workers.py / theme.py / i18n.py
   utils/paths.py                AppData、隨附檔位置、安全檔名、FileNameReserver
-  utils/win_job.py              Job Object（結束時終止子程序；自動更新前可取消）、具名 mutex（供安裝程式偵測；自動更新前釋放）
+  utils/win_job.py              Job Object（延伸限制資訊 class 9；結束時終止子程序；自動更新前改為允許脫離）、具名 mutex（供安裝程式偵測；自動更新前釋放）
   utils/system_open.py          開啟資料夾、在檔案總管中選取檔案、以預設播放器開啟 MP3 / MP4
   utils/logging_utils.py
 tests/                          單元、GUI（pytest-qt）、integration/（本機 HTTP＋真實 yt-dlp / FFmpeg）、fakes.py
 scripts/
   setup_windows.bat / run_dev.bat / build_exe.bat   Windows 開發與打包
   build_installer.py / .bat     以 Inno Setup 建立 setup.exe 與 .sha256
-  verify_installer.py           CI 中實際靜默安裝、啟動、轉檔、自動更新（/WAITPID、/RESTARTAPP）、解除安裝並檢查捷徑與登錄
+  verify_installer.py           CI 中實際靜默安裝、啟動、轉檔、自動更新（/WAITPID、/RESTARTAPP；並經由已安裝程式的
+                                --install-update 端到端驗證）、解除安裝並檢查捷徑與登錄
   fetch_ffmpeg.ps1              依 manifest 下載並驗證 FFmpeg 到 vendor/ffmpeg
   verify_dist.py                發行資料夾檢查 + 大小報告 + 用隨附 FFmpeg 實際轉 MP3 / MP4
   make_release_zip.py           壓縮 zip 並產生 .sha256
@@ -241,7 +244,7 @@ packaging/
   release.yml                   Run workflow / 推 tag / 推 release/v* 分支 → 測試、打包、安裝程式 → 建立 Release
   ffmpeg-verify.yml             manifest 變更時交叉驗證 FFmpeg SHA256
   ffmpeg-candidates.yml         比較 FFmpeg 候選建置的大小與 MP3 支援（只在修改此檔時執行）
-docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0，C18–C21 為 v2.4.0，C22–C25 為 v2.5.0，C26–C28 為 v2.6.0，C29 為 v2.7.0 新功能）
+docs/WINDOWS_INTEGRATION_TESTS.md   Windows 實機測試清單（A–I 段；C12–C17、E6a 為 v2.3.0，C18–C21 為 v2.4.0，C22–C25 為 v2.5.0，C26–C28 為 v2.6.0，C29 為 v2.7.0 新功能；C27 註明 v2.7.1 起才能自動更新成功）
 docs/RELEASE_NOTES.md               Release 頁面說明（release.yml 會讀取）
 THIRD_PARTY_NOTICES.md              第三方授權
 ```
@@ -250,7 +253,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 3. 剛剛做的關鍵決定，以及為什麼這樣決定
 
-### 3.1 最近幾輪（v2.1.3～v2.7.0）的決定
+### 3.1 最近幾輪（v2.1.3～v2.7.1）的決定
 
 | 決定 | 原因 |
 |---|---|
@@ -334,7 +337,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- v2.7.1 正式版已發布。已裝 beta.1 的電腦**不會**被提示更新到 v2.7.1 正式版（版本號同為 2.7.1），這是正常的。
+- 目前沒有進行中的開發；v2.7.1 正式版已發布且使用者實測無誤。
 - **待辦**：自動更新的完整流程（C27）要等 **v2.7.1 已安裝後的下一個正式版**才能實測（v2.6.0 / v2.7.0 的自動更新有錯）。
   下一次發版時請使用者開啟已安裝的 v2.7.1 確認 C27；若失敗，請使用者按「查看安裝紀錄」並提供 `install.log` 最後幾行。
 
@@ -386,7 +389,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 自動更新的驗證**必須經過程式本身**（`--install-update` → `verify_update_from_app()`）；只直接執行安裝程式的測試抓不到 Job 問題。
 - **自動更新**：不要讓 `launch_installer()` 之外的地方啟動安裝程式；啟動前一定要 `allow_children_to_outlive()` 與 `release_app_mutex()`，
   否則安裝程式會被 Job Object 終止或停在「程式執行中」。`installer.iss` 的 `/WAITPID`、`/RESTARTAPP` 參數名稱與 `updates.launch_installer()` 必須一致，
-  只能靠 Windows CI 的 `verify_self_update()` 驗證。`[Run]` 重新開啟程式那一行不可加 `skipifsilent`（自動更新是靜默安裝）。
+  只能靠 Windows CI 的 `verify_self_update()`（直接執行安裝程式）與 `verify_update_from_app()`（經由程式本身）驗證。`[Run]` 重新開啟程式那一行不可加 `skipifsilent`（自動更新是靜默安裝）。
 - `updates._request()` 只允許 `https://api.github.com/` 與 `https://github.com/`；不要改成使用 API 回傳的 `browser_download_url`。
 - 歌名整理的規則改動後務必跑 `tests/test_title_cleanup.py`；新增案例優先加在那裡。`DownloadResult.title` 必須保持原標題（佇列、歷史、播放清單比對都用它）。
 - **不要再在任何地方寫死版本號或「V2.0」**；顯示用名稱一律用 `APP_DISPLAY_NAME`（含版本）或 `APP_NAME`（不含版本）。`installer.iss` 的 `AppName` 不可加版本號（會影響升級辨識與捷徑名稱）。
@@ -442,7 +445,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 用 `pkill -f <腳本名>` 停止監看時，會連同執行 pkill 的那個 shell 一起結束（指令列含同樣字串）；改用 `TaskStop` 或記下 PID。
 - 使用者回覆「沒問題」有時只是「好的」，有時是「實測無誤」：**先用 API 查是否真的有新的 Release run**，再依情況回覆。
 - **不能推送 git tag**（代理 403）；**不能建立 / 刪除 GitHub Release**（屬公開動作，需使用者觸發；推 `release/v*` 分支也被拒）。發布一律請使用者按 Run workflow。
-- 連不到 YouTube（代理擋）；`gh` CLI 的 token 無效。GitHub 公開 API（未驗證）可讀 runs / jobs / annotations / releases，**讀不到完整日誌**——所以失敗原因要靠 `ci_run.ps1` / `junit_annotations.py` 轉成註解。
+- 連不到 YouTube（代理擋）；`gh` CLI 的 token 無效。GitHub 公開 API（未驗證）可讀 runs / jobs / annotations / releases；job 日誌（`/actions/jobs/<job_id>/logs`）2026-11-01 測試可下載，但不保證一直可用——失敗原因仍以 `ci_run.ps1` / `junit_annotations.py` 轉成註解為主。
 - `windows-ci.yml` 設有 `cancel-in-progress`：CI 跑到一半時再 push 會取消正在跑的那一輪；只改 `.md` / `docs/**` 不會觸發 CI。
 - 本 session 指定的工作分支為 `ccr-8a1768df-b3zofa`；慣例是同時推送到該分支與 `main`（`main` 才會觸發 CI）。
 - 新環境需重建 `.venv` 並安裝 GUI 測試用系統套件（附錄 B），否則 pytest 會因 `libEGL.so.1` 缺失而無法啟動。
@@ -471,6 +474,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - 使用者下載的多為**華語音樂**（五月天、周深等，常見頻道「相信音樂BinMusic」），MP3 與 MP4 都會下載；
   歌名整理的新規則請以使用者回報的實際標題為測試案例（`tests/test_title_cleanup.py`）。
 - 回報問題時**常只貼截圖、不附文字**：先從截圖判斷問題（例如檔名沒整理、錯誤訊息），再說明原因與修正。
+- 回報問題時常是**一句話描述現象**（例如「點選立即安裝並重新開啟後沒開啟且版本還是卡在 2.6.0」）：先找根本原因，並說明舊版是否需要手動處理。
 - 會問版本相關的問題（例如「從幾版開始可以自動更新」）：回答時說明版本界線與條件（安裝版 / 免安裝版、正式版 / 測試版）。
 
 ## 附錄 B：常用指令（Linux 雲端環境）
@@ -484,7 +488,8 @@ apt-get install -y libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 fonts
 # 最新 CI 狀態；某個 run 的工作與步驟
 curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/actions/runs?per_page=5"
 curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/actions/runs/<run_id>/jobs"
-# 某個 job 的註解（失敗原因、大小報告）
+# 某個 job 的註解（失敗原因、大小報告）；job 完整日誌（例如確認 verify_installer 的 [OK] 項目）
+curl -sSL "https://api.github.com/repos/makodo123/YT_Media_Tool/actions/jobs/<job_id>/logs" -o /tmp/joblog.txt
 curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/check-runs/<job_id>/annotations"
 # Release 與附件 digest；最新正式版；.sha256 內容
 curl -sS "https://api.github.com/repos/makodo123/YT_Media_Tool/releases"
