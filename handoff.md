@@ -34,20 +34,22 @@
 - **最新正式版 `v2.6.0`**（標示為 Latest）：2026-11-01 發布，4 個附件與 `.sha256` 已核對；**使用者實測下載無誤**。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0
 - v2.6.0 的程式碼與使用者實測無誤的 `v2.6.0-beta.3`（9fa5196）相同，之後只改 handoff.md。
-- **進行中：v2.7.0**（整理舊檔案的歌名）。`v2.7.0-beta.1` 已發布（預先發行）：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.7.0-beta.1 ；
-  等使用者實測，無誤再發 `v2.7.0`。**v2.7.0 正式版是第一次能實際驗證自動更新（C27）**：使用者已裝 v2.6.0 安裝版，發布後開啟程式應自動下載並出現「立即安裝並重新開啟」。
+- **進行中：v2.7.0**（整理舊檔案的歌名）。`v2.7.0-beta.1` 已發布：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.7.0-beta.1
+- 使用者實測 beta.1 回報（2026-11-01，截圖）：(1) 安裝精靈說明出現「%LOCALAPPDATA%\YT_Media_Tool」不白話；(2) 選了「Mix - 周深 … Official Stage Video」資料夾後「沒反應」——
+  實際是裡面的檔案已在下載時整理好（v2.6.0 起），而合輯**資料夾名稱**本身很亂、工具只改檔名、訊息也沒說掃描了幾個檔案。
+  修正已推送到 `main`（版本號仍 2.7.0），CI 通過後請使用者發布 `v2.7.0-beta.2`。**v2.7.0 正式版是第一次能實際驗證自動更新（C27）**：使用者已裝 v2.6.0 安裝版，發布後開啟程式應自動下載並出現「立即安裝並重新開啟」。
 - v2.6.0 開發中使用者回報與修正：beta.1 → YouTube「合輯」（`list=RD…`）讀不到「This playlist type is unviewable」（beta.2 修正）；
   beta.2 → MP4 沒有整理歌名、「[ 歌名 ] 5525版 Official Stage Video | 說明」與「周深《歌名》_ 描述」整理不對（beta.3 修正）；beta.3 實測無誤。
 - **從 v2.6.0 起才有自動更新**：下一個正式版發布時，是第一次能實際驗證「背景下載 → 立即安裝並重新開啟」（C27）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0 皆回報無誤。
-- 測試：337 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：345 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
 | 版本 | commit | 狀態 |
 |---|---|---|
-| v2.7.0-beta.1 | 88a1fd5 | 預先發行；整理舊檔案的歌名；setup.exe 106.1 MB（`ecc6812c…ade9521`）、zip 144.2 MB（`e9f43a2e…1ac0a1d`），sha256 已核對；待使用者實測 |
+| v2.7.0-beta.1 | 88a1fd5 | 預先發行；整理舊檔案的歌名；setup.exe 106.1 MB（`ecc6812c…ade9521`）、zip 144.2 MB（`e9f43a2e…1ac0a1d`），sha256 已核對；使用者回報合輯資料夾與說明文字 → beta.2 |
 | **v2.6.0** | 28cd087 | **正式版（Latest）**；程式碼同 v2.6.0-beta.3；setup.exe 106.1 MB（`49daabd5…bd6d6c`）、zip 144.2 MB（`d66c0857…66edb2fd`），sha256 已核對；**使用者實測無誤** |
 | v2.6.0-beta.3 | 9fa5196 | 預先發行；MP4 也整理歌名（找得到演出者時）、「[ 歌名 ] 5525版」等寫法；setup.exe 106.2 MB（`14259764…df54019`）、zip 144.1 MB（`0c2c8141…eea46c0`），sha256 已核對；**使用者實測無誤** |
 | v2.6.0-beta.2 | 5e71822 | 預先發行；合輯網址修正、歌名整理支援「歌手 [ 歌名 ]」與合唱；setup.exe 106.1 MB（`fe645706…5bf46c`）、zip 144.2 MB（`2a31a330…bd9b1d`），sha256 已核對；使用者回報 MP4 未整理 → beta.3 |
@@ -79,6 +81,7 @@
 
 | 項目 | 修改的檔案與重點 |
 |---|---|
+| beta.2 修正：合輯資料夾與訊息 | `core/title_cleanup.py` 新增 `clean_playlist_title()`：「Mix - <完整標題>」→「合輯 - 演出者 - 歌名」（使用者自己的清單名稱不改）；`gui/main_window.py` `_playlist_folder()` 新下載即用整理後的資料夾名稱。`core/batch_rename.py`：`RenamePlan` / `RenameResult` 新增 `is_dir`，`scan()` 也列出合輯資料夾（含所選資料夾本身）、`media_files()`；`apply()` 先改檔案、再由深到淺改資料夾；`undo()` 反序。`utils/paths.py` 新增 `replace_path_prefix()`；`storage/database.py` `rename_folder()`、`core/queue_manager.py` `rename_folder()`、`core/playlist_files.py` `rename_folder()`；`gui/main_window.py` `_on_folder_renamed()`（也更新「儲存至」與設定的下載資料夾）。`gui/rename_dialog.py`：資料夾列以 📁 標示、摘要顯示「掃描了 N 個 MP3 / MP4：可以整理…；另有 K 個已經整理好」、所選資料夾被改名時欄位跟著更新、復原時依相反順序同步。`packaging/installer_notice.txt`：資料位置改為白話說明 |
 | 整理舊檔案的歌名 | 新檔 `core/batch_rename.py`：`proposed_stem()`（以 `clean_title({"title": 檔名, "channel": ""})` 整理，保留「 (1)」重複編號）、`scan()`（只看 .mp3 / .mp4，略過以 `.` 開頭的檔案與資料夾如 `.ytmt_tmp`）、`apply()`（`sanitize_filename` 後以 `move_no_overwrite` 改名，已存在加「 (1)」，只差大小寫時略過；同名字幕 `影片.srt`、`影片.<語言>.srt` 一併改；最後更新同資料夾 `.m3u8` 的檔名行與 `#EXTINF` 標題）、`undo()`（原檔名已被使用時略過並回報）。新檔 `gui/rename_dialog.py`：資料夾、包含子資料夾、掃描、預覽表格（勾選、點兩下修改新檔名）、全選 / 全不選、改名（先確認）、復原上次改名。`storage/database.py` `rename_output_path()`（佇列與歷史，路徑比對不分大小寫）、`core/queue_manager.py` `rename_output_path()`（記憶體中的任務＋發出 TASK_UPDATED）、`core/playlist_files.py` `rename_file()`；`gui/main_window.py`：「工具 → 整理舊檔案的歌名…」、`open_rename_dialog()`、`on_files_renamed()`。`gui/theme.py`：`QTableView::indicator` 也加外框 |
 | 測試與文件 | `tests/test_batch_rename.py`（新）、`tests/test_gui.py`（改名後佇列 / 歷史 / 播放仍正確、使用者修改檔名、播放清單紀錄跟著改名）；README、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（C29） |
 
@@ -238,6 +241,9 @@ THIRD_PARTY_NOTICES.md              第三方授權
 |---|---|
 | 整理舊檔案**只改檔名、不改檔案內容**（不重寫 MP3 標籤） | 重寫標籤需要 FFmpeg 重新封裝整個檔案，風險與時間都較高；改名可完整復原。舊檔名本身沒有頻道資訊，所以不用頻道名稱補演出者。 |
 | 改名時**同步字幕、.m3u8、佇列、歷史與播放清單紀錄** | 否則字幕不再自動載入、清單找不到歌、「雙擊播放」「在檔案總管中顯示」會說檔案不存在。 |
+| 合輯資料夾名稱**下載時就整理**，且整理工具也能改**合輯資料夾**（只限「Mix - …」，使用者自己命名的資料夾不動） | 使用者實測發現最亂的是資料夾名稱（YouTube 合輯標題含第一首的完整標題）；一般資料夾名稱是使用者自己取的，不應自動改。 |
+| 改資料夾時**先改檔案、再由深到淺改資料夾**，復原與同步紀錄都**依相反順序** | 檔案的新舊路徑都以改名當下的資料夾為準；順序錯了，佇列與歷史紀錄會對不上路徑。 |
+| 掃描結果一定說明**掃描了幾個檔案、幾個已整理好** | 使用者實測時看到「沒有需要整理的檔案」以為沒反應；其實是檔案已在下載時整理好。 |
 | 改名一定**先預覽、使用者確認**，並提供**復原** | 規則不可能每次都對；使用者可取消勾選或直接修改新檔名。 |
 | YouTube「合輯」（`list=RD…`）改從**播放頁面網址**讀取（v2.6.0-beta.2） | 合輯沒有獨立的清單頁面，用 `playlist?list=` 會得到「unviewable」；yt-dlp 對 `watch?v=…&list=…` 會從播放頁面讀出合輯，一般清單則轉到清單頁面（查 yt-dlp `_extract_from_playlist` 原始碼確認）。只對 `RD` 開頭的清單改，降低影響範圍。 |
 | 含中文的 `[ ]` 視為歌名括號；歌名括號後的「…版」**保留為版本**（v2.6.0-beta.2／beta.3） | 使用者常下載的相信音樂（五月天等）寫法是「歌手 [ 歌名 ] 5525版 Official Stage Video」；同一首歌有多個版本（5525版、5525+2版），保留才分得出來。英文標題的 `[Acoustic]`、`[Remastered]` 不含中文，仍接在歌名後。 |
@@ -309,7 +315,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦**：使用者實測 `v2.7.0-beta.1`（C29）→ 發布正式版 `v2.7.0`
+- **待辦**：v2.7.0-beta.2 的 Windows CI 通過 → 請使用者發布 `v2.7.0-beta.2` → 確認附件 → 使用者實測（C29、C29a）→ 發布正式版 `v2.7.0`
   → 確認附件與 Latest → **請使用者開啟已安裝的 v2.6.0，驗證第一次自動更新（C27）** → 更新本文件。
 - **自動更新的完整流程（C27）要等 v2.6.0 之後的下一個正式版才能實測**：必須先裝有 v2.6.0（含自動更新功能），
   再發布更新的正式版。2.5.0 以前的版本沒有自動更新，只會顯示提醒。下一次發版時請使用者特別確認 C27。
@@ -353,6 +359,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `system_open.open_media()` 的副檔名白名單（.mp3 / .mp4）不要放寬。
 
 ### 近期新增功能的雷
+- 安裝精靈的說明（`installer_notice.txt`）給一般使用者看：不要出現 `%LOCALAPPDATA%` 等環境變數，改用白話路徑。
 - **任何改檔名的功能都要呼叫 `MainWindow.on_files_renamed()`**（或同等的 `queue.rename_output_path` 與 `PlaylistFileStore.rename_file`），否則佇列、歷史與播放清單紀錄會指向不存在的檔案。
 - 有勾選框的表格 / 清單一定要有 `::indicator` 樣式（`gui/theme.py` 已涵蓋 QCheckBox、QTreeView、QTableView），否則深色主題下未勾選的框看不到。
 - **YouTube「合輯」（`list=RD…`）不能用 `playlist?list=` 讀取**；讀取清單一律用 `ParsedUrl.playlist_source_url`。

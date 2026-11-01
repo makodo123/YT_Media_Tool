@@ -166,3 +166,16 @@ class FileNameReserver:
 def unique_output_path(directory: Path, stem: str, extension: str) -> Path:
     """不保留的單次查詢版本：回傳目前不存在的檔案路徑。"""
     return FileNameReserver().reserve(directory, stem, extension)
+
+
+def replace_path_prefix(path: str, old: str, new: str) -> str | None:
+    """path 位於 old 資料夾（或就是 old）時，回傳把 old 換成 new 的路徑；否則回傳 None。比對不分大小寫與斜線方向。"""
+    if not path:
+        return None
+    full, base = os.path.abspath(path), os.path.abspath(old)
+    if os.path.normcase(full) == os.path.normcase(base):
+        return str(new)
+    prefix = os.path.normcase(base).rstrip("\\/") + os.sep
+    if os.path.normcase(full).startswith(prefix):
+        return os.path.join(str(new), os.path.relpath(full, base))
+    return None

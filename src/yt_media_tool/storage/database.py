@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from yt_media_tool.core.task_models import DownloadTask, TaskStatus, now_iso
+from yt_media_tool.utils.paths import replace_path_prefix
 
 log = logging.getLogger(__name__)
 
@@ -247,6 +248,24 @@ class Database:
                     if same(row["output_path"]):
                         conn.execute(f"UPDATE {table} SET output_path = ? WHERE id = ?", (new, row["id"]))  # noqa: S608
                         updated += 1
+        return updated
+
+    def rename_folder(self, old: str, new: str) -> int:
+        """資料夾改名後更新佇列與歷史紀錄中位於該資料夾內的路徑。回傳更新筆數。"""
+        updated = 0
+        with self.transaction() as conn:
+            for row in conn.execute("SELECT id, output_dir, output_path FROM download_tasks").fetchall():
+                new_dir = replace_path_prefix(row["output_dir"], old, new)
+                new_path = replace_path_prefix(row["output_path"], old, new)
+                if new_dir or new_path:
+                    conn.execute("UPDATE download_tasks SET output_dir = ?, output_path = ? WHERE id = ?",
+                                 (new_dir or row["output_dir"], new_path or row["output_path"], row["id"]))
+                    updated += 1
+            for row in conn.execute("SELECT id, output_path FROM download_history").fetchall():
+                new_path = replace_path_prefix(row["output_path"], old, new)
+                if new_path:
+                    conn.execute("UPDATE download_history SET output_path = ? WHERE id = ?", (new_path, row["id"]))
+                    updated += 1
         return updated
 
     def list_history(self, limit: int = 500) -> list[dict[str, Any]]:

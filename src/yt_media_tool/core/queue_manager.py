@@ -19,6 +19,7 @@ from yt_media_tool.core.errors import DownloadCancelledError, explain_error
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus
 from yt_media_tool.storage.database import Database
 from yt_media_tool.storage.settings import MAX_CONCURRENT, MIN_CONCURRENT
+from yt_media_tool.utils.paths import replace_path_prefix
 
 log = logging.getLogger(__name__)
 
@@ -260,6 +261,20 @@ class QueueManager:
                     task.output_path = new
                     events.append((TASK_UPDATED, task.snapshot()))
         self._db.rename_output_path(old, new)
+        self._emit(events)
+
+    def rename_folder(self, old: str, new: str) -> None:
+        """資料夾改名後更新位於其中的任務（儲存位置與檔案位置）。"""
+        events = []
+        with self._lock:
+            for task in self._tasks.values():
+                new_dir = replace_path_prefix(task.output_dir, old, new)
+                new_path = replace_path_prefix(task.output_path, old, new)
+                if new_dir or new_path:
+                    task.output_dir = new_dir or task.output_dir
+                    task.output_path = new_path or task.output_path
+                    events.append((TASK_UPDATED, task.snapshot()))
+        self._db.rename_folder(old, new)
         self._emit(events)
 
     def clear_completed(self) -> int:

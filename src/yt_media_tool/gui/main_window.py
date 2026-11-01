@@ -25,6 +25,7 @@ from yt_media_tool.core import converter, updates
 from yt_media_tool.core.downloader import PlaylistEntry, PlaylistInfo
 from yt_media_tool.core.local_convert import is_media_file
 from yt_media_tool.core.playlist_files import PlaylistFileStore
+from yt_media_tool.core.title_cleanup import clean_playlist_title
 from yt_media_tool.core.errors import explain_error
 from yt_media_tool.core.queue_manager import (
     QUEUE_STATE, TASK_ADDED, TASK_FINISHED, TASK_PROGRESS, TASK_REMOVED, TASK_UPDATED, TaskSpec,
@@ -42,7 +43,7 @@ from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RET
 from yt_media_tool.gui.settings_dialog import SettingsDialog
 from yt_media_tool.gui.workers import BackgroundJob
 from yt_media_tool.storage.settings import AppSettings
-from yt_media_tool.utils.paths import sanitize_filename
+from yt_media_tool.utils.paths import replace_path_prefix, sanitize_filename
 from yt_media_tool.utils import system_open
 
 log = logging.getLogger(__name__)
@@ -760,7 +761,8 @@ class MainWindow(QMainWindow):
             entry = next((e for e in group.entries if e.url == urls[0]), None)
             if entry is not None and entry.video_id == group.preselect_video_id:
                 return None
-        return str(Path(output_dir) / sanitize_filename(group.title or "播放清單"))
+        # YouTube 合輯的標題是「Mix - <第一首的完整標題>」：整理成「合輯 - 演出者 - 歌名」當資料夾名稱
+        return str(Path(output_dir) / sanitize_filename(clean_playlist_title(group.title) or "播放清單"))
 
     def choose_playlist_entries(self, groups: list[PlaylistGroup], output_dir: str = "") -> list[list[str]] | None:
         """顯示播放清單選擇對話框；依清單回傳勾選的影片網址，取消時回傳 None。"""
@@ -794,12 +796,28 @@ class MainWindow(QMainWindow):
     def on_files_renamed(self, pairs: list[tuple[Path, Path]]) -> None:
         """檔案改名後同步佇列、歷史紀錄與播放清單紀錄中的檔名。"""
         for old, new in pairs:
+            if new.is_dir():
+                self._on_folder_renamed(old, new)
+                continue
             self.ctx.queue.rename_output_path(str(old), str(new))
             try:
                 self._playlist_files.rename_file(str(old.parent), old.name, new.name)
             except Exception:  # 播放清單紀錄只是附加資訊
                 log.warning("無法更新播放清單紀錄", exc_info=True)
         self._update_details()
+
+    def _on_folder_renamed(self, old: Path, new: Path) -> None:
+        self.ctx.queue.rename_folder(str(old), str(new))
+        try:
+            self._playlist_files.rename_folder(str(old), str(new))
+        except Exception:
+            log.warning("無法更新播放清單紀錄", exc_info=True)
+        moved = replace_path_prefix(self.folder_edit.text(), str(old), str(new))
+        if moved:  # 「儲存至」就是（或位於）被改名的資料夾
+            self.folder_edit.setText(moved)
+        saved = replace_path_prefix(self.ctx.settings.download_dir, str(old), str(new))
+        if saved:
+            self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, download_dir=saved))
 
     def open_history(self) -> None:
         HistoryDialog(self.ctx.db, self, on_redownload=self.redownload).exec()

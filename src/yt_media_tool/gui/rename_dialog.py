@@ -32,9 +32,10 @@ class RenameDialog(QDialog):
         self._root = Path(start_folder)
         self._last: list[RenameResult] = []
 
-        hint = QLabel("把之前下載、檔名很長的 MP3 / MP4 整理成「演出者 - 歌名」。先按「掃描」預覽，"
-                      "確認勾選的項目後再按「改名」；可直接點兩下「整理後檔名」修改。\n"
-                      "同名檔案不會被覆蓋；同名的字幕檔與播放清單檔（.m3u8）會一併更新；只改檔名，不改檔案內容。")
+        hint = QLabel("把之前下載、檔名很長的 MP3 / MP4 整理成「演出者 - 歌名」；YouTube 合輯的資料夾"
+                      "（「Mix - …」）也會整理成「合輯 - 演出者 - 歌名」。"
+                      "先按「掃描」預覽，確認勾選的項目後再按「改名」；可直接點兩下「整理後名稱」修改。\n"
+                      "同名檔案不會被覆蓋；同名的字幕檔與播放清單檔（.m3u8）會一併更新；只改名稱，不改檔案內容。")
         hint.setObjectName("hintLabel")
         hint.setWordWrap(True)
 
@@ -53,7 +54,7 @@ class RenameDialog(QDialog):
         top.addWidget(self.scan_button)
 
         self.table = QTableWidget(0, 3)
-        self.table.setHorizontalHeaderLabels(["目前檔名", "整理後檔名（點兩下可修改）", "所在資料夾"])
+        self.table.setHorizontalHeaderLabels(["目前名稱", "整理後名稱（點兩下可修改）", "所在資料夾"])
         self.table.verticalHeader().setVisible(False)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.DoubleClicked
@@ -108,25 +109,45 @@ class RenameDialog(QDialog):
             QMessageBox.warning(self, "整理舊檔案的歌名", f"資料夾不存在：\n{folder}")
             return 0
         self._root = folder
-        plans = batch_rename.scan(folder, self.recursive.isChecked())
+        recursive = self.recursive.isChecked()
+        plans = batch_rename.scan(folder, recursive)
+        media_count = len(batch_rename.media_files(folder, recursive))
         self.table.blockSignals(True)
         self.table.setRowCount(len(plans))
         for row, plan in enumerate(plans):
-            old = QTableWidgetItem(plan.path.name)
+            old = QTableWidgetItem(("📁 " if plan.is_dir else "") + plan.path.name)
             old.setFlags((old.flags() | Qt.ItemFlag.ItemIsUserCheckable) & ~Qt.ItemFlag.ItemIsEditable)
             old.setCheckState(Qt.CheckState.Checked)
             old.setData(PathRole, str(plan.path))
-            old.setToolTip(str(plan.path))
+            old.setData(Qt.ItemDataRole.UserRole + 2, plan.is_dir)
+            old.setToolTip(str(plan.path) + ("\n（合輯資料夾：裡面的檔案位置會一併更新）" if plan.is_dir else ""))
             new = QTableWidgetItem(plan.new_stem)
-            new.setToolTip(f"副檔名維持 {plan.path.suffix}")
-            relative = plan.path.parent.relative_to(folder)
-            where = QTableWidgetItem("（此資料夾）" if str(relative) == "." else str(relative))
+            new.setToolTip("資料夾名稱" if plan.is_dir else f"副檔名維持 {plan.path.suffix}")
+            if plan.path == folder:
+                where_text = "（所選的資料夾本身）"
+            else:
+                relative = plan.path.parent.relative_to(folder)
+                where_text = "（此資料夾）" if str(relative) == "." else str(relative)
+            where = QTableWidgetItem(where_text)
             where.setFlags(where.flags() & ~Qt.ItemFlag.ItemIsEditable)
             for col, item in ((COL_OLD, old), (COL_NEW, new), (COL_FOLDER, where)):
                 self.table.setItem(row, col, item)
         self.table.blockSignals(False)
-        self.summary.setText(f"找到 {len(plans)} 個可以整理的檔案。" if plans
-                             else "沒有需要整理的檔案（檔名已經整理好，或無法判斷歌名）。")
+        file_count = sum(1 for p in plans if not p.is_dir)
+        folder_count = len(plans) - file_count
+        scope = "（含子資料夾）" if recursive else ""
+        if media_count == 0 and not plans:
+            text = f"這個資料夾{scope}裡沒有 MP3 / MP4 檔案。"
+        elif not plans:
+            text = f"掃描了 {media_count} 個 MP3 / MP4，檔名都已經整理好了（或無法判斷歌名），不需要改名。"
+        else:
+            parts = [f"{file_count} 個檔案"] if file_count else []
+            parts += [f"{folder_count} 個合輯資料夾"] if folder_count else []
+            tidy = media_count - file_count
+            text = (f"掃描了 {media_count} 個 MP3 / MP4：可以整理 {'、'.join(parts)}"
+                    + (f"；另有 {tidy} 個已經整理好。" if tidy else "。"))
+        self.summary.setText(text)
+        self.summary.setStyleSheet("")
         self._update_buttons()
         return len(plans)
 
@@ -135,7 +156,8 @@ class RenameDialog(QDialog):
         for row in range(self.table.rowCount()):
             old, new = self.table.item(row, COL_OLD), self.table.item(row, COL_NEW)
             if old.checkState() == Qt.CheckState.Checked and new.text().strip():
-                plans.append(RenamePlan(Path(old.data(PathRole)), new.text().strip()))
+                plans.append(RenamePlan(Path(old.data(PathRole)), new.text().strip(),
+                                        is_dir=bool(old.data(Qt.ItemDataRole.UserRole + 2))))
         return plans
 
     def _set_all(self, checked: bool) -> None:
@@ -160,9 +182,10 @@ class RenameDialog(QDialog):
             return 0
         results, errors = batch_rename.apply(plans)
         self._last = results
-        self._notify([(r.old, r.new) for r in results])
+        self._notify([(r.old, r.new) for r in results])  # 先檔案、後資料夾（與實際改名順序相同）
+        self._follow_root(results, forward=True)
         self.scan()
-        message = f"已改名 {len(results)} 個檔案。"
+        message = f"已改名 {len(results)} 個項目。"
         if errors:
             message += f"另有 {len(errors)} 個無法改名：" + "；".join(f"{p.name}（{why}）" for p, why in errors[:3])
         self.summary.setText(message)
@@ -176,16 +199,29 @@ class RenameDialog(QDialog):
         results, self._last = self._last, []
         errors = batch_rename.undo(results)
         failed = {p for p, _ in errors}
-        restored = [(r.new, r.old) for r in results if r.new not in failed]
+        # 復原時資料夾先還原，裡面檔案的路徑才對得上：依相反順序通知
+        restored = [(r.new, r.old) for r in reversed(results) if r.new not in failed]
         self._notify(restored)
+        self._follow_root([r for r in results if r.new not in failed], forward=False)
         self.scan()
-        message = f"已復原 {len(restored)} 個檔案。"
+        message = f"已復原 {len(restored)} 個項目。"
         if errors:
             message += f"另有 {len(errors)} 個無法復原：" + "；".join(f"{p.name}（{why}）" for p, why in errors[:3])
         self.summary.setText(message)
         self._color_summary(bool(errors))
         self._update_buttons()
         return len(restored)
+
+    def _follow_root(self, results: list[RenameResult], forward: bool) -> None:
+        """所選的資料夾本身被改名（或復原）時，更新資料夾欄位，重新掃描才找得到。"""
+        current = Path(self.folder_edit.text().strip())
+        for result in results:
+            if not result.is_dir:
+                continue
+            before, after = (result.old, result.new) if forward else (result.new, result.old)
+            if current == before:
+                self.folder_edit.setText(str(after))
+                current = after
 
     def _notify(self, pairs: list[tuple[Path, Path]]) -> None:
         if pairs and self._on_renamed is not None:

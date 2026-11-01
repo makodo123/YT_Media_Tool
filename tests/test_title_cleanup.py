@@ -82,3 +82,16 @@ def test_clean_channel(channel, expected):
 def test_without_channel_fallback_only_confident_results(title, channel, expected):
     result = clean_title({"title": title, "channel": channel}, channel_fallback=False)
     assert (result.display if result else None) == expected
+
+
+@pytest.mark.parametrize(("title", "expected"), [
+    ("Mix - 周深 ZHOU SHEN × MAYDAY 五月天 [ 如煙 Like Smoke ] 5525+2版 Official Stage Video",
+     "合輯 - 周深 × 五月天 - 如煙 (5525+2版)"),
+    ("合輯 - 周深 ZHOU SHEN ╳ MAYDAY 五月天 [ 如煙 Like Smoke ] Official Live Video", "合輯 - 周深 ╳ 五月天 - 如煙"),
+    ("我的最愛歌單", "我的最愛歌單"),  # 使用者自己建立的清單不改
+    ("Mixtape 2024", "Mixtape 2024"),
+])
+def test_clean_playlist_title(title, expected):
+    from yt_media_tool.core.title_cleanup import clean_playlist_title
+
+    assert clean_playlist_title(title) == expected

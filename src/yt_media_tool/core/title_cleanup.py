@@ -190,3 +190,16 @@ def clean_title(info: dict, channel_fallback: bool = True) -> CleanTitle | None:
     if artist and artist == song:
         artist = ""
     return CleanTitle(artist, song)
+
+
+_MIX_TITLE = re.compile(r"^(?:mix|my\s+mix|合輯|合辑|混合|自動播放清單)\s*[-–—:：]\s*(.+)$", re.IGNORECASE)
+
+
+def clean_playlist_title(title: str) -> str:
+    """YouTube 自動產生的合輯標題是「Mix - <第一首的完整標題>」，又長又亂；整理成「合輯 - 演出者 - 歌名」。
+    使用者自己建立的播放清單名稱維持原樣。"""
+    match = _MIX_TITLE.match((title or "").strip())
+    if not match:
+        return title
+    cleaned = clean_title({"title": match.group(1), "channel": ""})
+    return f"合輯 - {cleaned.display if cleaned else _squash(match.group(1))}"

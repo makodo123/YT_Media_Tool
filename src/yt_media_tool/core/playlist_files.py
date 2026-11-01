@@ -17,7 +17,7 @@ from typing import Any
 
 from yt_media_tool.core.task_models import DownloadTask, TaskStatus
 from yt_media_tool.storage.database import Database
-from yt_media_tool.utils.paths import sanitize_filename
+from yt_media_tool.utils.paths import replace_path_prefix, sanitize_filename
 
 log = logging.getLogger(__name__)
 
@@ -78,6 +78,17 @@ class PlaylistFileStore:
                 for url, name in files.items():
                     if name == old_name:
                         files[url], changed = new_name, True
+        if changed:
+            self._save(batches)
+
+    def rename_folder(self, old: str, new: str) -> None:
+        """資料夾改名後更新批次記錄的資料夾位置。"""
+        batches = self._load()
+        changed = False
+        for batch in batches:
+            moved = replace_path_prefix(batch.get("folder", ""), old, new)
+            if moved:
+                batch["folder"], changed = moved, True
         if changed:
             self._save(batches)
 

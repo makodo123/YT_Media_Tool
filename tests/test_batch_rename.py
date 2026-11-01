@@ -85,3 +85,35 @@ def test_undo_skips_when_original_name_reused(music):
     assert errors and "已被使用" in errors[0][1]
     assert (music / f"{MESSY}.mp4").read_bytes() == b"new file with old name"
     assert (music / f"{CLEAN}.mp4").read_bytes() == b"video"
+
+
+MIX = "Mix - 周深 ZHOU SHEN × MAYDAY 五月天 [ 如煙 Like Smoke ] 5525+2版 Official Stage Video"
+MIX_CLEAN = "合輯 - 周深 × 五月天 - 如煙 (5525+2版)"
+
+
+def test_mix_folder_is_renamed_after_files_and_undone(tmp_path):
+    root = tmp_path / "下載"
+    mix = root / MIX
+    mix.mkdir(parents=True)
+    (mix / "周深 × 五月天 - 如煙 (5525+2版).mp4").write_bytes(b"clean already")
+    (mix / f"{MESSY}.mp4").write_bytes(b"messy")
+    (root / "我的歌單").mkdir()  # 使用者自己命名的資料夾不動
+    plans = batch_rename.scan(root)
+    assert sorted((p.path.name, p.new_name, p.is_dir) for p in plans) == sorted([
+        (f"{MESSY}.mp4", f"{CLEAN}.mp4", False), (MIX, MIX_CLEAN, True)])
+    # 所選的資料夾本身就是合輯資料夾時也會列出
+    assert [(p.path, p.is_dir) for p in batch_rename.scan(mix) if p.is_dir] == [(mix, True)]
+
+    results, errors = batch_rename.apply(plans)
+    assert errors == []
+    assert [r.is_dir for r in results] == [False, True]  # 先改檔案、再改資料夾
+    new_mix = root / MIX_CLEAN
+    assert sorted(p.name for p in new_mix.iterdir()) == sorted([f"{CLEAN}.mp4", f"{CLEAN} (1).mp4"])
+
+    assert batch_rename.undo(results) == []
+    assert sorted(p.name for p in mix.iterdir()) == sorted(["周深 × 五月天 - 如煙 (5525+2版).mp4", f"{MESSY}.mp4"])
+    assert not new_mix.exists()
+
+
+def test_media_files_counts_only_mp3_mp4(music):
+    assert len(batch_rename.media_files(music)) == 3  # 略過 .txt 與 .ytmt_tmp

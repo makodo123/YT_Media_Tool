@@ -5,6 +5,8 @@
 - 先產生預覽（RenamePlan），使用者確認後才改名；同名檔案已存在時改用「 (1)」「 (2)」…，絕不覆蓋。
 - 同名的字幕檔（影片.srt、影片.zh-TW.srt）一併改名，播放器才會繼續自動載入。
 - 同資料夾中的播放清單檔（.m3u8）裡的檔名一併更新。
+- YouTube 合輯的資料夾（「Mix - <第一首的完整標題>」）一併整理成「合輯 - 演出者 - 歌名」；
+  使用者自己命名的資料夾不動。先改檔案、再由深到淺改資料夾；復原時順序相反。
 - 可用 undo() 復原上一次改名。
 只改檔名，不修改檔案內容（MP3 內的歌名資訊不變）。
 """
@@ -20,7 +22,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from yt_media_tool.core.downloader import move_no_overwrite
-from yt_media_tool.core.title_cleanup import clean_title
+from yt_media_tool.core.title_cleanup import clean_playlist_title, clean_title
 from yt_media_tool.utils.paths import sanitize_filename
 
 log = logging.getLogger(__name__)
@@ -32,11 +34,12 @@ _DUPLICATE_SUFFIX = re.compile(r"^(.*?)\s*\((\d+)\)$")  # 「歌名 (1)」：保
 @dataclass
 class RenamePlan:
     path: Path
-    new_stem: str
+    new_stem: str  # 檔案：不含副檔名的新檔名；資料夾：新的資料夾名稱
+    is_dir: bool = False
 
     @property
     def new_name(self) -> str:
-        return self.new_stem + self.path.suffix
+        return self.new_stem if self.is_dir else self.new_stem + self.path.suffix
 
 
 @dataclass
@@ -44,6 +47,7 @@ class RenameResult:
     old: Path
     new: Path
     extras: list[tuple[Path, Path]] = field(default_factory=list)  # 一併改名的字幕檔（舊, 新）
+    is_dir: bool = False
 
 
 def proposed_stem(stem: str) -> str | None:
@@ -59,21 +63,38 @@ def proposed_stem(stem: str) -> str | None:
     return new if new and new != stem else None
 
 
+def proposed_folder_name(name: str) -> str | None:
+    """合輯資料夾（「Mix - …」）建議的新名稱；其他資料夾或不需要改時回傳 None。"""
+    new = sanitize_filename(clean_playlist_title(name))
+    return new if new and new != name else None
+
+
 def _skip(path: Path, root: Path) -> bool:
     parts = path.relative_to(root).parts
     return any(part.startswith(".") for part in parts)
 
 
-def scan(folder: Path, recursive: bool = True) -> list[RenamePlan]:
+def media_files(folder: Path, recursive: bool = True) -> list[Path]:
+    """資料夾中的 MP3 / MP4（略過隱藏檔與 .ytmt_* 暫存資料夾）。"""
     folder = Path(folder)
     candidates = folder.rglob("*") if recursive else folder.iterdir()
+    return sorted(p for p in candidates
+                  if p.suffix.lower() in MEDIA_SUFFIXES and p.is_file() and not _skip(p, folder))
+
+
+def scan(folder: Path, recursive: bool = True) -> list[RenamePlan]:
+    """預覽要改名的檔案與合輯資料夾（包含所選的資料夾本身）。"""
+    folder = Path(folder)
     plans = []
-    for path in sorted(candidates):
-        if path.suffix.lower() not in MEDIA_SUFFIXES or not path.is_file() or _skip(path, folder):
-            continue
+    for path in media_files(folder, recursive):
         stem = proposed_stem(path.stem)
         if stem:
             plans.append(RenamePlan(path, stem))
+    subfolders = folder.rglob("*") if recursive else folder.iterdir()
+    for path in [folder, *sorted(p for p in subfolders if p.is_dir() and not _skip(p, folder))]:
+        name = proposed_folder_name(path.name)
+        if name:
+            plans.append(RenamePlan(path, name, is_dir=True))
     return plans
 
 
@@ -128,11 +149,12 @@ def _update_playlists(folder: Path, renamed: dict[str, str]) -> None:
 
 
 def apply(plans: Iterable[RenamePlan]) -> tuple[list[RenameResult], list[tuple[Path, str]]]:
-    """依預覽改名；回傳（成功的改名, 失敗的檔案與原因）。"""
+    """依預覽改名（先檔案、再由深到淺改資料夾）；回傳（成功的改名, 失敗的檔案與原因）。"""
+    plans = list(plans)
     results: list[RenameResult] = []
     errors: list[tuple[Path, str]] = []
     by_folder: dict[Path, dict[str, str]] = {}
-    for plan in plans:
+    for plan in (p for p in plans if not p.is_dir):
         src = plan.path
         stem = sanitize_filename(plan.new_stem)
         if not stem:
@@ -162,6 +184,21 @@ def apply(plans: Iterable[RenamePlan]) -> tuple[list[RenameResult], list[tuple[P
         by_folder.setdefault(src.parent, {})[src.name] = target.name
     for folder, renamed in by_folder.items():
         _update_playlists(folder, renamed)
+    for plan in sorted((p for p in plans if p.is_dir), key=lambda p: len(p.path.parts), reverse=True):
+        src, name = plan.path, sanitize_filename(plan.new_stem)
+        if not name:
+            errors.append((src, "新名稱不可空白"))
+            continue
+        if not src.is_dir():
+            errors.append((src, "資料夾已不存在（可能已被移動或刪除）"))
+            continue
+        try:
+            target = _move_to_unused(src, name, "")
+        except OSError as exc:
+            errors.append((src, f"無法改名（資料夾中的檔案可能正在使用）：{exc.strerror or exc}"))
+            continue
+        if target is not None:
+            results.append(RenameResult(src, target, is_dir=True))
     return results, errors
 
 
@@ -169,9 +206,10 @@ def undo(results: list[RenameResult]) -> list[tuple[Path, str]]:
     """復原 apply() 的改名；原檔名已被其他檔案使用時略過並回報。"""
     errors: list[tuple[Path, str]] = []
     by_folder: dict[Path, dict[str, str]] = {}
-    for result in reversed(results):
-        if not result.new.is_file():
-            errors.append((result.new, "檔案已不存在，無法復原"))
+    for result in reversed(results):  # 資料夾最後改名，所以最先復原，裡面的檔案路徑才會正確
+        exists = result.new.is_dir() if result.is_dir else result.new.is_file()
+        if not exists:
+            errors.append((result.new, "已不存在，無法復原"))
             continue
         try:
             if result.old.exists() or not move_no_overwrite(result.new, result.old):
@@ -186,7 +224,8 @@ def undo(results: list[RenameResult]) -> list[tuple[Path, str]]:
                     move_no_overwrite(new_sub, old_sub)
             except OSError:
                 log.warning("無法復原字幕 %s", new_sub, exc_info=True)
-        by_folder.setdefault(result.old.parent, {})[result.new.name] = result.old.name
+        if not result.is_dir:
+            by_folder.setdefault(result.old.parent, {})[result.new.name] = result.old.name
     for folder, renamed in by_folder.items():
         _update_playlists(folder, renamed)
     return errors

@@ -1090,8 +1090,8 @@ def test_rename_dialog_user_edited_name(window, qtbot, dialogs, tmp_path):
     dialog.table.item(0, COL_NEW).setText("周杰倫 - 告白氣球")  # 使用者自己補上演出者
     dialog.apply()
     assert sorted(p.name for p in folder.iterdir()) == ["周杰倫 - 告白氣球.mp3"]
-    assert "已改名 1 個檔案" in dialog.summary.text()
-    assert dialog.scan() == 0 and "沒有需要整理的檔案" in dialog.summary.text()
+    assert "已改名 1 個項目" in dialog.summary.text()
+    assert dialog.scan() == 0 and "掃描了 1 個 MP3 / MP4，檔名都已經整理好了" in dialog.summary.text()
 
 
 def test_playlist_store_follows_renamed_files(db, tmp_path):
@@ -1116,3 +1116,60 @@ def test_playlist_store_follows_renamed_files(db, tmp_path):
     text = (music / "清單.m3u8").read_text(encoding="utf-8")
     lines = [line for line in text.splitlines() if not line.startswith("#")]
     assert lines == ["新.mp3", "二.mp3"]  # 改名後的檔案沒有從清單中消失
+
+
+def test_rename_mix_folder_syncs_queue_history_and_download_folder(window, qtbot, dialogs, monkeypatch):
+    from yt_media_tool.utils import system_open
+
+    mix = "Mix - 周深 ZHOU SHEN × MAYDAY 五月天 [ 如煙 Like Smoke ] 5525+2版 Official Stage Video"
+    window.ctx.queue.resume()
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    window.add_from_input()
+    model = window.table.queue_model
+    qtbot.waitUntil(lambda: model.task_at(0).status is TaskStatus.COMPLETED, timeout=5000)
+    task = model.task_at(0)
+    base = Path(task.output_path).parent
+    # 重現使用者的情況：歌曲在舊版建立的「Mix - …」資料夾裡，「儲存至」也是這個資料夾
+    old_dir = base / mix
+    old_dir.mkdir()
+    song = old_dir / "周深 × 五月天 - 如煙 (5525+2版).mp4"
+    Path(task.output_path).rename(song)
+    window.ctx.queue.rename_output_path(task.output_path, str(song))
+    window.folder_edit.setText(str(old_dir))
+
+    dialog = window.open_rename_dialog()
+    qtbot.addWidget(dialog)
+    assert dialog.table.rowCount() == 1 and dialog.table.item(0, 0).text().startswith("📁 Mix - ")
+    assert "掃描了 1 個 MP3 / MP4：可以整理 1 個合輯資料夾；另有 1 個已經整理好" in dialog.summary.text()
+    assert dialog.apply() == 1
+
+    new_dir = base / "合輯 - 周深 × 五月天 - 如煙 (5525+2版)"
+    new_song = new_dir / song.name
+    assert new_song.is_file() and not old_dir.exists()
+    assert dialog.folder_edit.text() == str(new_dir)  # 對話框跟著換到新名稱
+    assert window.folder_edit.text() == str(new_dir)  # 主視窗「儲存至」也跟著更新
+    assert model.task_at(0).output_path == str(new_song)
+    assert window.ctx.db.list_history()[0]["output_path"] == str(new_song)
+    played = []
+    monkeypatch.setattr(system_open, "_open_with_default_app", lambda path: played.append(path) or True)
+    assert window.play(model.task_at(0)) and played == [new_song]
+
+    assert dialog.undo() == 1
+    assert song.is_file() and model.task_at(0).output_path == str(song)
+    assert window.folder_edit.text() == str(old_dir)
+    assert window.ctx.db.list_history()[0]["output_path"] == str(song)
+
+
+def test_mix_playlist_folder_name_is_cleaned_on_download(window, qtbot, fake, monkeypatch):
+    from yt_media_tool.core.downloader import PlaylistEntry, PlaylistInfo
+
+    url = "https://www.youtube.com/watch?v=uzVdsZbYibQ&list=RDuzVdsZbYibQ"
+    fake.playlists[url] = PlaylistInfo(
+        "Mix - 周深 ZHOU SHEN × MAYDAY 五月天 [ 如煙 Like Smoke ] 5525+2版 Official Stage Video",
+        [PlaylistEntry(f"https://www.youtube.com/watch?v=vid{i:08d}", f"歌 {i}", f"vid{i:08d}") for i in range(2)])
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: [[e.url for e in groups[0].entries]])
+    window.url_input.setPlainText(url)
+    window.add_from_input()
+    # 貼上的那首不在讀到的清單中，會排在最前面：共 3 首
+    qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
+    assert {Path(t.output_dir).name for t in window.ctx.queue.tasks()} == {"合輯 - 周深 × 五月天 - 如煙 (5525+2版)"}
