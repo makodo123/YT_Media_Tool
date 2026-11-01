@@ -34,7 +34,7 @@
 - **最新正式版 `v2.6.0`**（標示為 Latest）：2026-11-01 發布，4 個附件與 `.sha256` 已核對；**使用者實測下載無誤**。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0
 - v2.6.0 的程式碼與使用者實測無誤的 `v2.6.0-beta.3`（9fa5196）相同，之後只改 handoff.md。
-- **進行中：v2.7.0**（整理舊檔案的歌名）。已推送到 `main`，等 Windows CI 通過後請使用者發布 `v2.7.0-beta.1`，
+- **進行中：v2.7.0**（整理舊檔案的歌名）。已推送到 `main`，Windows CI 通過（cc52b06，run 41277065374），已請使用者發布 `v2.7.0-beta.1`，
   實測無誤再發 `v2.7.0`。**v2.7.0 正式版是第一次能實際驗證自動更新（C27）**：使用者已裝 v2.6.0 安裝版，發布後開啟程式應自動下載並出現「立即安裝並重新開啟」。
 - v2.6.0 開發中使用者回報與修正：beta.1 → YouTube「合輯」（`list=RD…`）讀不到「This playlist type is unviewable」（beta.2 修正）；
   beta.2 → MP4 沒有整理歌名、「[ 歌名 ] 5525版 Official Stage Video | 說明」與「周深《歌名》_ 描述」整理不對（beta.3 修正）；beta.3 實測無誤。
