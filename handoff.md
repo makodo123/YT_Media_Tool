@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.8.1 開發完成，等待 Windows CI 與測試版）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.8.1-beta.1 發布後，等待使用者實測）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -33,7 +33,7 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 
 ### 2.1 目前狀態
 
-- **開發中 v2.8.1（尚未發布）**：GitHub API 額度用完時改用 Releases 網頁判斷最新版；等 Windows CI 通過後請使用者 Run `v2.8.1-beta.1`。
+- **`v2.8.1-beta.1` 已發布（預先發行，61d1cca）**：GitHub API 額度用完時改用 Releases 網頁判斷最新版；Windows CI 通過；等待使用者實測。
 - **最新正式版 `v2.8.0`**（標示為 Latest）：2026-11-01 發布（a213573），4 個附件與 `.sha256` 已核對（安裝程式的 GitHub digest 與 `.sha256` 一致）。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.8.0
 - v2.8.0 的程式碼與使用者實測無誤的 `v2.8.0-beta.1`（b342233）相同，之後只改 handoff.md。
@@ -53,7 +53,7 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 
 | 版本 | commit | 狀態 |
 |---|---|---|
-| v2.8.1（開發中） | — | 新版本檢查在 API 額度用完時改用 Releases 網頁；等 Windows CI 通過後請使用者 Run `v2.8.1-beta.1` |
+| v2.8.1-beta.1 | 61d1cca | 預先發行；新版本檢查在 API 額度用完時改用 Releases 網頁；setup.exe 106.2 MB（`75558eee…e5926888`）、zip 144.2 MB（`2f31eb7b…09054216`），sha256 已核對；**等待使用者實測** |
 | **v2.8.0** | a213573 | **正式版（Latest）**；程式碼同 v2.8.0-beta.1；setup.exe 106.2 MB（`b6dd5785…be405bcd`）、zip 144.2 MB（`8edc8280…fa84d1b`），sha256 已核對 |
 | v2.8.0-beta.1 | b342233 | 預先發行；播放清單同步、已下載過提醒、只下載片段、選歌時的預計檔名；setup.exe 106.2 MB（`5edf5946…f354ffde`）、zip 144.2 MB（`e61115b3…ff818abb`），sha256 已核對；**使用者實測無誤** |
 | v2.7.1 | 4f08730 | 正式版；程式碼同 v2.7.1-beta.1；setup.exe 106.2 MB（`375108b7…77e014fb`）、zip 144.2 MB（`47abe6f5…6bdbee75`），sha256 已核對；**使用者實測無誤** |
@@ -372,7 +372,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦 1**：v2.8.1 已推送，等 Windows CI 通過 → 請使用者 Run `v2.8.1-beta.1` → 實測 → 正式版 v2.8.1。
+- **待辦 1**：`v2.8.1-beta.1` 已發布 → 使用者實測 → 正式版 v2.8.1。
 - **待辦 2：自動更新實測（C27）**：使用者正在測「v2.7.1 自動更新到 v2.8.0」。
   - 使用者曾把 v2.7.1 直接裝在 v2.8.0-beta.1 上，v2.7.1 開啟時出現「資料庫版本 3 比程式支援的版本 2 新」（預期中的降版保護）。
   - 已教使用者的測法：關閉程式 → 把 `%LOCALAPPDATA%\YT_Media_Tool\yt_media_tool.sqlite3`（含 `-wal`、`-shm`）移到備份資料夾 →
