@@ -44,10 +44,11 @@ QLabel#infoLabel {{ color: #cfe3ff; background: #1f3350; border: 1px solid #2d4a
     padding: 4px 8px; }}
 QTreeView {{ background: #1b1d22; border: 1px solid #3a3f47; }}
 QTreeView::item {{ padding: 2px 0; }}
-QCheckBox::indicator, QTreeView::indicator {{ width: 14px; height: 14px; border: 1px solid #8a919c;
-    border-radius: 3px; background: #2a2e35; }}
-QCheckBox::indicator:hover, QTreeView::indicator:hover {{ border-color: {ACCENT}; }}
-QCheckBox::indicator:checked, QTreeView::indicator:checked {{ background: {ACCENT}; border-color: {ACCENT}; }}
+QCheckBox::indicator, QTreeView::indicator, QTableView::indicator {{ width: 14px; height: 14px;
+    border: 1px solid #8a919c; border-radius: 3px; background: #2a2e35; }}
+QCheckBox::indicator:hover, QTreeView::indicator:hover, QTableView::indicator:hover {{ border-color: {ACCENT}; }}
+QCheckBox::indicator:checked, QTreeView::indicator:checked, QTableView::indicator:checked {{
+    background: {ACCENT}; border-color: {ACCENT}; }}
 QTreeView::indicator:indeterminate {{ background: #2d4a73; border-color: {ACCENT}; }}
 """
 

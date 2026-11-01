@@ -68,6 +68,19 @@ class PlaylistFileStore:
             self._save(batches)
         return written
 
+    def rename_file(self, folder: str, old_name: str, new_name: str) -> None:
+        """批次整理改名後更新記錄的檔名，之後重寫清單檔時才不會漏掉這首。"""
+        batches = self._load()
+        changed = False
+        for batch in batches:
+            if _same_folder(batch.get("folder", ""), folder):
+                files = batch.get("files", {})
+                for url, name in files.items():
+                    if name == old_name:
+                        files[url], changed = new_name, True
+        if changed:
+            self._save(batches)
+
     def _write(self, batch: dict[str, Any]) -> Path | None:
         folder = Path(batch["folder"])
         files = batch.get("files", {})

@@ -1031,3 +1031,88 @@ def test_youtube_mix_is_read_from_watch_page(window, qtbot, fake, monkeypatch):
     window.add_from_input()
     qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
     assert requested == ["https://www.youtube.com/watch?v=uzVdsZbYibQ&list=RDuzVdsZbYibQ"]
+
+
+def test_rename_dialog_renames_and_syncs_queue_history(window, qtbot, dialogs, monkeypatch):
+    from PySide6.QtCore import Qt
+
+    from yt_media_tool.gui.rename_dialog import COL_NEW, COL_OLD
+    from yt_media_tool.utils import system_open
+
+    messy = "周深 ZHOU SHEN × MAYDAY 五月天 [ 如煙 Like Smoke ] 5525+2版 Official Stage Video"
+    clean = "周深 × 五月天 - 如煙 (5525+2版)"
+    window.ctx.queue.resume()
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    window.add_from_input()
+    model = window.table.queue_model
+    qtbot.waitUntil(lambda: model.task_at(0).status is TaskStatus.COMPLETED, timeout=5000)
+    task = model.task_at(0)
+    folder = Path(task.output_path).parent
+    # 模擬之前下載、檔名很長的檔案（佇列與歷史都指向它）
+    messy_path = folder / f"{messy}.mp4"
+    Path(task.output_path).rename(messy_path)
+    window.ctx.queue.rename_output_path(task.output_path, str(messy_path))
+    (folder / "其他 [ 笑忘歌 Song ] Official Live Video.mp3").write_bytes(b"x")
+
+    dialog = window.open_rename_dialog()
+    qtbot.addWidget(dialog)
+    assert dialog.table.rowCount() == 2
+    rows = {dialog.table.item(r, COL_OLD).text(): r for r in range(2)}
+    assert dialog.table.item(rows[f"{messy}.mp4"], COL_NEW).text() == clean
+    other = rows["其他 [ 笑忘歌 Song ] Official Live Video.mp3"]
+    dialog.table.item(other, COL_OLD).setCheckState(Qt.CheckState.Unchecked)
+    assert dialog.apply_button.text() == "改名（1 個）"
+
+    assert dialog.apply() == 1
+    new_path = folder / f"{clean}.mp4"
+    assert new_path.is_file() and (folder / "其他 [ 笑忘歌 Song ] Official Live Video.mp3").is_file()
+    assert model.task_at(0).output_path == str(new_path)  # 佇列跟著更新
+    history = window.ctx.db.list_history()
+    assert history[0]["output_path"] == str(new_path)  # 歷史紀錄跟著更新
+    played = []
+    monkeypatch.setattr(system_open, "_open_with_default_app", lambda path: played.append(path) or True)
+    assert window.play(model.task_at(0)) and played == [new_path]  # 雙擊播放仍找得到檔案
+
+    assert dialog.undo() == 1
+    assert messy_path.is_file() and model.task_at(0).output_path == str(messy_path)
+    assert window.ctx.db.list_history()[0]["output_path"] == str(messy_path)
+
+
+def test_rename_dialog_user_edited_name(window, qtbot, dialogs, tmp_path):
+    from yt_media_tool.gui.rename_dialog import COL_NEW, RenameDialog
+
+    folder = tmp_path / "舊檔案"
+    folder.mkdir()
+    (folder / "告白氣球 (Official Music Video) [HD].mp3").write_bytes(b"x")
+    dialog = RenameDialog(str(folder), window)
+    qtbot.addWidget(dialog)
+    assert dialog.scan() == 1
+    dialog.table.item(0, COL_NEW).setText("周杰倫 - 告白氣球")  # 使用者自己補上演出者
+    dialog.apply()
+    assert sorted(p.name for p in folder.iterdir()) == ["周杰倫 - 告白氣球.mp3"]
+    assert "已改名 1 個檔案" in dialog.summary.text()
+    assert dialog.scan() == 0 and "沒有需要整理的檔案" in dialog.summary.text()
+
+
+def test_playlist_store_follows_renamed_files(db, tmp_path):
+    from yt_media_tool.core.playlist_files import PlaylistFileStore
+    from yt_media_tool.core.task_models import DownloadTask
+
+    music = tmp_path / "清單"
+    music.mkdir()
+    urls = ["https://www.youtube.com/watch?v=aaaaaaaaaaa", "https://www.youtube.com/watch?v=bbbbbbbbbbb"]
+    store = PlaylistFileStore(db)
+    store.add_batch(str(music), "清單", "mp3", urls)
+    (music / "舊.mp3").write_bytes(b"x")
+    store.on_task_completed(DownloadTask(url=urls[0], media_format=MediaFormat.MP3, quality="192",
+                                         output_dir=str(music), status=TaskStatus.COMPLETED,
+                                         output_path=str(music / "舊.mp3")))
+    (music / "舊.mp3").rename(music / "新.mp3")
+    store.rename_file(str(music), "舊.mp3", "新.mp3")
+    (music / "二.mp3").write_bytes(b"x")
+    store.on_task_completed(DownloadTask(url=urls[1], media_format=MediaFormat.MP3, quality="192",
+                                         output_dir=str(music), status=TaskStatus.COMPLETED,
+                                         output_path=str(music / "二.mp3")))
+    text = (music / "清單.m3u8").read_text(encoding="utf-8")
+    lines = [line for line in text.splitlines() if not line.startswith("#")]
+    assert lines == ["新.mp3", "二.mp3"]  # 改名後的檔案沒有從清單中消失

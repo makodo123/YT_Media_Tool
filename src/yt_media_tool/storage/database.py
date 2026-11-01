@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sqlite3
 import threading
 from collections.abc import Iterator
@@ -231,6 +232,22 @@ class Database:
                  task.output_path, task.status.value, task.error_message, now_iso()),
             )
             return int(cur.lastrowid)
+
+    def rename_output_path(self, old: str, new: str) -> int:
+        """檔案改名後更新佇列與歷史紀錄中的檔案位置（路徑比對不分大小寫與斜線方向）。回傳更新筆數。"""
+        def same(path: str) -> bool:
+            return bool(path) and os.path.normcase(os.path.abspath(path)) == os.path.normcase(os.path.abspath(old))
+
+        updated = 0
+        with self.transaction() as conn:
+            for table in ("download_tasks", "download_history"):
+                # 資料表名稱來自程式內常數，值以參數綁定
+                rows = conn.execute(f"SELECT id, output_path FROM {table} WHERE output_path != ''").fetchall()  # noqa: S608
+                for row in rows:
+                    if same(row["output_path"]):
+                        conn.execute(f"UPDATE {table} SET output_path = ? WHERE id = ?", (new, row["id"]))  # noqa: S608
+                        updated += 1
+        return updated
 
     def list_history(self, limit: int = 500) -> list[dict[str, Any]]:
         rows = self._query("SELECT * FROM download_history ORDER BY id DESC LIMIT ?", (int(limit),))

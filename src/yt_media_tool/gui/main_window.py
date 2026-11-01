@@ -35,6 +35,7 @@ from yt_media_tool.core.task_models import (
 from yt_media_tool.core.url_parser import ParsedUrl, UrlKind, parse_urls
 from yt_media_tool.gui.convert_dialog import ConvertDialog
 from yt_media_tool.gui.history_dialog import HistoryDialog
+from yt_media_tool.gui.rename_dialog import RenameDialog
 from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
 from yt_media_tool.gui.qt_bridge import QueueEventBridge
 from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RETRY, QueueTableView
@@ -136,6 +137,9 @@ class MainWindow(QMainWindow):
         settings_action.setShortcut(QKeySequence("Ctrl+,"))
         settings_action.triggered.connect(self.open_settings)
         tools_menu.addAction(settings_action)
+        rename_action = QAction("整理舊檔案的歌名…", self)
+        rename_action.triggered.connect(lambda: self.open_rename_dialog())
+        tools_menu.addAction(rename_action)
         convert_action = QAction("本機檔案轉 MP3…", self)
         convert_action.triggered.connect(lambda: self.open_converter())
         tools_menu.addAction(convert_action)
@@ -779,6 +783,23 @@ class MainWindow(QMainWindow):
         dialog.raise_()
         dialog.activateWindow()
         return dialog
+
+    def open_rename_dialog(self) -> RenameDialog:
+        """整理舊檔案的歌名（預設掃描目前的下載資料夾）。"""
+        dialog = RenameDialog(self.folder_edit.text(), self, on_renamed=self.on_files_renamed)
+        dialog.show()
+        dialog.scan()
+        return dialog
+
+    def on_files_renamed(self, pairs: list[tuple[Path, Path]]) -> None:
+        """檔案改名後同步佇列、歷史紀錄與播放清單紀錄中的檔名。"""
+        for old, new in pairs:
+            self.ctx.queue.rename_output_path(str(old), str(new))
+            try:
+                self._playlist_files.rename_file(str(old.parent), old.name, new.name)
+            except Exception:  # 播放清單紀錄只是附加資訊
+                log.warning("無法更新播放清單紀錄", exc_info=True)
+        self._update_details()
 
     def open_history(self) -> None:
         HistoryDialog(self.ctx.db, self, on_redownload=self.redownload).exec()

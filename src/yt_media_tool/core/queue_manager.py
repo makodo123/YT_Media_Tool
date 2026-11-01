@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 import time
 from collections.abc import Callable, Iterable
@@ -248,6 +249,18 @@ class QueueManager:
             self._db.delete_task(task_id)
         self._emit([(TASK_REMOVED, task_id)])
         return True
+
+    def rename_output_path(self, old: str, new: str) -> None:
+        """檔案在程式外（或由批次整理）改名後，更新任務的檔案位置，讓「播放」「開啟位置」仍能找到檔案。"""
+        target = os.path.normcase(os.path.abspath(old))
+        events = []
+        with self._lock:
+            for task in self._tasks.values():
+                if task.output_path and os.path.normcase(os.path.abspath(task.output_path)) == target:
+                    task.output_path = new
+                    events.append((TASK_UPDATED, task.snapshot()))
+        self._db.rename_output_path(old, new)
+        self._emit(events)
 
     def clear_completed(self) -> int:
         with self._lock:
