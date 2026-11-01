@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.6.0 開發中）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.6.0 發布後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -31,30 +31,26 @@
 
 ### 2.1 目前狀態
 
-- **最新正式版 `v2.5.0`**（標示為 Latest）：2026-11-01 發布，4 個附件與 `.sha256` 已核對；**使用者實測下載無誤**。
-  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.5.0
-- v2.5.0 的程式碼與使用者實測無誤的 `v2.5.0-beta.2`（e5ddb36）相同，之後只改 handoff.md。
-- **進行中：v2.6.0**（歌名自動整理、自動下載並安裝更新）。`v2.6.0-beta.1` 已發布（預先發行）：
-  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.1 ；等使用者實測，無誤再以 tag `v2.6.0` 發布正式版。
-  已確認實際 Release 的安裝程式有 GitHub `digest`，且與 `.sha256` 一致（自動更新的雙重檢查可用）。
-- 使用者實測 beta.1 回報（2026-11-01）：YouTube「合輯」（Mix，`list=RD…`）網址讀取失敗「This playlist type is unviewable」。
-  修正以 `v2.6.0-beta.2` 發布（版本號仍 2.6.0）：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.2
-- 使用者實測 beta.2（截圖 3 個 MP4 檔名）：MP4 沒有整理歌名（原設計只整理 MP3）；新寫法「[ 歌名 ] 5525版 Official Stage Video | 說明」、
-  「周深《歌名》_ 描述」整理不對。修正以 `v2.6.0-beta.3` 發布：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.3 ；**使用者實測無誤**，已請使用者以 tag `v2.6.0` 發布正式版。
-- v2.5.0 開發中使用者回報（beta.1 實測時）：標題「YT Media Tool V2.0」與版本不一致 → beta.2 改由 `__version__` 產生；
-  2.4.0 檢查不到 2.5.0 → 因當時只有測試版（設計如此），已改寫訊息說明。
+- **最新正式版 `v2.6.0`**（標示為 Latest）：2026-11-01 發布，4 個附件與 `.sha256` 已核對。
+  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0
+- v2.6.0 的程式碼與使用者實測無誤的 `v2.6.0-beta.3`（9fa5196）相同，之後只改 handoff.md。
+- **沒有進行中的工作**。
+- v2.6.0 開發中使用者回報與修正：beta.1 → YouTube「合輯」（`list=RD…`）讀不到「This playlist type is unviewable」（beta.2 修正）；
+  beta.2 → MP4 沒有整理歌名、「[ 歌名 ] 5525版 Official Stage Video | 說明」與「周深《歌名》_ 描述」整理不對（beta.3 修正）；beta.3 實測無誤。
+- **從 v2.6.0 起才有自動更新**：下一個正式版發布時，是第一次能實際驗證「背景下載 → 立即安裝並重新開啟」（C27）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
-  v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0 皆回報無誤。
-- 測試：304 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+  v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3 皆回報無誤。
+- 測試：328 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
 | 版本 | commit | 狀態 |
 |---|---|---|
+| **v2.6.0** | 28cd087 | **正式版（Latest）**；程式碼同 v2.6.0-beta.3；setup.exe 106.1 MB（`49daabd5…bd6d6c`）、zip 144.2 MB（`d66c0857…66edb2fd`），sha256 已核對 |
 | v2.6.0-beta.3 | 9fa5196 | 預先發行；MP4 也整理歌名（找得到演出者時）、「[ 歌名 ] 5525版」等寫法；setup.exe 106.2 MB（`14259764…df54019`）、zip 144.1 MB（`0c2c8141…eea46c0`），sha256 已核對；**使用者實測無誤** |
 | v2.6.0-beta.2 | 5e71822 | 預先發行；合輯網址修正、歌名整理支援「歌手 [ 歌名 ]」與合唱；setup.exe 106.1 MB（`fe645706…5bf46c`）、zip 144.2 MB（`2a31a330…bd9b1d`），sha256 已核對；使用者回報 MP4 未整理 → beta.3 |
 | v2.6.0-beta.1 | d67afc0 | 預先發行；歌名自動整理、自動下載並安裝更新；setup.exe 106.1 MB（`3ddc1a30…b63759`）、zip 144.2 MB（`7d9b6966…c925e59`），sha256 已核對；使用者回報合輯網址讀不到 → beta.2 |
-| **v2.5.0** | dba2aa7 | **正式版（Latest）**；程式碼同 v2.5.0-beta.2；setup.exe 106.1 MB（`cd2314ba…a4edc67`）、zip 144.1 MB（`665fd29c…2ca060`），sha256 已核對；**使用者實測無誤** |
+| v2.5.0 | dba2aa7 | 正式版；程式碼同 v2.5.0-beta.2；setup.exe 106.1 MB（`cd2314ba…a4edc67`）、zip 144.1 MB（`665fd29c…2ca060`），sha256 已核對；**使用者實測無誤** |
 | v2.5.0-beta.2 | e5ddb36 | 預先發行；標題顯示實際版本、檢查新版本的說明；setup.exe 106.1 MB（`c962ac44…4828edb`）、zip 144.2 MB（`c46e0958…01fd121`），sha256 已核對；**使用者實測無誤** |
 | v2.5.0-beta.1 | b913ab3 | 預先發行；本機檔案轉 MP3、播放清單檔 .m3u8；setup.exe 106.1 MB（`3094a708…2caac9f`）、zip 144.2 MB（`46b3cc1a…6305d7a`），sha256 已核對；使用者回報標題版本不一致 → beta.2（第一次 Run 的 tag 打成 `v2.5.0beta.1` 被擋下，第二次成功） |
 | v2.4.0 | 48ac341 | 正式版；程式碼同 v2.4.0-beta.1；setup.exe 106.1 MB（`d27cbbe2…a876f1`）、zip 144.1 MB（`3608f00b…1181f3`），sha256 已核對；**使用者實測無誤** |
@@ -77,7 +73,7 @@
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
 
-**v2.6.0**（未發布；使用者選了「歌名自動整理」與「自動下載並安裝更新」）
+**v2.6.0**（使用者選了「歌名自動整理」與「自動下載並安裝更新」；beta.2、beta.3 依實測修正）
 
 | 項目 | 修改的檔案與重點 |
 |---|---|
@@ -296,7 +292,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦**：使用者發布正式版 `v2.6.0` → 確認附件與 Latest → 更新本文件。
+**目前沒有待辦的必要工作。** v2.6.0 已發布為 Latest；使用者有新需求或回報問題時，依下方流程以新版本號修正並發布。
 - **自動更新的完整流程（C27）要等 v2.6.0 之後的下一個正式版才能實測**：必須先裝有 v2.6.0（含自動更新功能），
   再發布更新的正式版。2.5.0 以前的版本沒有自動更新，只會顯示提醒。下一次發版時請使用者特別確認 C27。
 
