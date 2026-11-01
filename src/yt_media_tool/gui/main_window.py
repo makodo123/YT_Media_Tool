@@ -156,7 +156,7 @@ class MainWindow(QMainWindow):
         history_action = QAction("下載歷史紀錄…", self)
         history_action.triggered.connect(self.open_history)
         tools_menu.addAction(history_action)
-        check_action = QAction("檢查相依元件（FFmpeg / Deno）", self)
+        check_action = QAction("檢查程式元件（FFmpeg / Deno）", self)
         check_action.triggered.connect(self.show_dependency_report)
         tools_menu.addAction(check_action)
 
@@ -386,9 +386,10 @@ class MainWindow(QMainWindow):
         messages = []
         if not self.ctx.tools.available:
             messages.append("⚠ 找不到 FFmpeg / FFprobe：無法合併影音或轉換 MP3。"
-                            "請至「工具 → 檢查相依元件」查看安裝方式。")
+                            "請重新安裝最新版，或到「工具 → 檢查程式元件」查看說明。")
         if not self.ctx.js_runtime.available:
-            messages.append("⚠ 未偵測到 Deno（JavaScript 執行環境）：部分 YouTube 格式可能無法取得。")
+            messages.append("⚠ 找不到 Deno（處理 YouTube 網頁用的元件）：部分影片可能只剩低畫質或無法下載，"
+                            "請重新安裝最新版。")
         self.dependency_banner.setText("\n".join(messages))
         self.dependency_banner.setVisible(bool(messages))
         if self.ctx.tools.available:
@@ -418,7 +419,7 @@ class MainWindow(QMainWindow):
     def show_dependency_report(self) -> None:
         report = self.dependency_report()
         self._refresh_dependency_banner()
-        QMessageBox.information(self, "相依元件檢查", report)
+        QMessageBox.information(self, "程式元件", report)
 
     # ================= 新版本提醒與自動更新 =================
     def check_for_updates(self, manual: bool = False) -> None:

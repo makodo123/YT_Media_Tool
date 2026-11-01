@@ -21,9 +21,9 @@ STYLESHEET = f"""
 QWidget {{ font-size: 10pt; }}
 QGroupBox {{ border: 1px solid #3a3f47; border-radius: 6px; margin-top: 10px; padding-top: 6px; }}
 QGroupBox::title {{ subcontrol-origin: margin; left: 10px; padding: 0 4px; color: #cfd6e0; }}
-QPlainTextEdit, QLineEdit, QComboBox, QSpinBox, QTextEdit {{
+QPlainTextEdit, QLineEdit, QComboBox, QTextEdit {{
     background: #1e2127; border: 1px solid #3a3f47; border-radius: 4px; padding: 3px; }}
-QPlainTextEdit:focus, QLineEdit:focus, QComboBox:focus, QSpinBox:focus {{ border-color: {ACCENT}; }}
+QPlainTextEdit:focus, QLineEdit:focus, QComboBox:focus {{ border-color: {ACCENT}; }}
 QPushButton {{ background: #2f343c; border: 1px solid #454b55; border-radius: 4px; padding: 5px 12px; }}
 QPushButton:hover {{ background: #3a404a; }}
 QPushButton:pressed {{ background: #262a30; }}

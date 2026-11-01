@@ -59,8 +59,9 @@ _YTDLP_PATTERNS: list[tuple[str, str]] = [
      "影片不存在、已被移除或無法觀看。"),
     (r"Requested format is not available", "找不到符合條件的影片格式。"),
     (r"HTTP Error 429|Too Many Requests", "請求次數過多（HTTP 429），YouTube 暫時限制存取，請稍後再試。"),
-    (r"HTTP Error 403", "伺服器拒絕存取（HTTP 403），可能是連結過期，請重試；若持續發生請更新 yt-dlp。"),
-    (r"HTTP Error 404", "找不到資源（HTTP 404）。"),
+    (r"HTTP Error 403", "YouTube 拒絕存取（HTTP 403），通常是下載連結過期，請按「重試」。"
+     "若一直發生，可能是 YouTube 改版，請到「說明 → 檢查新版本」更新本程式。"),
+    (r"HTTP Error 404", "找不到影片或檔案（HTTP 404），請確認網址是否正確後重試。"),
     (r"Unable to download webpage|Failed to resolve|getaddrinfo|Name or service not known|"
      r"timed out|Connection (reset|refused|aborted)|Network is unreachable|URLError|SSL",
      "網路連線失敗，請確認網路狀態後重試。"),

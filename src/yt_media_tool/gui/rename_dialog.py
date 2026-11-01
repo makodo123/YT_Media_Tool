@@ -32,10 +32,10 @@ class RenameDialog(QDialog):
         self._root = Path(start_folder)
         self._last: list[RenameResult] = []
 
-        hint = QLabel("把之前下載、檔名很長的 MP3 / MP4 整理成「演出者 - 歌名」；YouTube 合輯的資料夾"
-                      "（「Mix - …」）也會整理成「合輯 - 演出者 - 歌名」。"
-                      "先按「掃描」預覽，確認勾選的項目後再按「改名」；可直接點兩下「整理後名稱」修改。\n"
-                      "同名檔案不會被覆蓋；同名的字幕檔與播放清單檔（.m3u8）會一併更新；只改名稱，不改檔案內容。")
+        hint = QLabel("把之前下載、檔名很長的 MP3 / MP4 改成「演出者 - 歌名」；YouTube 合輯資料夾（「Mix - …」）"
+                      "改成「合輯 - 演出者 - 歌名」。\n"
+                      "步驟：選資料夾 → 按「掃描」預覽 → 勾選要改的項目（「整理後名稱」可點兩下修改）→ 按「改名」。\n"
+                      "只改檔名、不改檔案內容；不會覆蓋同名檔案；同名的字幕檔與播放清單檔會一起改。")
         hint.setObjectName("hintLabel")
         hint.setWordWrap(True)
 

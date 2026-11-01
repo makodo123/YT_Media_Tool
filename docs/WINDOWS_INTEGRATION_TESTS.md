@@ -25,7 +25,7 @@
 | B1 | 解壓縮至 `C:\Program Files\YT_Media_Tool`（需系統管理員權限），以一般使用者啟動 | 正常啟動；`%LOCALAPPDATA%\YT_Media_Tool` 下產生資料庫與 logs；安裝目錄內沒有新增任何檔案 |
 | B2 | 解壓縮至含中文與空白的路徑（例如 `D:\工具 測試\YT_Media_Tool`）並啟動 | 正常啟動 |
 | B3 | 視窗標題、深色主題、繁體中文字型 | 標題「YT Media Tool v<版本>」（例如 v2.5.0，與「說明 → 關於」的版本相同），深色，中文顯示正常無方塊字 |
-| B4 | 「工具 → 檢查相依元件」 | FFmpeg 與 Deno 顯示「隨附」，路徑位於 `_internal` |
+| B4 | 「工具 → 檢查程式元件」 | FFmpeg 與 Deno 顯示「隨附」，路徑位於 `_internal` |
 | B5 | 同時開啟第二個執行個體 | 顯示「已在執行中」並結束 |
 | B6 | Windows Defender / SmartScreen | 記錄是否誤報（EXE 未簽章時 SmartScreen 會警示，屬預期） |
 | B7 | 125% / 150% / 200% 顯示縮放 | 介面不重疊、表格按鈕可點 |

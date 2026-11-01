@@ -215,7 +215,8 @@ class ConvertDialog(QDialog):
             self.summary.setText("正在取消…")
             return
         if not self._tools.available:
-            QMessageBox.warning(self, "本機檔案轉 MP3", "找不到 FFmpeg，無法轉檔。請到「工具 → 檢查相依元件」查看。")
+            QMessageBox.warning(self, "本機檔案轉 MP3", "找不到 FFmpeg，無法轉檔。"
+                                "請重新安裝最新版，或到「工具 → 檢查程式元件」查看。")
             return
         if self.other_folder.isChecked() and not self.folder_edit.text().strip():
             QMessageBox.warning(self, "本機檔案轉 MP3", "請選擇要存放 MP3 的資料夾。")

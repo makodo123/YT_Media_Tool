@@ -92,7 +92,7 @@ class SettingsDialog(QDialog):
         self.playlist_subfolder = QCheckBox("播放清單存到以清單名稱命名的子資料夾")
         self.playlist_subfolder.setToolTip("例如「下載資料夾\\我的最愛歌單\\」；只下載貼上的那一支影片時不另建資料夾。")
         self.playlist_subfolder.setChecked(settings.playlist_subfolder)
-        self.playlist_m3u = QCheckBox("播放清單產生清單檔（.m3u8），音樂播放器可依原順序播放")
+        self.playlist_m3u = QCheckBox("下載播放清單時產生播放順序檔（.m3u8），音樂播放器可依清單原本的順序播放")
         self.playlist_m3u.setToolTip("從播放清單下載 2 部以上時，在存放的資料夾產生「清單名稱.m3u8」，\n"
                                      "用音樂播放器（例如 VLC、foobar2000、手機音樂 App）開啟即依原清單順序播放。")
         self.playlist_m3u.setChecked(settings.playlist_m3u)
@@ -169,7 +169,7 @@ class SettingsDialog(QDialog):
         cookies_form.addRow("cookies.txt：", self.cookies_file_row)
         cookies_form.addRow(cookies_note)
 
-        note = QLabel("畫質與音質為目標輸出設定；原始素材不支援時，會在佇列中顯示實際取得的格式。")
+        note = QLabel("影片沒有所選的畫質或音質時，會下載可取得的最高品質，並在佇列的「品質」欄標示 ⚠。")
         note.setObjectName("hintLabel")
         note.setWordWrap(True)
         form.addRow(note)  # 放在「下載」群組內，說明上面的畫質與音質設定
