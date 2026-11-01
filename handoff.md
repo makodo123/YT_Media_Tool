@@ -40,7 +40,7 @@
 - 使用者實測 beta.1 回報（2026-11-01）：YouTube「合輯」（Mix，`list=RD…`）網址讀取失敗「This playlist type is unviewable」。
   修正以 `v2.6.0-beta.2` 發布（版本號仍 2.6.0）：https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.2
 - 使用者實測 beta.2（截圖 3 個 MP4 檔名）：MP4 沒有整理歌名（原設計只整理 MP3）；新寫法「[ 歌名 ] 5525版 Official Stage Video | 說明」、
-  「周深《歌名》_ 描述」整理不對。修正已推送到 `main`，CI 通過後請使用者發布 `v2.6.0-beta.3`。
+  「周深《歌名》_ 描述」整理不對。修正已推送到 `main`，Windows CI 通過（0686094，run 41269038216），已請使用者發布 `v2.6.0-beta.3`。
 - v2.5.0 開發中使用者回報（beta.1 實測時）：標題「YT Media Tool V2.0」與版本不一致 → beta.2 改由 `__version__` 產生；
   2.4.0 檢查不到 2.5.0 → 因當時只有測試版（設計如此），已改寫訊息說明。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
