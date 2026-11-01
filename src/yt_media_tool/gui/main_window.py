@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QSystemTrayIcon, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from yt_media_tool import APP_DISPLAY_NAME, __version__
+from yt_media_tool import APP_DISPLAY_NAME, APP_NAME, __version__
 from yt_media_tool.app_context import AppContext
 from yt_media_tool.core import converter, updates
 from yt_media_tool.core.downloader import PlaylistEntry, PlaylistInfo
@@ -391,7 +391,11 @@ class MainWindow(QMainWindow):
             if manual:
                 QMessageBox.information(self, "檢查新版本", f"有新版本 {latest} 可以下載（目前為 {__version__}）。")
         elif manual:
-            QMessageBox.information(self, "檢查新版本", f"目前已是最新版本（{__version__}）。")
+            QMessageBox.information(
+                self, "檢查新版本",
+                f"目前已是最新的正式版（{__version__}）。\n\n"
+                "測試版（版本名稱含 beta）只放在 GitHub 的 Releases 頁面供試用，不會自動提醒；"
+                "正式版發布後才會通知所有使用者更新。")
 
     def _on_update_failed(self, exc: Exception) -> None:
         self._update_job = None
@@ -415,7 +419,7 @@ class MainWindow(QMainWindow):
             self.update_banner.hide()
 
     def _show_about(self) -> None:
-        QMessageBox.about(self, "關於", f"<b>{APP_DISPLAY_NAME}</b><br>版本 {__version__}<br><br>"
+        QMessageBox.about(self, "關於", f"<b>{APP_NAME}</b><br>版本 {__version__}<br><br>"
                           + DISCLAIMER.replace("\n", "<br>"))
 
     # ================= 網址處理 =================

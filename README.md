@@ -1,4 +1,4 @@
-# YT Media Tool V2.0
+# YT Media Tool
 
 [![Windows CI](https://github.com/makodo123/YT_Media_Tool/actions/workflows/windows-ci.yml/badge.svg)](https://github.com/makodo123/YT_Media_Tool/actions/workflows/windows-ci.yml)
 

@@ -35,7 +35,10 @@
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.4.0
 - v2.4.0 的程式碼與使用者實測無誤的 `v2.4.0-beta.1`（18c3d1d）相同。
 - **進行中：v2.5.0**（本機檔案轉 MP3、播放清單檔 .m3u8）。`v2.5.0-beta.1` 已發布（預先發行）：
-  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.5.0-beta.1 ；等使用者實測，無誤再以 tag `v2.5.0` 發布正式版。
+  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.5.0-beta.1
+- 使用者實測回報（2026-11-01）：(1) 視窗 / 對話框標題「YT Media Tool V2.0」與版本 2.4.0 不一致；(2) 2.4.0「檢查新版本」說已是最新，
+  為何沒有 2.5.0 → 因 2.5.0 目前只有測試版（`releases/latest` 不含預先發行，屬設計），已改寫訊息說明。
+  修正已推送到 `main`（版本號仍 2.5.0），CI 通過後請使用者發布 `v2.5.0-beta.2`。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0 皆回報無誤。
 - 測試：266 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
@@ -69,6 +72,8 @@
 
 | 項目 | 修改的檔案與重點 |
 |---|---|
+| beta.2 修正：標題版本不一致 | `__init__.py`：`APP_DISPLAY_NAME = f"{APP_NAME} v{__version__}"`（原本寫死「YT Media Tool V2.0」，視窗與所有對話框標題都顯示 V2.0）；「關於」改顯示 `APP_NAME`＋版本；`packaging/version_info.txt` 檔案描述、README / THIRD_PARTY_NOTICES / main.py / setup_windows.bat 的「V2.0」移除；`--version` 輸出改為「YT Media Tool v2.5.0」 |
+| beta.2 修正：檢查新版本的說明 | `gui/main_window.py` `_on_update_checked`：已是最新時說明「目前已是最新的正式版」，測試版不會自動提醒 |
 | 本機檔案轉 MP3 | 新檔 `core/local_convert.py`：`convert_to_mp3()` 先 FFprobe 確認有音訊 → FFmpeg（參數清單、`-progress pipe:1` 回報進度、可取消）寫到輸出資料夾的隱藏暫存檔 `.ytmt_convert_<亂數>.mp3` → `verify_output` → `FileNameReserver`＋`move_no_overwrite` 改成 `原檔名.mp3`（已存在加「 (1)」）；失敗 / 取消只刪自己的暫存檔；`ConvertError` 為中文原因。新檔 `gui/convert_dialog.py`：非強制回應視窗、加入 / 拖曳檔案、音質、存到「原資料夾」或指定資料夾、逐檔進度與結果、雙擊在檔案總管中顯示、關閉時詢問取消。`gui/main_window.py`：「工具 → 本機檔案轉 MP3…」、`open_converter()`；把本機影音檔拖到主視窗即開啟轉檔視窗（網址仍放進輸入框）；主視窗關閉時若轉檔中先詢問 |
 | 播放清單檔（.m3u8） | 新檔 `core/playlist_files.py`：`PlaylistFileStore` 把每個播放清單批次（資料夾、清單名稱、格式、影片順序、已完成檔名、清單檔名）存在 `application_settings` 的 `playlist_files.batches`（最多 50 筆）；任務完成時重寫清單檔（UTF-8、相對路徑、依清單順序、只列存在的檔案；暫存檔＋`os.replace`）；第一次建立時同名檔存在改用「 (1)」。`gui/main_window.py`：`_on_playlists_expanded` 登記批次（2 部以上）、`_on_task_finished` 更新（例外只記錄）。設定 `playlist_m3u`（預設開） |
 | 測試與文件 | `tests/integration/test_local_convert.py`（新，真實 FFmpeg：轉檔、不覆蓋、沒有聲音 / 非影音檔、取消）、`tests/test_playlist_files.py`（新）、`tests/test_gui.py`（轉檔視窗、拖曳本機檔、播放清單下載後產生 .m3u8）；README、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（C22–C25） |
@@ -202,6 +207,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 | 決定 | 原因 |
 |---|---|
+| 標題**不再寫死「V2.0」**，`APP_DISPLAY_NAME` 由 `__version__` 產生 | 使用者發現標題「V2.0」與實際版本 2.4.0 不一致；原始規格的名稱「YT Media Tool V2.0」只是產品名，改為顯示實際版本以免誤會。安裝程式與捷徑使用 `APP_NAME`（不含版本），升級不受影響。 |
+| 新版本提醒**不提醒測試版**（維持） | 測試版給使用者自己試用；一般使用者只該收到正式版提醒。訊息已說明此事。 |
 | 播放清單檔用 **`.m3u8`（UTF-8）**，不用 `.m3u` | 使用者要求的是 .m3u 清單檔；.m3u 在許多播放器以系統編碼讀取，中文歌名會變亂碼，.m3u8 是同一種格式的 UTF-8 版本。 |
 | 清單檔**每完成一首就重寫**，批次資訊存在資料庫 | 下載完成順序不固定、可能失敗後重試、程式可能中途關閉；每次依原清單順序重寫，只列出存在的檔案，最後一定完整。 |
 | 只有從播放清單加入 **2 部以上**才產生清單檔 | 只下載一首時清單檔沒有意義。 |
@@ -261,7 +268,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦**：使用者實測 `v2.5.0-beta.1`（C22–C25）→ 發布正式版 `v2.5.0` → 確認附件與 Latest → 更新本文件。
+- **待辦**：v2.5.0-beta.2 的 Windows CI 通過 → 請使用者發布 `v2.5.0-beta.2` → 確認附件 → 使用者實測（C22–C25、標題版本）
+  → 發布正式版 `v2.5.0` → 確認附件與 Latest → 更新本文件。
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
@@ -302,6 +310,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `system_open.open_media()` 的副檔名白名單（.mp3 / .mp4）不要放寬。
 
 ### 近期新增功能的雷
+- **不要再在任何地方寫死版本號或「V2.0」**；顯示用名稱一律用 `APP_DISPLAY_NAME`（含版本）或 `APP_NAME`（不含版本）。`installer.iss` 的 `AppName` 不可加版本號（會影響升級辨識與捷徑名稱）。
 - 本機轉檔 `convert_to_mp3()`：**不可**讓 FFmpeg 直接寫到正式檔名或使用 `-y`；一律暫存檔 → 驗證 → `move_no_overwrite`。
   取消時由監看執行緒 `kill` FFmpeg，`finally` 刪除暫存檔。
 - `PlaylistFileStore` 的 `os.replace` 只能用在本程式記錄的清單檔名（batch 的 `m3u`）；第一次建立一定先找未使用的檔名。

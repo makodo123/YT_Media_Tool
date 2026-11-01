@@ -86,7 +86,9 @@ def test_window_title_columns_and_theme(window):
 
     from yt_media_tool.gui.theme import apply_dark_theme
 
-    assert window.windowTitle() == "YT Media Tool V2.0"
+    from yt_media_tool import __version__
+
+    assert window.windowTitle() == f"YT Media Tool v{__version__}"  # 標題版本號與實際版本一致
     model = window.table.queue_model
     assert [model.headerData(i, Qt.Orientation.Horizontal) for i in range(len(COLUMNS))] == \
         ["編號", "影片名稱", "格式", "品質", "進度", "速度", "剩餘時間", "狀態", "操作"]
@@ -829,7 +831,7 @@ def test_update_banner_and_skip(window, dialogs, monkeypatch):
 def test_manual_update_check_reports_result(window, dialogs):
     window._update_manual = True
     window._on_update_checked("0.0.1")
-    assert "目前已是最新版本" in dialogs.text()
+    assert "目前已是最新的正式版" in dialogs.text() and "測試版" in dialogs.text()
     window._update_manual = True
     window._on_update_failed(OSError("offline"))
     assert "無法連線到 GitHub" in dialogs.text()

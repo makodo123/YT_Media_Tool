@@ -3,7 +3,7 @@ chcp 65001 >nul
 setlocal EnableExtensions
 cd /d "%~dp0.."
 
-echo === YT Media Tool V2.0：建立開發環境 ===
+echo === YT Media Tool：建立開發環境 ===
 where py >nul 2>nul
 if errorlevel 1 goto nopy
 py -3.12 -c "import sys; print('Python', sys.version)"

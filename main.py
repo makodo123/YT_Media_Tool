@@ -1,4 +1,4 @@
-"""YT Media Tool V2.0 啟動檔（開發環境與 PyInstaller 共用）。"""
+"""YT Media Tool 啟動檔（開發環境與 PyInstaller 共用）。"""
 
 import multiprocessing
 import sys

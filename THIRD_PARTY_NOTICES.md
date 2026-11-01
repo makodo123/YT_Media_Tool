@@ -1,6 +1,6 @@
 # 第三方元件與授權說明
 
-YT Media Tool V2.0 本身以 Apache License 2.0 授權（見專案根目錄 `LICENSE`）。
+YT Media Tool 本身以 Apache License 2.0 授權（見專案根目錄 `LICENSE`）。
 本程式使用或隨附下列第三方元件。各元件之著作權歸其原作者所有，並依各自授權條款散布。
 
 | 元件 | 版本 | 用途 | 授權 | 來源 |

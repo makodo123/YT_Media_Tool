@@ -16,7 +16,7 @@ log = logging.getLogger(__name__)
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
     if "--version" in argv:
-        print(f"{APP_DISPLAY_NAME} {__version__}")
+        print(APP_DISPLAY_NAME)
         return 0
     # --smoke-test：建立主視窗、檢查相依元件後自動結束（供打包後驗證用，不會開始任何下載）
     smoke_test = "--smoke-test" in argv
@@ -24,7 +24,7 @@ def main(argv: list[str] | None = None) -> int:
     log_path = setup_logging()
     kill_children_on_exit()
     create_app_mutex()
-    log.info("%s %s 啟動（frozen=%s），資料目錄：%s", APP_DISPLAY_NAME, __version__, paths.is_frozen(),
+    log.info("%s 啟動（frozen=%s），資料目錄：%s", APP_DISPLAY_NAME, paths.is_frozen(),
              paths.app_data_dir())
 
     from PySide6.QtCore import QLockFile, QTimer

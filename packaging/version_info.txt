@@ -6,7 +6,7 @@ VSVersionInfo(
   kids=[
     StringFileInfo([StringTable('040404B0', [
       StringStruct('CompanyName', 'YT Media Tool'),
-      StringStruct('FileDescription', 'YT Media Tool V2.0'),
+      StringStruct('FileDescription', 'YT Media Tool'),
       StringStruct('FileVersion', '$VERSION$'),
       StringStruct('InternalName', 'YT_Media_Tool'),
       StringStruct('OriginalFilename', 'YT_Media_Tool.exe'),
