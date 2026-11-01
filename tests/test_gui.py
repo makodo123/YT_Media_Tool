@@ -807,14 +807,23 @@ def test_copy_inside_app_is_not_auto_pasted(window, monkeypatch):
     assert window.auto_paste_clipboard() == 0
 
 
-def test_update_banner_and_skip(window, dialogs, monkeypatch):
+def _release(version="99.0.0"):
+    from yt_media_tool.core import updates
+
+    return updates.LatestRelease(version, f"YT_Media_Tool-{version}-win64-setup.exe", None)
+
+
+def test_update_banner_portable_build_links_to_download_page(window, dialogs, monkeypatch):
     from PySide6.QtGui import QDesktopServices
 
     from yt_media_tool.core import updates
 
+    monkeypatch.setattr(updates, "is_installed_build", lambda: False)
+    monkeypatch.setattr(updates, "download_update", lambda *a, **k: pytest.fail("免安裝版不可自動下載"))
     assert window.update_banner.isHidden()
-    window._on_update_checked("99.0.0")
-    assert not window.update_banner.isHidden() and "99.0.0" in window.update_banner.text()
+    window._on_update_checked(_release())
+    text = window.update_banner.text()
+    assert not window.update_banner.isHidden() and "99.0.0" in text and "免安裝版" in text
     assert dialogs.messages == []  # 自動檢查不跳對話框
 
     opened = []
@@ -825,15 +834,71 @@ def test_update_banner_and_skip(window, dialogs, monkeypatch):
     window._on_update_link("skip")
     assert window.update_banner.isHidden()
     assert window.ctx.settings.skipped_update_version == "99.0.0"
-    window._on_update_checked("99.0.0")
+    window._on_update_checked(_release())
     assert window.update_banner.isHidden()  # 已略過的版本不再自動提醒
-    window._on_update_checked("99.0.1")
+    window._on_update_checked(_release("99.0.1"))
     assert not window.update_banner.isHidden()  # 更新的版本仍會提醒
+
+
+def test_installed_build_downloads_then_installs(window, qtbot, dialogs, monkeypatch, tmp_path):
+    from yt_media_tool.core import updates
+
+    setup = tmp_path / "YT_Media_Tool-99.0.0-win64-setup.exe"
+    setup.write_bytes(b"MZ")
+    launched = []
+
+    def fake_download(release, on_progress=None, cancel=None, **kwargs):
+        on_progress(50.0)
+        return setup
+
+    monkeypatch.setattr(updates, "is_installed_build", lambda: True)
+    monkeypatch.setattr(updates, "download_update", fake_download)
+    monkeypatch.setattr(updates, "launch_installer", lambda path: launched.append(path))
+    window._on_update_checked(_release())
+    qtbot.waitUntil(lambda: "已下載完成並通過檢查" in window.update_banner.text(), timeout=5000)
+    assert "立即安裝並重新開啟" in window.update_banner.text()
+
+    dialogs.answer = QMessageBox.StandardButton.No
+    window._on_update_link("install")
+    assert launched == [] and not window._closing  # 使用者取消：不安裝
+
+    dialogs.answer = QMessageBox.StandardButton.Yes
+    window._on_update_link("install")
+    assert launched == [setup] and window._closing  # 啟動安裝程式並關閉程式
+    assert "安裝完成後會自動重新開啟" in dialogs.text()
+
+
+def test_update_download_failure_shows_retry(window, qtbot, monkeypatch):
+    from yt_media_tool.core import updates
+
+    attempts = []
+
+    def failing(release, **kwargs):
+        attempts.append(1)
+        raise updates.UpdateError("檢查碼不符")
+
+    monkeypatch.setattr(updates, "is_installed_build", lambda: True)
+    monkeypatch.setattr(updates, "download_update", failing)
+    window._on_update_checked(_release())
+    qtbot.waitUntil(lambda: "自動下載失敗" in window.update_banner.text(), timeout=5000)
+    assert "檢查碼不符" in window.update_banner.text() and 'href="update"' in window.update_banner.text()
+    window._on_update_link("update")
+    qtbot.waitUntil(lambda: len(attempts) == 2, timeout=5000)
+
+
+def test_auto_download_can_be_disabled(window, monkeypatch):
+    from yt_media_tool.core import updates
+
+    window.ctx.settings.auto_download_updates = False
+    monkeypatch.setattr(updates, "is_installed_build", lambda: True)
+    monkeypatch.setattr(updates, "download_update", lambda *a, **k: pytest.fail("不應自動下載"))
+    window._on_update_checked(_release())
+    assert "下載並安裝" in window.update_banner.text()
 
 
 def test_manual_update_check_reports_result(window, dialogs):
     window._update_manual = True
-    window._on_update_checked("0.0.1")
+    window._on_update_checked(_release("0.0.1"))
     assert "目前已是最新的正式版" in dialogs.text() and "測試版" in dialogs.text()
     window._update_manual = True
     window._on_update_failed(OSError("offline"))
@@ -846,7 +911,8 @@ def test_manual_update_check_reports_result(window, dialogs):
 def test_check_for_updates_runs_in_background(window, qtbot, monkeypatch):
     from yt_media_tool.core import updates
 
-    monkeypatch.setattr(updates, "fetch_latest_version", lambda: "99.1.0")
+    monkeypatch.setattr(updates, "is_installed_build", lambda: False)
+    monkeypatch.setattr(updates, "fetch_latest_release", lambda: _release("99.1.0"))
     window.check_for_updates()
     qtbot.waitUntil(lambda: not window.update_banner.isHidden(), timeout=3000)
     assert window._update_job is None

@@ -98,6 +98,10 @@ class SettingsDialog(QDialog):
         self.check_updates.setToolTip("只連線 GitHub 讀取最新版本號，不會傳送任何個人資料。\n"
                                       "也可以從「說明 → 檢查新版本」手動檢查。")
         self.check_updates.setChecked(settings.check_updates)
+        self.auto_download_updates = QCheckBox("有新版本時自動在背景下載（安裝前會先詢問；只適用安裝版）")
+        self.auto_download_updates.setToolTip("下載的安裝程式會核對檢查碼，通過後才能安裝；\n"
+                                              "按「立即安裝並重新開啟」才會關閉程式並更新。免安裝版請到下載頁面手動更新。")
+        self.auto_download_updates.setChecked(settings.auto_download_updates)
         self.ffmpeg_dir = QLineEdit(settings.ffmpeg_dir)
         self.ffmpeg_dir.setPlaceholderText("留白＝自動偵測（隨附版本或系統 PATH）")
         self.ffmpeg_status = QLabel()
@@ -120,7 +124,8 @@ class SettingsDialog(QDialog):
         files_group = QGroupBox("其他功能")
         files_layout = QVBoxLayout(files_group)
         for box in (self.embed_metadata, self.clean_titles, self.playlist_subfolder, self.playlist_m3u,
-                    self.auto_paste, self.notify, self.open_folder, self.keep_history, self.check_updates):
+                    self.auto_paste, self.notify, self.open_folder, self.keep_history, self.check_updates,
+                    self.auto_download_updates):
             files_layout.addWidget(box)
 
         ffmpeg_group = QGroupBox("FFmpeg（通常不需更改）")
@@ -252,6 +257,7 @@ class SettingsDialog(QDialog):
             rate_limit_mbps=self.rate_limit.value(),
             auto_paste_clipboard=self.auto_paste.isChecked(),
             check_updates=self.check_updates.isChecked(),
+            auto_download_updates=self.auto_download_updates.isChecked(),
             keep_history=self.keep_history.isChecked(),
             embed_metadata=self.embed_metadata.isChecked(),
             clean_titles=self.clean_titles.isChecked(),

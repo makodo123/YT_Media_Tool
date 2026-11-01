@@ -43,6 +43,38 @@ def shortcuts() -> list[Path]:
     return [start_menu, desktop]
 
 
+SYSTEM32 = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32"
+
+
+def app_running() -> bool:
+    out = subprocess.run([str(SYSTEM32 / "tasklist.exe"), "/FI", "IMAGENAME eq YT_Media_Tool.exe", "/NH"],
+                         capture_output=True, text=True, check=False).stdout
+    return "YT_Media_Tool.exe" in out
+
+
+def verify_self_update(setup: Path, install_dir: Path, work: Path, env: dict) -> list[tuple[str, bool]]:
+    """模擬程式內自動更新：在「舊程式」仍執行時覆蓋安裝，安裝程式須等它結束，完成後重新開啟程式。"""
+    checks = []
+    old_app = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(8)"])
+    started = time.monotonic()
+    result = subprocess.run([str(setup), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER",
+                             f"/DIR={install_dir}", f"/LOG={work / 'update.log'}",
+                             f"/WAITPID={old_app.pid}", "/RESTARTAPP=1"],
+                            env=env, timeout=600, check=False)
+    elapsed = time.monotonic() - started
+    checks.append((f"自動更新：等待舊程式結束後才安裝（/WAITPID，耗時 {elapsed:.1f} 秒）",
+                   result.returncode == 0 and old_app.poll() is not None and elapsed >= 6))
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not app_running():
+        time.sleep(1)
+    checks.append(("自動更新：安裝完成後重新開啟程式（/RESTARTAPP=1）", app_running()))
+    subprocess.run([str(SYSTEM32 / "taskkill.exe"), "/F", "/IM", "YT_Media_Tool.exe"], capture_output=True, check=False)
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline and app_running():
+        time.sleep(1)
+    return checks
+
+
 def main(argv: list[str]) -> int:
     if not sys.platform.startswith("win"):
         print("此檢查只能在 Windows 上執行", file=sys.stderr)
@@ -78,6 +110,8 @@ def main(argv: list[str]) -> int:
                        (data_dir / "yt_media_tool.sqlite3").is_file() and not any(install_dir.rglob("*.sqlite3"))))
         checks += [(f"安裝後 {name}", ok) for name, ok in
                    ffmpeg_functional_checks(install_dir / "_internal" / "ffmpeg", ".exe")]
+
+        checks += verify_self_update(setup, install_dir, work, env)
 
         # 解除安裝程式會複製自己到暫存資料夾後重新執行，原程序立即結束，因此輪詢等待完成
         subprocess.run([str(install_dir / "unins000.exe"), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],

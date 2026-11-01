@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
+import html
 import logging
+import threading
 from datetime import datetime
 from pathlib import Path
 
-from PySide6.QtCore import QByteArray, Qt, QThreadPool, QTimer, QUrl
+from PySide6.QtCore import QByteArray, QObject, Qt, QThreadPool, QTimer, QUrl, Signal
 from PySide6.QtGui import (
     QAction, QCloseEvent, QDesktopServices, QDragEnterEvent, QDropEvent, QGuiApplication, QKeySequence,
 )
@@ -59,6 +61,13 @@ def _local_time(iso: str) -> str:
         return iso
 
 
+class _UpdateSignals(QObject):
+    """背景下載更新 → 主執行緒。"""
+
+    progress = Signal(float)
+    finished = Signal(object)  # Path（成功）或 UpdateError
+
+
 class MainWindow(QMainWindow):
     def __init__(self, ctx: AppContext, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -72,7 +81,16 @@ class MainWindow(QMainWindow):
         self._convert_dialog: ConvertDialog | None = None
         self._playlist_files = PlaylistFileStore(ctx.db)
         self._update_manual = False
-        self._available_update: str | None = None
+        self._available_update: updates.LatestRelease | None = None
+        self._update_thread: threading.Thread | None = None
+        self._update_cancel: threading.Event | None = None
+        self._update_path: Path | None = None
+        self._update_error = ""
+        self._update_progress = 0.0
+        self._closing_for_update = False
+        self._update_signals = _UpdateSignals(self)
+        self._update_signals.progress.connect(self._on_update_progress)
+        self._update_signals.finished.connect(self._on_update_downloaded)
         self._jobs: set[BackgroundJob] = set()
         self._expand_context: tuple = ()
         self.setWindowTitle(APP_DISPLAY_NAME)
@@ -368,55 +386,150 @@ class MainWindow(QMainWindow):
         self._refresh_dependency_banner()
         QMessageBox.information(self, "相依元件檢查", report)
 
-    # ================= 新版本提醒 =================
+    # ================= 新版本提醒與自動更新 =================
     def check_for_updates(self, manual: bool = False) -> None:
         """在背景向 GitHub 查詢最新正式版；manual 為使用者從選單手動檢查（會顯示結果）。"""
         if self._update_job is not None:
             return
         self._update_manual = manual
-        job = BackgroundJob(updates.fetch_latest_version)
+        job = BackgroundJob(updates.fetch_latest_release)
         job.signals.succeeded.connect(self._on_update_checked)
         job.signals.failed.connect(self._on_update_failed)
         self._update_job = job
         QThreadPool.globalInstance().start(job)
 
-    def _on_update_checked(self, latest: str | None) -> None:
+    def _on_update_checked(self, release: updates.LatestRelease | None) -> None:
         self._update_job = None
         manual = self._update_manual
         if self._closing:
             return
-        if latest and updates.is_newer(latest):
-            if manual or latest != self.ctx.settings.skipped_update_version:
-                self.show_update_banner(latest)
+        if release is None or not updates.is_newer(release.version):
             if manual:
-                QMessageBox.information(self, "檢查新版本", f"有新版本 {latest} 可以下載（目前為 {__version__}）。")
-        elif manual:
-            QMessageBox.information(
-                self, "檢查新版本",
-                f"目前已是最新的正式版（{__version__}）。\n\n"
-                "測試版（版本名稱含 beta）只放在 GitHub 的 Releases 頁面供試用，不會自動提醒；"
-                "正式版發布後才會通知所有使用者更新。")
+                QMessageBox.information(
+                    self, "檢查新版本",
+                    f"目前已是最新的正式版（{__version__}）。\n\n"
+                    "測試版（版本名稱含 beta）只放在 GitHub 的 Releases 頁面供試用，不會自動提醒；"
+                    "正式版發布後才會通知所有使用者更新。")
+            return
+        if not manual and release.version == self.ctx.settings.skipped_update_version:
+            return
+        if self._available_update is None or self._available_update.version != release.version:
+            self._available_update, self._update_path, self._update_error = release, None, ""
+        downloading = False
+        if updates.is_installed_build() and (manual or self.ctx.settings.auto_download_updates):
+            downloading = self.start_update_download()
+        self.show_update_banner()
+        if manual:
+            extra = "已開始在背景下載，完成後可一鍵安裝。" if downloading else ""
+            QMessageBox.information(self, "檢查新版本",
+                                    f"有新版本 {release.version} 可以下載（目前為 {__version__}）。{extra}")
 
     def _on_update_failed(self, exc: Exception) -> None:
         self._update_job = None
         if self._update_manual and not self._closing:
             QMessageBox.warning(self, "檢查新版本", "無法連線到 GitHub 檢查新版本，請確認網路連線後再試。")
 
-    def show_update_banner(self, latest: str) -> None:
-        self._available_update = latest
-        self.update_banner.setText(
-            f"有新版本 <b>{latest}</b> 可以下載（目前為 {__version__}）。"
-            "YouTube 改版時舊版可能無法下載，建議更新。　"
-            '<a href="download">前往下載頁面</a>　<a href="skip">略過這個版本</a>')
+    def update_downloading(self) -> bool:
+        return self._update_thread is not None and self._update_thread.is_alive()
+
+    def start_update_download(self) -> bool:
+        """在背景下載並驗證新版安裝程式；完成後橫幅顯示「立即安裝並重新開啟」。"""
+        release = self._available_update
+        if release is None or self.update_downloading() or self._update_path is not None:
+            return False
+        self._update_cancel = threading.Event()
+        self._update_error, self._update_progress = "", 0.0
+        signals, cancel = self._update_signals, self._update_cancel
+
+        def work() -> None:
+            try:
+                path = updates.download_update(release, on_progress=signals.progress.emit, cancel=cancel)
+            except updates.UpdateCancelledError:
+                return
+            except updates.UpdateError as exc:
+                signals.finished.emit(exc)
+            except Exception as exc:  # 意外錯誤也只顯示在橫幅，不影響程式
+                log.exception("下載更新失敗")
+                signals.finished.emit(updates.UpdateError(f"下載更新失敗：{exc}"))
+            else:
+                signals.finished.emit(path)
+
+        self._update_thread = threading.Thread(target=work, daemon=True)
+        self._update_thread.start()
+        return True
+
+    def _on_update_progress(self, pct: float) -> None:
+        self._update_progress = pct
+        self.show_update_banner()
+
+    def _on_update_downloaded(self, result: object) -> None:
+        self._update_thread = None
+        if isinstance(result, Path):
+            self._update_path = result
+        else:
+            self._update_error = str(result)
+        if not self._closing:
+            self.show_update_banner()
+
+    def show_update_banner(self) -> None:
+        release = self._available_update
+        if release is None:
+            return
+        version = release.version
+        head = f"有新版本 <b>{version}</b>（目前為 {__version__}）。"
+        skip = '<a href="skip">略過這個版本</a>'
+        page = '<a href="download">前往下載頁面</a>'
+        if self._update_path is not None:
+            text = (f"新版本 <b>{version}</b> 已下載完成並通過檢查。　"
+                    f'<a href="install">立即安裝並重新開啟</a>　{skip}')
+        elif self.update_downloading():
+            text = f"{head}正在背景下載… {self._update_progress:.0f}%　{page}"
+        elif self._update_error:
+            text = (f"{head}自動下載失敗：{html.escape(self._update_error)}　"
+                    f'<a href="update">重試</a>　{page}　{skip}')
+        elif updates.is_installed_build():
+            text = f'{head}YouTube 改版時舊版可能無法下載，建議更新。　<a href="update">下載並安裝</a>　{page}　{skip}'
+        else:
+            text = f"{head}免安裝版請下載新的 zip，解壓縮後取代舊的資料夾。　{page}　{skip}"
+        self.update_banner.setText(text)
         self.update_banner.show()
 
     def _on_update_link(self, link: str) -> None:
         if link == "download":
             QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
-        elif link == "skip" and self._available_update:
+        elif link == "update":
+            self.start_update_download()
+            self.show_update_banner()
+        elif link == "install":
+            self.install_update()
+        elif link == "skip" and self._available_update is not None:
+            if self._update_cancel is not None:
+                self._update_cancel.set()
             self.ctx.apply_settings(dataclasses.replace(self.ctx.settings,
-                                                        skipped_update_version=self._available_update))
+                                                        skipped_update_version=self._available_update.version))
             self.update_banner.hide()
+
+    def install_update(self) -> bool:
+        """關閉程式並執行已驗證的新版安裝程式（安裝完成後由安裝程式重新開啟本程式）。"""
+        setup, release = self._update_path, self._available_update
+        if setup is None or release is None or not setup.is_file():
+            return False
+        if self._convert_dialog is not None and self._convert_dialog.is_running():
+            QMessageBox.information(self, "安裝更新", "本機檔案轉 MP3 仍在進行中，請等轉檔完成或取消後再安裝更新。")
+            return False
+        message = f"程式將關閉並安裝 {APP_NAME} {release.version}，安裝完成後會自動重新開啟。"
+        if self.ctx.queue.has_active_tasks():
+            message += "\n\n目前進行中的下載會中斷，重新開啟後會排回佇列繼續下載。"
+        if QMessageBox.question(self, "安裝更新", message) != QMessageBox.StandardButton.Yes:
+            return False
+        try:
+            updates.launch_installer(setup)
+        except (OSError, updates.UpdateError) as exc:
+            QMessageBox.warning(self, "安裝更新", f"無法啟動安裝程式：{exc}\n\n可改到下載頁面手動更新。")
+            return False
+        self._closing_for_update = True
+        self.close()
+        return True
 
     def _show_about(self) -> None:
         QMessageBox.about(self, "關於", f"<b>{APP_NAME}</b><br>版本 {__version__}<br><br>"
@@ -1005,7 +1118,7 @@ class MainWindow(QMainWindow):
             if not self._convert_dialog.close():  # 會詢問是否取消轉檔
                 event.ignore()
                 return
-        if self.ctx.queue.has_active_tasks():
+        if self.ctx.queue.has_active_tasks() and not self._closing_for_update:  # 安裝更新時已先確認過
             answer = QMessageBox.question(
                 self, "結束程式",
                 "仍有下載進行中。確定要結束嗎？\n進行中的任務會被中斷並清除暫存檔，下次開啟時會重新排入佇列。")
@@ -1013,6 +1126,8 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
         self._closing = True
+        if self._update_cancel is not None:
+            self._update_cancel.set()  # 停止背景下載更新（下次啟動會重新下載或沿用已驗證的檔案）
         try:
             self.ctx.db.set_setting("ui.geometry", bytes(self.saveGeometry().toHex()).decode())
         except Exception:

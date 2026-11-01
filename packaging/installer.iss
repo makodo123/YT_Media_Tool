@@ -10,6 +10,8 @@
 ; - 升級時先刪除舊版 _internal，避免殘留已移除的檔案。
 ; - 解除安裝時詢問是否刪除 %LOCALAPPDATA%\YT_Media_Tool（設定、佇列、歷史、日誌）；
 ;   靜默解除安裝時預設保留。已下載的影片一律不刪除（程式從不記錄、也不碰觸下載資料夾以外的檔案）。
+; - 程式內「自動更新」以 /SILENT /WAITPID=<舊程式 PID> /RESTARTAPP=1 執行本安裝程式：
+;   先等舊程式完全結束（最多 60 秒）再安裝，完成後重新開啟程式。
 
 #ifndef AppVersion
   #define AppVersion "0.0.0"
@@ -85,11 +87,48 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: deskto
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; 自動更新：靜默安裝完成後重新開啟程式（以原本的使用者身分，即使安裝時已提升權限）
+Filename: "{app}\{#AppExeName}"; Flags: nowait runasoriginaluser; Check: ShouldRestartApp
 
 [UninstallDelete]
 Type: filesandordirs; Name: "{app}\_internal"
 
 [Code]
+function OpenProcess(dwDesiredAccess: Cardinal; bInheritHandle: Integer; dwProcessId: Cardinal): THandle;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(hHandle: THandle; dwMilliseconds: Cardinal): Cardinal;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(hObject: THandle): Integer;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+const
+  SYNCHRONIZE = $00100000;
+
+function InitializeSetup(): Boolean;
+var
+  Pid: Integer;
+  Handle: THandle;
+begin
+  Result := True;
+  { 程式內自動更新：等舊程式完全結束後才開始安裝，避免檔案仍被使用 }
+  Pid := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
+  if Pid > 0 then
+  begin
+    Handle := OpenProcess(SYNCHRONIZE, 0, Pid);
+    if Handle <> 0 then
+    begin
+      Log(Format('等待 PID %d 結束', [Pid]));
+      WaitForSingleObject(Handle, 60000);
+      CloseHandle(Handle);
+    end;
+  end;
+end;
+
+function ShouldRestartApp(): Boolean;
+begin
+  Result := ExpandConstant('{param:RESTARTAPP|0}') = '1';
+end;
+
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   DataDir: String;

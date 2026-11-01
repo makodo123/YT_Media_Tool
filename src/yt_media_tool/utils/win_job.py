@@ -102,3 +102,54 @@ def create_app_mutex(name: str = APP_MUTEX_NAME) -> bool:
     except Exception:
         log.warning("無法建立程式 mutex，安裝程式將無法偵測程式是否執行中", exc_info=True)
         return False
+
+
+def allow_children_to_outlive() -> bool:
+    """取消「程式結束時終止子程序」，讓自動更新啟動的安裝程式在本程式結束後繼續執行。
+
+    只在即將關閉程式並安裝更新時呼叫；此時佇列已停止，不會再有 ffmpeg 子程序。
+    """
+    if not sys.platform.startswith("win") or _job_handle is None:
+        return True
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class JOBOBJECT_BASIC_LIMIT_INFORMATION(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_int64),
+                ("PerJobUserTimeLimit", ctypes.c_int64),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        job_object_basic_limit_information = 2
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+        kernel32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+        info = JOBOBJECT_BASIC_LIMIT_INFORMATION()  # LimitFlags = 0：清除 KILL_ON_JOB_CLOSE
+        if not kernel32.SetInformationJobObject(_job_handle, job_object_basic_limit_information,
+                                                ctypes.byref(info), ctypes.sizeof(info)):
+            raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
+        return True
+    except Exception:
+        log.warning("無法取消 Job Object 的子程序終止設定", exc_info=True)
+        return False
+
+
+def release_app_mutex() -> None:
+    """釋放程式 mutex，讓自動更新的安裝程式不會因「程式執行中」而停止。"""
+    global _mutex_handle
+    if not sys.platform.startswith("win") or _mutex_handle is None:
+        return
+    try:
+        import ctypes
+
+        ctypes.WinDLL("kernel32").CloseHandle(_mutex_handle)  # type: ignore[attr-defined]
+    except Exception:
+        log.warning("無法釋放程式 mutex", exc_info=True)
+    _mutex_handle = None
