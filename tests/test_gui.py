@@ -897,21 +897,114 @@ def test_auto_download_can_be_disabled(window, monkeypatch):
     assert "下載並安裝" in window.update_banner.text()
 
 
-def test_manual_update_check_reports_result(window, dialogs):
-    from yt_media_tool.core import updates
+def test_manual_update_check_shows_progress_and_result(window, qtbot, monkeypatch, dialogs):
+    import threading
 
+    from yt_media_tool.core import updates
+    from yt_media_tool.gui import update_dialog as ud
+
+    gate = threading.Event()
+
+    def slow_fetch():
+        gate.wait(5)
+        return _release("0.0.1")
+
+    monkeypatch.setattr(updates, "fetch_latest_release", slow_fetch)
+    window.check_for_updates(manual=True)
+    dialog = window._update_dialog
+    assert dialog.isVisible() and dialog.state == ud.CHECKING  # 按下就出現「正在檢查」
+    assert not dialog.bar.isHidden() and dialog.bar.maximum() == 0  # 來回跑動的進度條
+    gate.set()
+    qtbot.waitUntil(lambda: dialog.state == ud.LATEST, timeout=5000)
+    assert "目前已是最新的正式版" in dialog.message.text() and "測試版" in dialog.message.text()
+    assert dialog.heading.text().startswith("✓") and dialog.bar.isHidden()
+    assert dialogs.messages == []  # 結果顯示在同一個視窗，不另跳訊息
+
+
+@pytest.mark.parametrize("error,expected", [
+    (OSError("offline"), "無法連線到 GitHub"),
+    ("rate", "GitHub 暫時限制查詢次數"),
+])
+def test_manual_update_check_failure_is_shown_with_retry(window, monkeypatch, error, expected):
+    from yt_media_tool.core import updates
+    from yt_media_tool.gui import update_dialog as ud
+
+    if error == "rate":
+        error = updates.UpdateCheckError(updates.RATE_LIMIT_MESSAGE)
+    monkeypatch.setattr(window, "_on_update_checked", lambda *a: None)
     window._update_manual = True
-    window._on_update_checked(_release("0.0.1"))
-    assert "目前已是最新的正式版" in dialogs.text() and "測試版" in dialogs.text()
-    window._update_manual = True
+    window._update_check_error = ""
+    window.open_update_dialog()
+    window._on_update_failed(error)
+    dialog = window._update_dialog
+    assert dialog.state == ud.CHECK_FAILED and expected in dialog.message.text()
+    assert dialog.heading.text().startswith("✕") and "retry_check" in dialog.button_widgets
+
+
+def test_auto_check_failure_does_not_open_window(window):
     window._on_update_failed(OSError("offline"))
-    assert "無法連線到 GitHub" in dialogs.text()
-    window._update_manual = False
-    window._on_update_failed(OSError("offline"))
-    assert dialogs.text().count("無法連線到 GitHub") == 1  # 自動檢查失敗時不打擾
-    window._update_manual = True
-    window._on_update_failed(updates.UpdateCheckError(updates.RATE_LIMIT_MESSAGE))
-    assert "GitHub 暫時限制查詢次數" in dialogs.text()
+    assert window._update_dialog is None
+
+
+def test_manual_check_downloads_with_progress_then_ready(window, qtbot, monkeypatch, tmp_path):
+    import threading
+
+    from yt_media_tool.core import updates
+    from yt_media_tool.gui import update_dialog as ud
+
+    setup = tmp_path / "setup.exe"
+    setup.write_bytes(b"MZ")
+    halfway, finish = threading.Event(), threading.Event()
+
+    def fake_download(release, on_progress=None, cancel=None, **kwargs):
+        on_progress(42.0)
+        halfway.set()
+        finish.wait(5)
+        return setup
+
+    monkeypatch.setattr(updates, "is_installed_build", lambda: True)
+    monkeypatch.setattr(updates, "download_update", fake_download)
+    monkeypatch.setattr(updates, "fetch_latest_release", lambda: _release())
+    window.check_for_updates(manual=True)
+    dialog = window._update_dialog
+    qtbot.waitUntil(lambda: dialog.state == ud.DOWNLOADING and dialog.bar.value() == 42, timeout=5000)
+    assert dialog.bar.maximum() == 100 and "cancel" in dialog.button_widgets
+    finish.set()
+    qtbot.waitUntil(lambda: dialog.state == ud.READY, timeout=5000)
+    assert "立即安裝並重新開啟" in dialog.button_widgets["install"].text()
+
+
+def test_cancel_download_from_window(window, qtbot, monkeypatch):
+    from yt_media_tool.core import updates
+    from yt_media_tool.gui import update_dialog as ud
+
+    def cancellable(release, on_progress=None, cancel=None, **kwargs):
+        cancel.wait(5)
+        raise updates.UpdateCancelledError()
+
+    monkeypatch.setattr(updates, "is_installed_build", lambda: True)
+    monkeypatch.setattr(updates, "download_update", cancellable)
+    window._on_update_checked(_release())
+    dialog = window.open_update_dialog()
+    assert dialog.state == ud.DOWNLOADING
+    dialog.button_widgets["cancel"].click()
+    qtbot.waitUntil(lambda: dialog.state == ud.AVAILABLE, timeout=5000)  # 可以再按「下載並安裝」
+    assert "download" in dialog.button_widgets
+
+
+def test_download_failure_shown_in_window(window, qtbot, monkeypatch):
+    from yt_media_tool.core import updates
+    from yt_media_tool.gui import update_dialog as ud
+
+    monkeypatch.setattr(updates, "is_installed_build", lambda: True)
+    def failing(*args, **kwargs):
+        raise updates.UpdateError("檢查碼不符")
+
+    monkeypatch.setattr(updates, "download_update", failing)
+    window._on_update_checked(_release())
+    dialog = window.open_update_dialog()
+    qtbot.waitUntil(lambda: dialog.state == ud.DOWNLOAD_FAILED, timeout=5000)
+    assert "檢查碼不符" in dialog.message.text() and dialog.heading.text().startswith("✕")
 
 
 def test_check_for_updates_runs_in_background(window, qtbot, monkeypatch):
@@ -1184,36 +1277,72 @@ def test_mix_playlist_folder_name_is_cleaned_on_download(window, qtbot, fake, mo
 def test_failed_auto_update_is_reported_on_next_start(qtbot, tmp_path, db_path, fake, dialogs, monkeypatch):
     import dataclasses
 
+    from PySide6.QtGui import QGuiApplication
+
     from yt_media_tool import __version__
     from yt_media_tool.core import updates
-    from yt_media_tool.utils import system_open
+    from yt_media_tool.gui import update_dialog as ud
 
+    log_file = tmp_path / "install.log"
+    log_file.write_text("2026-11-01 15:59:21.155   Log opened.\n"
+                        "2026-11-01 15:59:22.001   Message box (OK):\n"
+                        "                          無法存取檔案 YT_Media_Tool.exe，檔案正在使用中。\n"
+                        "2026-11-01 15:59:22.002   Defaulting to OK for suppressed message box (OK):\n"
+                        "2026-11-01 15:59:22.010   Log closed.\n", encoding="utf-8")
+    monkeypatch.setattr(updates, "install_log_path", lambda: log_file)
     ctx = create_context(db_path=db_path, downloader=fake, start_paused=True)
     ctx.apply_settings(dataclasses.replace(ctx.settings, pending_update_version="99.0.0"))
     win = MainWindow(ctx)  # 模擬安裝沒有完成：重新開啟後版本仍是舊的
     qtbot.addWidget(win)
-    text = win.update_banner.text()
-    assert not win.update_banner.isHidden() and "99.0.0" in text and "沒有完成" in text and __version__ in text
+    win.show()
+    qtbot.waitUntil(lambda: win._update_dialog is not None and win._update_dialog.isVisible(), timeout=3000)
+    dialog = win._update_dialog
+    text = dialog.message.text()
+    assert dialog.state == ud.INSTALL_FAILED and "99.0.0" in text and __version__ in text
+    assert "原因：安裝程式顯示：無法存取檔案 YT_Media_Tool.exe，檔案正在使用中。" in text  # 不必自己看記錄檔
+    assert "沒有完成" in win.update_banner.text() and 'href="details"' in win.update_banner.text()
     assert ctx.settings.pending_update_version == ""  # 只提示一次
-    revealed = []
-    monkeypatch.setattr(system_open, "reveal_file", lambda path: revealed.append(path) or True)
-    win._on_update_link("openlog")
-    assert revealed == [updates.install_log_path()]
+    dialog.button_widgets["copy"].click()
+    copied = QGuiApplication.clipboard().text()
+    assert "無法存取檔案" in copied and "Log closed." in copied
+    assert dialog.button_widgets["copy"].text() == "已複製 ✓"
     win.close()
 
 
-def test_successful_auto_update_shows_status(qtbot, db_path, fake, dialogs):
+def test_successful_auto_update_shows_result(qtbot, db_path, fake, dialogs):
     import dataclasses
 
     from yt_media_tool import __version__
+    from yt_media_tool.gui import update_dialog as ud
 
     ctx = create_context(db_path=db_path, downloader=fake, start_paused=True)
     ctx.apply_settings(dataclasses.replace(ctx.settings, pending_update_version=__version__))
     win = MainWindow(ctx)
     qtbot.addWidget(win)
-    assert win.update_banner.isHidden() and "已更新到" in win.statusBar().currentMessage()
-    assert ctx.settings.pending_update_version == ""
+    win.show()
+    qtbot.waitUntil(lambda: win._update_dialog is not None and win._update_dialog.isVisible(), timeout=3000)
+    assert win._update_dialog.state == ud.UPDATED and f"已成功更新到 YT Media Tool {__version__}" in \
+        win._update_dialog.message.text()
+    assert win.update_banner.isHidden() and ctx.settings.pending_update_version == ""
     win.close()
+
+
+def test_install_failure_to_launch_is_shown(window, monkeypatch, dialogs, tmp_path):
+    from yt_media_tool.core import updates
+    from yt_media_tool.gui import update_dialog as ud
+
+    setup = tmp_path / "setup.exe"
+    setup.write_bytes(b"MZ")
+    window._available_update, window._update_path = _release(), setup
+
+    def broken(path):
+        raise OSError("存取被拒")
+
+    monkeypatch.setattr(updates, "launch_installer", broken)
+    assert not window.install_update()
+    dialog = window._update_dialog
+    assert dialog.state == ud.INSTALL_FAILED and "存取被拒" in dialog.message.text()
+    assert window.ctx.settings.pending_update_version == "" and not window._closing
 
 
 # ---- v2.8.0：只下載片段、已下載過提醒、播放清單同步、選歌時修改檔名 ----

@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.8.1-beta.1 發布後，等待使用者實測）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.8.1-beta.2 開發完成：更新視窗；等待 Windows CI）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -33,7 +33,8 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 
 ### 2.1 目前狀態
 
-- **`v2.8.1-beta.1` 已發布（預先發行，61d1cca）**：GitHub API 額度用完時改用 Releases 網頁判斷最新版；Windows CI 通過；等待使用者實測。
+- **`v2.8.1-beta.1` 已發布（預先發行，61d1cca）**：GitHub API 額度用完時改用 Releases 網頁判斷最新版。
+- **開發中 `v2.8.1-beta.2`（版本號仍為 2.8.1）**：使用者要求「按檢查更新要跳出視窗、有進度條，下載與安裝的成功或失敗都要顯示，不要讓使用者看 log」→ 新增更新視窗；等 Windows CI 通過後請使用者 Run `v2.8.1-beta.2`。
 - **最新正式版 `v2.8.0`**（標示為 Latest）：2026-11-01 發布（a213573），4 個附件與 `.sha256` 已核對（安裝程式的 GitHub digest 與 `.sha256` 一致）。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.8.0
 - v2.8.0 的程式碼與使用者實測無誤的 `v2.8.0-beta.1`（b342233）相同，之後只改 handoff.md。
@@ -47,12 +48,13 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 - **從 v2.6.0 起才有自動更新，但 v2.6.0 / v2.7.0 的自動更新會失敗**；v2.7.1 之後的下一個正式版才是第一次能實際驗證成功的自動更新（C27）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0、v2.7.0-beta.2、v2.7.1-beta.1、v2.7.1、v2.8.0-beta.1 皆回報無誤。
-- 測試：404 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：414 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
 | 版本 | commit | 狀態 |
 |---|---|---|
+| v2.8.1-beta.2（開發中） | — | 更新視窗（檢查 / 下載進度 / 安裝 / 結果）、重新開啟後顯示更新成功或失敗原因；等 Windows CI 通過後請使用者 Run `v2.8.1-beta.2` |
 | v2.8.1-beta.1 | 61d1cca | 預先發行；新版本檢查在 API 額度用完時改用 Releases 網頁；setup.exe 106.2 MB（`75558eee…e5926888`）、zip 144.2 MB（`2f31eb7b…09054216`），sha256 已核對；**等待使用者實測** |
 | **v2.8.0** | a213573 | **正式版（Latest）**；程式碼同 v2.8.0-beta.1；setup.exe 106.2 MB（`b6dd5785…be405bcd`）、zip 144.2 MB（`8edc8280…fa84d1b`），sha256 已核對 |
 | v2.8.0-beta.1 | b342233 | 預先發行；播放清單同步、已下載過提醒、只下載片段、選歌時的預計檔名；setup.exe 106.2 MB（`5edf5946…f354ffde`）、zip 144.2 MB（`e61115b3…ff818abb`），sha256 已核對；**使用者實測無誤** |
@@ -87,6 +89,15 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.8.1-beta.2**（使用者：「按下檢查更新應該跳出一個視窗說正在檢查更新，如果有進度條更好，下載和安裝更新也是一樣，成功或失敗都要顯示出來，不要讓使用者去看 log」）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 更新視窗 | 新檔 `gui/update_dialog.py`：`UpdateDialog`（非強制回應）＋ `UpdateView(state, message, progress)`；狀態 CHECKING / LATEST / CHECK_FAILED / PORTABLE / AVAILABLE / DOWNLOADING / DOWNLOAD_FAILED / READY / INSTALLING / UPDATED / INSTALL_FAILED，各有標題（成功「✓」綠、失敗「✕」紅）、說明、進度條（檢查與安裝為跑動的不定進度、下載為百分比）與按鈕；按鈕以 `actionRequested` 通知主視窗（retry_check / download / cancel / install / page / copy）。視窗只負責顯示 |
+| 主視窗 | `gui/main_window.py`：`check_for_updates(manual=True)` 立即開啟視窗；`update_view()` 依目前狀態產生畫面（`_install_view` 優先，其次檢查中、檢查失敗、已是最新、免安裝版、可安裝、下載中、下載失敗、可下載）；`_refresh_update_dialog()` 在檢查結果、下載進度、下載完成時更新；`_on_update_action()`。手動檢查的結果不再用 QMessageBox。取消下載時工作執行緒送出 `UpdateCancelledError`，回到「可下載」。橫幅「下載並安裝 / 重試」與新的「顯示進度」連結會開啟視窗。`install_update()` 確認後顯示 INSTALLING 再啟動安裝程式；啟動失敗顯示 INSTALL_FAILED。`check_previous_update()` 重新開啟後 300 ms 開啟視窗：成功顯示 UPDATED；失敗顯示 INSTALL_FAILED（原因由 `updates.summarize_install_log()` 整理），橫幅「查看原因」重新開啟視窗；「複製詳細資訊」把原因與記錄最後 30 行複製到剪貼簿（取代舊的「開啟安裝記錄檔位置」） |
+| 記錄檔整理 | `core/updates.py` `summarize_install_log()`：去掉時間戳；找不到記錄 → 安裝程式沒有執行（防毒 / 被刪除）；有「Installation process succeeded」但版本沒變 → 可能裝到其他資料夾；「Message box」/「Exception message:」後一行 → 「安裝程式顯示：…」；其他 → 被中斷或舊程式沒在時間內關閉 |
+| 測試與文件 | `tests/test_gui.py`（檢查中的視窗與不定進度條、結果、失敗與重試、自動檢查失敗不開視窗、下載進度 42%、取消下載、下載失敗、重新開啟後成功 / 失敗原因與複製、安裝程式啟動失敗）、`tests/test_updates.py`（記錄檔整理）；README、WINDOWS_INTEGRATION_TESTS（C27b） |
 
 **v2.8.1**（使用者測試自動更新時，日誌兩次出現 `HTTP Error 403: rate limit exceeded`，選擇「額度用完就改用網頁」）
 
@@ -283,6 +294,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 | 決定 | 原因 |
 |---|---|
+| 手動檢查、下載、安裝都在**同一個更新視窗**顯示每一步與結果；自動檢查（啟動時）仍只用橫幅，不跳視窗 | 使用者要求看得到進度與成功 / 失敗；啟動時自動檢查若每次跳視窗會打擾。安裝本身由 Inno Setup 的進度視窗顯示（`/SILENT`），程式已關閉無法顯示，所以重新開啟後再告訴使用者結果。 |
+| 失敗原因從安裝記錄檔整理成白話，並提供「複製詳細資訊」 | 使用者不該去找 log；需要回報時一鍵複製即可。 |
 | API 額度用完時改用 Releases 網頁的轉址判斷最新版（不讀網頁內容），驗證只靠 `.sha256` | 未登入的 GitHub API 每個網路每小時 60 次，家用 / 行動網路常多人共用同一個對外位址；網頁轉址沒有這個限制。少了 API 的第二份檢查碼，但 `.sha256` 與安裝程式都來自同一個 GitHub Release、走 https，仍能擋下下載不完整或被竄改的檔案。 |
 | 片段用 yt-dlp 的 `download_ranges`（只抓需要的部分），不重新編碼（`force_keyframes_at_cuts=False`） | 從兩小時的演唱會截一首歌時不必下載整部影片；重新編碼影片很慢。代價是 MP4 開頭可能提早 1～2 秒（從前一個關鍵畫面開始），已寫在提示中；MP3 不受影響。 |
 | 片段**一次只用於一部影片**，加入後自動取消勾選 | 多部影片很少需要同一段時間；忘記取消勾選會讓之後的下載都被截短。 |
@@ -372,13 +385,13 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦 1**：`v2.8.1-beta.1` 已發布 → 使用者實測 → 正式版 v2.8.1。
+- **待辦 1**：v2.8.1-beta.2 已推送，等 Windows CI 通過 → 請使用者 Run `v2.8.1-beta.2` → 實測（C27a、C27b）→ 正式版 v2.8.1。
 - **待辦 2：自動更新實測（C27）**：使用者正在測「v2.7.1 自動更新到 v2.8.0」。
   - 使用者曾把 v2.7.1 直接裝在 v2.8.0-beta.1 上，v2.7.1 開啟時出現「資料庫版本 3 比程式支援的版本 2 新」（預期中的降版保護）。
   - 已教使用者的測法：關閉程式 → 把 `%LOCALAPPDATA%\YT_Media_Tool\yt_media_tool.sqlite3`（含 `-wal`、`-shm`）移到備份資料夾 →
     開 v2.7.1（像全新安裝）→ 自動更新到 v2.8.0 → 測完關閉程式、刪掉新產生的資料庫、把備份搬回來。
   - 測試時兩次遇到 GitHub API `403 rate limit exceeded`（v2.7.1 沒有備用查詢方式），已建議等一小時或改用手機熱點。結果待使用者回報。
-  - 若失敗，請使用者按「查看安裝紀錄」並提供 `install.log` 最後幾行。
+  - 若失敗：v2.7.1 / v2.8.0 會在橫幅提供「開啟安裝記錄檔位置」；v2.8.1-beta.2 起重新開啟後直接顯示原因，請使用者按「複製詳細資訊」貼過來。
   - **不要建議使用者在正常資料下改裝回舊版**：資料庫已是 v3，v2.7.1 以前的版本打不開。
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
@@ -435,6 +448,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - **自動更新**：不要讓 `launch_installer()` 之外的地方啟動安裝程式；啟動前一定要 `allow_children_to_outlive()` 與 `release_app_mutex()`，
   否則安裝程式會被 Job Object 終止或停在「程式執行中」。`installer.iss` 的 `/WAITPID`、`/RESTARTAPP` 參數名稱與 `updates.launch_installer()` 必須一致，
   只能靠 Windows CI 的 `verify_self_update()`（直接執行安裝程式）與 `verify_update_from_app()`（經由程式本身）驗證。`[Run]` 重新開啟程式那一行不可加 `skipifsilent`（自動更新是靜默安裝）。
+- 更新視窗的按鈕與狀態集中在 `gui/update_dialog.py` 的 `_BUTTONS` / `_TITLES`；新增狀態時兩個表都要加，`MainWindow.update_view()` 也要能產生該狀態。測試以 `dialog.state`、`dialog.button_widgets` 檢查。
 - 新版本檢查的備用方式依賴 GitHub 的轉址網址格式（`/releases/latest` → `/releases/tag/vX.Y.Z`）；若 GitHub 改版導致比對失敗，`_fetch_from_page()` 會回傳 None（視為沒有新版），不會出錯。
 - `updates._request()` 只允許 `https://api.github.com/` 與 `https://github.com/`；不要改成使用 API 回傳的 `browser_download_url`。
 - 歌名整理的規則改動後務必跑 `tests/test_title_cleanup.py`；新增案例優先加在那裡。`DownloadResult.title` 必須保持原標題（佇列、歷史、播放清單比對都用它）。

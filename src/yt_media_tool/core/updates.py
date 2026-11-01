@@ -241,6 +241,43 @@ def install_log_path() -> Path:
     return updates_dir() / "install.log"
 
 
+_LOG_PREFIX = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{3}\s+")
+
+
+def _log_lines(path: Path) -> list[str]:
+    try:
+        raw = path.read_bytes()[-256 * 1024:]
+    except OSError:
+        return []
+    for encoding in ("utf-8", "cp950", "latin-1"):
+        try:
+            text = raw.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    return [_LOG_PREFIX.sub("", line).strip() for line in text.splitlines()]
+
+
+def summarize_install_log(path: Path | None = None) -> tuple[str, str]:
+    """把安裝記錄檔整理成（給使用者看的原因, 最後幾行記錄供回報問題）。使用者不需要自己開記錄檔。"""
+    path = path or install_log_path()
+    lines = _log_lines(path)
+    details = "\n".join(line for line in lines[-30:] if line)
+    if not lines:
+        return ("安裝程式沒有執行（找不到安裝記錄）。可能被防毒軟體或 Windows 安全性功能擋下，"
+                "或下載的安裝程式已被刪除。", "")
+    if any("Installation process succeeded" in line for line in lines):
+        return "安裝程式回報已安裝完成，但程式版本沒有改變（可能安裝到了其他資料夾）。", details
+    for i, line in enumerate(lines):
+        if line.startswith("Message box") or line.startswith("Exception message:"):
+            reason = next((nxt for nxt in lines[i + 1:i + 4] if nxt and not nxt.startswith("Defaulting")), "")
+            if reason:
+                return f"安裝程式顯示：{reason}", details
+    if any("SetupAborted" in line or "aborted" in line.lower() or "cancel" in line.lower() for line in lines):
+        return "安裝被取消或中斷了。", details
+    return "安裝沒有完成（可能被中斷，或舊版程式沒有在時間內關閉）。", details
+
+
 def launch_installer(setup: Path) -> Path:
     """以靜默模式執行安裝程式：等本程式結束後安裝，完成後重新開啟程式。呼叫後應立即關閉程式。
 

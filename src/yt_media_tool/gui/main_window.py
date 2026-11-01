@@ -41,7 +41,9 @@ from yt_media_tool.gui.rename_dialog import RenameDialog
 from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
 from yt_media_tool.gui.qt_bridge import QueueEventBridge
 from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RETRY, QueueTableView
+from yt_media_tool.gui import update_dialog
 from yt_media_tool.gui.settings_dialog import SettingsDialog
+from yt_media_tool.gui.update_dialog import UpdateDialog, UpdateView
 from yt_media_tool.gui.workers import BackgroundJob
 from yt_media_tool.storage.settings import AppSettings
 from yt_media_tool.utils.paths import replace_path_prefix, sanitize_filename
@@ -90,6 +92,10 @@ class MainWindow(QMainWindow):
         self._update_path: Path | None = None
         self._update_error = ""
         self._update_progress = 0.0
+        self._update_check_error = ""
+        self._update_dialog: UpdateDialog | None = None
+        self._install_view: UpdateView | None = None  # 安裝中 / 上次更新的結果
+        self._install_details = ""
         self._closing_for_update = False
         self._update_signals = _UpdateSignals(self)
         self._update_signals.progress.connect(self._on_update_progress)
@@ -416,7 +422,12 @@ class MainWindow(QMainWindow):
 
     # ================= 新版本提醒與自動更新 =================
     def check_for_updates(self, manual: bool = False) -> None:
-        """在背景向 GitHub 查詢最新正式版；manual 為使用者從選單手動檢查（會顯示結果）。"""
+        """在背景向 GitHub 查詢最新正式版；manual 為使用者從選單手動檢查（開啟更新視窗顯示每一步與結果）。"""
+        if manual:
+            self._update_manual = True
+            self._update_check_error = ""
+            self._install_view = None
+            self.open_update_dialog()
         if self._update_job is not None:
             return
         self._update_manual = manual
@@ -425,44 +436,107 @@ class MainWindow(QMainWindow):
         job.signals.failed.connect(self._on_update_failed)
         self._update_job = job
         QThreadPool.globalInstance().start(job)
+        self._refresh_update_dialog()
 
     def _on_update_checked(self, release: updates.LatestRelease | None) -> None:
         self._update_job = None
         manual = self._update_manual
         if self._closing:
             return
-        if release is None or not updates.is_newer(release.version):
-            if manual:
-                QMessageBox.information(
-                    self, "檢查新版本",
-                    f"目前已是最新的正式版（{__version__}）。\n\n"
-                    "測試版（版本名稱含 beta）只放在 GitHub 的 Releases 頁面供試用，不會自動提醒；"
-                    "正式版發布後才會通知所有使用者更新。")
-            return
-        if not manual and release.version == self.ctx.settings.skipped_update_version:
-            return
-        if self._available_update is None or self._available_update.version != release.version:
-            self._available_update, self._update_path, self._update_error = release, None, ""
-        downloading = False
-        if updates.is_installed_build() and (manual or self.ctx.settings.auto_download_updates):
-            downloading = self.start_update_download()
-        self.show_update_banner()
-        if manual:
-            extra = "已開始在背景下載，完成後可一鍵安裝。" if downloading else ""
-            QMessageBox.information(self, "檢查新版本",
-                                    f"有新版本 {release.version} 可以下載（目前為 {__version__}）。{extra}")
+        if release is not None and updates.is_newer(release.version) and (
+                manual or release.version != self.ctx.settings.skipped_update_version):
+            if self._available_update is None or self._available_update.version != release.version:
+                self._available_update, self._update_path, self._update_error = release, None, ""
+            if updates.is_installed_build() and (manual or self.ctx.settings.auto_download_updates):
+                self.start_update_download()
+            self.show_update_banner()
+        self._refresh_update_dialog()
 
     def _on_update_failed(self, exc: Exception) -> None:
         self._update_job = None
-        if self._update_manual and not self._closing:
-            message = str(exc) if isinstance(exc, updates.UpdateCheckError) else updates.OFFLINE_MESSAGE
-            QMessageBox.warning(self, "檢查新版本", message)
+        message = str(exc) if isinstance(exc, updates.UpdateCheckError) else updates.OFFLINE_MESSAGE
+        self._update_check_error = message
+        if not self._closing:
+            self._refresh_update_dialog()
+
+    # ---- 更新視窗 ----
+    def open_update_dialog(self) -> UpdateDialog:
+        if self._update_dialog is None:
+            self._update_dialog = UpdateDialog(self)
+            self._update_dialog.actionRequested.connect(self._on_update_action)
+        dialog = self._update_dialog
+        dialog.show_view(self.update_view())
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+        return dialog
+
+    def _refresh_update_dialog(self) -> None:
+        if self._update_dialog is not None and self._update_dialog.isVisible():
+            self._update_dialog.show_view(self.update_view())
+
+    def update_view(self) -> UpdateView:
+        """更新視窗目前要顯示的狀態與說明。"""
+        if self._install_view is not None:
+            return self._install_view
+        if self._update_job is not None:
+            return UpdateView(update_dialog.CHECKING, "正在向 GitHub 查詢最新版本，請稍候…")
+        if self._update_check_error:
+            return UpdateView(update_dialog.CHECK_FAILED, self._update_check_error)
+        release = self._available_update
+        if release is None or not updates.is_newer(release.version):
+            return UpdateView(update_dialog.LATEST,
+                              f"目前已是最新的正式版（{__version__}）。\n\n"
+                              "測試版（版本名稱含 beta）只放在 GitHub 的 Releases 頁面供試用，不會自動提醒；"
+                              "正式版發布後才會通知所有使用者更新。")
+        head = f"有新版本 {release.version}（目前為 {__version__}）。"
+        if not updates.is_installed_build():
+            return UpdateView(update_dialog.PORTABLE,
+                              f"{head}\n\n免安裝版請到下載頁面下載新的 zip，解壓縮後取代舊的資料夾"
+                              "（設定與紀錄存在別處，不會遺失）。")
+        if self._update_path is not None:
+            return UpdateView(update_dialog.READY,
+                              f"新版本 {release.version} 已下載完成，並通過檢查碼驗證。\n\n"
+                              "按「立即安裝並重新開啟」後，程式會先關閉，接著出現安裝進度視窗，"
+                              "安裝完成後自動重新開啟新版。設定、佇列與歷史紀錄都會保留。")
+        if self.update_downloading():
+            return UpdateView(update_dialog.DOWNLOADING,
+                              f"{head}\n\n正在下載安裝程式… 可以先關閉這個視窗，下載會在背景繼續，"
+                              "完成後視窗上方會出現「立即安裝並重新開啟」。", self._update_progress)
+        if self._update_error:
+            return UpdateView(update_dialog.DOWNLOAD_FAILED,
+                              f"{self._update_error}\n\n可以按「重試」，或到下載頁面手動下載安裝程式。")
+        return UpdateView(update_dialog.AVAILABLE,
+                          f"{head}YouTube 改版時舊版可能無法下載，建議更新。\n\n"
+                          "按「下載並安裝」會先下載並驗證安裝程式，完成後再由您決定何時安裝。")
+
+    def _on_update_action(self, action: str) -> None:
+        if action == "retry_check":
+            self.check_for_updates(manual=True)
+        elif action == "download":
+            self.start_update_download()
+            self.show_update_banner()
+            self._refresh_update_dialog()
+        elif action == "cancel":
+            if self._update_cancel is not None:
+                self._update_cancel.set()
+        elif action == "install":
+            self.install_update()
+        elif action == "page":
+            QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
+        elif action == "copy":
+            text = f"{self._install_view.message if self._install_view else ''}\n\n{self._install_details}".strip()
+            QGuiApplication.clipboard().setText(text)
+            self._last_clipboard = text  # 不要被當成貼上的網址
+            button = self._update_dialog.button_widgets.get("copy") if self._update_dialog else None
+            if button is not None:
+                button.setText("已複製 ✓")
 
     def update_downloading(self) -> bool:
         return self._update_thread is not None and self._update_thread.is_alive()
 
     def start_update_download(self) -> bool:
-        """在背景下載並驗證新版安裝程式；完成後橫幅顯示「立即安裝並重新開啟」。"""
+        """在背景下載並驗證新版安裝程式；完成後顯示「立即安裝並重新開啟」。"""
         release = self._available_update
         if release is None or self.update_downloading() or self._update_path is not None:
             return False
@@ -473,11 +547,11 @@ class MainWindow(QMainWindow):
         def work() -> None:
             try:
                 path = updates.download_update(release, on_progress=signals.progress.emit, cancel=cancel)
-            except updates.UpdateCancelledError:
-                return
+            except updates.UpdateCancelledError as exc:
+                signals.finished.emit(exc)
             except updates.UpdateError as exc:
                 signals.finished.emit(exc)
-            except Exception as exc:  # 意外錯誤也只顯示在橫幅，不影響程式
+            except Exception as exc:  # 意外錯誤也只顯示給使用者，不影響程式
                 log.exception("下載更新失敗")
                 signals.finished.emit(updates.UpdateError(f"下載更新失敗：{exc}"))
             else:
@@ -490,15 +564,17 @@ class MainWindow(QMainWindow):
     def _on_update_progress(self, pct: float) -> None:
         self._update_progress = pct
         self.show_update_banner()
+        self._refresh_update_dialog()
 
     def _on_update_downloaded(self, result: object) -> None:
         self._update_thread = None
         if isinstance(result, Path):
             self._update_path = result
-        else:
+        elif not isinstance(result, updates.UpdateCancelledError):
             self._update_error = str(result)
         if not self._closing:
             self.show_update_banner()
+            self._refresh_update_dialog()
 
     def show_update_banner(self) -> None:
         release = self._available_update
@@ -512,7 +588,7 @@ class MainWindow(QMainWindow):
             text = (f"新版本 <b>{version}</b> 已下載完成並通過檢查。　"
                     f'<a href="install">立即安裝並重新開啟</a>　{skip}')
         elif self.update_downloading():
-            text = f"{head}正在背景下載… {self._update_progress:.0f}%　{page}"
+            text = f'{head}正在背景下載… {self._update_progress:.0f}%　<a href="progress">顯示進度</a>'
         elif self._update_error:
             text = (f"{head}自動下載失敗：{html.escape(self._update_error)}　"
                     f'<a href="update">重試</a>　{page}　{skip}')
@@ -524,29 +600,41 @@ class MainWindow(QMainWindow):
         self.update_banner.show()
 
     def check_previous_update(self) -> None:
-        """上次啟動了自動更新：確認是否已更新成功；沒有成功時在上方提示手動更新與記錄檔位置。"""
+        """上次啟動了自動更新：開啟程式後直接顯示更新成功或失敗（含原因），使用者不需要自己看記錄檔。"""
         pending = self.ctx.settings.pending_update_version
         if not pending:
             return
         self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, pending_update_version=""))
         if not updates.is_newer(pending):
+            self._install_view = UpdateView(update_dialog.UPDATED,
+                                            f"已成功更新到 {APP_NAME} {__version__}。\n\n"
+                                            "設定、下載佇列與歷史紀錄都已保留。")
             self.statusBar().showMessage(f"已更新到 {APP_DISPLAY_NAME}", 10000)
-            return
-        log.warning("自動更新到 %s 沒有完成（目前 %s）", pending, __version__)
-        self.update_banner.setText(
-            f"上次自動更新到 <b>{pending}</b> 沒有完成（目前仍是 {__version__}）。請到下載頁面下載安裝程式手動更新；"
-            "若問題持續，請提供安裝記錄檔給開發者。　"
-            '<a href="download">前往下載頁面</a>　<a href="openlog">開啟安裝記錄檔位置</a>')
-        self.update_banner.show()
+        else:
+            reason, self._install_details = updates.summarize_install_log()
+            log.warning("自動更新到 %s 沒有完成（目前 %s）：%s", pending, __version__, reason)
+            self._install_view = UpdateView(
+                update_dialog.INSTALL_FAILED,
+                f"上次要更新到 {pending}，但沒有完成（目前仍是 {__version__}）。\n\n原因：{reason}\n\n"
+                "請按「下載安裝程式手動更新」，下載後執行即可（設定與紀錄不會遺失）。"
+                "若問題持續，可按「複製詳細資訊」貼給開發者。")
+            self.update_banner.setText(
+                f"上次自動更新到 <b>{pending}</b> 沒有完成（目前仍是 {__version__}）。　"
+                '<a href="details">查看原因</a>　<a href="download">前往下載頁面</a>')
+            self.update_banner.show()
+        QTimer.singleShot(300, self.open_update_dialog)  # 主視窗顯示後再開啟
 
     def _on_update_link(self, link: str) -> None:
-        if link == "openlog":
-            system_open.reveal_file(updates.install_log_path())
+        if link == "details":
+            self.open_update_dialog()
         elif link == "download":
             QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
         elif link == "update":
             self.start_update_download()
             self.show_update_banner()
+            self.open_update_dialog()
+        elif link == "progress":
+            self.open_update_dialog()
         elif link == "install":
             self.install_update()
         elif link == "skip" and self._available_update is not None:
@@ -569,13 +657,23 @@ class MainWindow(QMainWindow):
             message += "\n\n目前進行中的下載會中斷，重新開啟後會排回佇列繼續下載。"
         if QMessageBox.question(self, "安裝更新", message) != QMessageBox.StandardButton.Yes:
             return False
-        # 記下正在更新的版本：下次啟動時若版本沒變，代表安裝沒有完成，提示使用者手動更新
+        # 記下正在更新的版本：下次啟動時比對版本，顯示更新成功或失敗
         self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, pending_update_version=release.version))
+        self._install_view = UpdateView(update_dialog.INSTALLING,
+                                        f"正在啟動 {release.version} 的安裝程式…\n\n"
+                                        "程式會自動關閉，接著出現安裝進度視窗；"
+                                        "安裝完成後會自動重新開啟新版，並告訴您是否更新成功。")
+        self.open_update_dialog()
+        QApplication.processEvents()
         try:
             updates.launch_installer(setup)
         except (OSError, updates.UpdateError) as exc:
             self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, pending_update_version=""))
-            QMessageBox.warning(self, "安裝更新", f"無法啟動安裝程式：{exc}\n\n可改到下載頁面手動更新。")
+            self._install_details = ""
+            self._install_view = UpdateView(update_dialog.INSTALL_FAILED,
+                                            f"無法啟動安裝程式：{exc}\n\n"
+                                            "請按「下載安裝程式手動更新」，下載後執行即可。")
+            self._refresh_update_dialog()
             return False
         self._closing_for_update = True
         self.close()

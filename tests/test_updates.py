@@ -232,3 +232,31 @@ def test_both_failing_reports_friendly_message():
         updates.fetch_latest_release(opener=_api_then_page(_rate_limit()))
     with pytest.raises(updates.UpdateCheckError, match="無法連線到 GitHub"):
         updates.fetch_latest_release(opener=_api_then_page(urllib.error.URLError("offline")))
+
+
+# ---- 安裝記錄檔整理成白話原因 ----
+
+def _log(tmp_path, *lines):
+    path = tmp_path / "install.log"
+    path.write_text("\n".join(f"2026-11-01 15:59:21.155   {line}" for line in lines) + "\n", encoding="utf-8")
+    return path
+
+
+def test_summarize_missing_log(tmp_path):
+    reason, details = updates.summarize_install_log(tmp_path / "none.log")
+    assert "安裝程式沒有執行" in reason and details == ""
+
+
+def test_summarize_message_box_reason(tmp_path):
+    path = _log(tmp_path, "Log opened.", "Message box (OK):", "磁碟空間不足。",
+                "Defaulting to OK for suppressed message box (OK):", "Log closed.")
+    reason, details = updates.summarize_install_log(path)
+    assert reason == "安裝程式顯示：磁碟空間不足。"
+    assert details.endswith("Log closed.") and "2026-11-01" not in details  # 去掉時間，方便閱讀
+
+
+def test_summarize_exception_and_generic(tmp_path):
+    path = _log(tmp_path, "Exception message:", "Access is denied.", "Log closed.")
+    assert updates.summarize_install_log(path)[0] == "安裝程式顯示：Access is denied."
+    assert "安裝沒有完成" in updates.summarize_install_log(_log(tmp_path, "Log opened.", "Log closed."))[0]
+    assert "版本沒有改變" in updates.summarize_install_log(_log(tmp_path, "Installation process succeeded."))[0]
