@@ -26,6 +26,16 @@ def main(argv: list[str] | None = None) -> int:
     create_app_mutex()
     log.info("%s 啟動（frozen=%s），資料目錄：%s", APP_DISPLAY_NAME, paths.is_frozen(),
              paths.app_data_dir())
+    if "--install-update" in argv:
+        # 供 CI 驗證自動更新：與「立即安裝並重新開啟」相同，在已建立 Job Object 與 mutex 的程序中
+        # 啟動安裝程式後立即結束，確認安裝程式不會被一併終止、安裝後會重新開啟程式
+        from pathlib import Path
+
+        from yt_media_tool.core import updates
+
+        index = argv.index("--install-update")
+        print(updates.launch_installer(Path(argv[index + 1])))
+        return 0
 
     from PySide6.QtCore import QLockFile, QTimer
     from PySide6.QtGui import QIcon

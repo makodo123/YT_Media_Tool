@@ -186,15 +186,38 @@ def download_update(release: LatestRelease, dest_dir: Path | None = None,
     return target
 
 
-def launch_installer(setup: Path) -> None:
-    """以靜默模式執行安裝程式：等本程式結束後安裝，完成後重新開啟程式。呼叫後應立即關閉程式。"""
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+
+
+def install_log_path() -> Path:
+    """自動更新時安裝程式的記錄檔（失敗時可請使用者提供）。"""
+    return updates_dir() / "install.log"
+
+
+def launch_installer(setup: Path) -> Path:
+    """以靜默模式執行安裝程式：等本程式結束後安裝，完成後重新開啟程式。呼叫後應立即關閉程式。
+
+    回傳安裝記錄檔路徑。安裝程式必須在本程式結束後繼續執行，因此：
+    1. 取消本程式 Job Object 的「結束時終止子程序」並允許脫離 Job；
+    2. 以 CREATE_BREAKAWAY_FROM_JOB 啟動，讓安裝程式完全不在本程式的 Job 內（不被允許時改為一般啟動）；
+    3. 釋放程式 mutex，避免安裝程式認為程式仍在執行而停止。
+    """
     if not sys.platform.startswith("win"):
         raise UpdateError("自動安裝只支援 Windows。")
-    win_job.allow_children_to_outlive()  # 否則安裝程式會在本程式結束時被一併終止
-    win_job.release_app_mutex()  # 否則安裝程式會認為程式仍在執行而停止
+    log_file = install_log_path()
+    log_file.parent.mkdir(parents=True, exist_ok=True)
+    log_file.unlink(missing_ok=True)
+    win_job.allow_children_to_outlive()
+    win_job.release_app_mutex()
+    args = [str(setup), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", f"/LOG={log_file}",
+            f"/WAITPID={os.getpid()}", "/RESTARTAPP=1"]
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-    subprocess.Popen(  # 參數清單，不經過 shell
-        [str(setup), "/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", f"/WAITPID={os.getpid()}", "/RESTARTAPP=1"],
-        creationflags=flags, close_fds=True,
-    )
-    log.info("已啟動更新安裝程式 %s", setup)
+    try:
+        # 參數清單，不經過 shell
+        subprocess.Popen(args, creationflags=flags | CREATE_BREAKAWAY_FROM_JOB, close_fds=True)
+    except OSError:
+        # 本程式本身位於不允許脫離的外層 Job 時會被拒絕；此時已取消終止設定，一般啟動即可
+        log.warning("無法以 CREATE_BREAKAWAY_FROM_JOB 啟動安裝程式，改為一般啟動", exc_info=True)
+        subprocess.Popen(args, creationflags=flags, close_fds=True)
+    log.info("已啟動更新安裝程式 %s（記錄檔 %s）", setup, log_file)
+    return log_file

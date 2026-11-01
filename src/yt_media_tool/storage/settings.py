@@ -40,6 +40,7 @@ class AppSettings:
     check_updates: bool = True  # 啟動時檢查 GitHub 是否有新的正式版
     auto_download_updates: bool = True  # 有新版本時自動在背景下載（安裝前會先詢問；僅安裝版）
     skipped_update_version: str = ""  # 使用者選擇「略過這個版本」的版本號
+    pending_update_version: str = ""  # 已啟動自動更新、等待安裝完成的版本（下次啟動時確認是否成功）
 
     def validated(self) -> AppSettings:
         defaults = AppSettings()
@@ -72,6 +73,7 @@ class AppSettings:
         s.check_updates = bool(s.check_updates)
         s.auto_download_updates = bool(s.auto_download_updates)
         s.skipped_update_version = s.skipped_update_version if isinstance(s.skipped_update_version, str) else ""
+        s.pending_update_version = s.pending_update_version if isinstance(s.pending_update_version, str) else ""
         s.ffmpeg_dir = s.ffmpeg_dir if isinstance(s.ffmpeg_dir, str) else ""
         if s.cookies_source not in COOKIE_SOURCES:
             s.cookies_source = defaults.cookies_source

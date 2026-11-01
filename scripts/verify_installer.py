@@ -75,6 +75,38 @@ def verify_self_update(setup: Path, install_dir: Path, work: Path, env: dict) ->
     return checks
 
 
+def verify_update_from_app(setup: Path, install_dir: Path, data_dir: Path, env: dict) -> list[tuple[str, bool]]:
+    """從已安裝的程式本身啟動自動更新（與「立即安裝並重新開啟」相同的程式路徑）：
+    程式建立了「結束時終止子程序」的 Job Object 與 mutex，安裝程式必須在程式結束後繼續完成安裝並重新開啟程式。
+    （v2.6.0 的自動更新就是在這裡失敗：安裝程式隨程式結束被終止。）"""
+    checks = []
+    exe = install_dir / "YT_Media_Tool.exe"
+    log_file = data_dir / "updates" / "install.log"
+    result = subprocess.run([str(exe), "--install-update", str(setup)], env=env, timeout=120, check=False)
+    checks.append(("程式內自動更新：從已安裝的程式啟動安裝程式", result.returncode == 0))
+    succeeded = False
+    deadline = time.monotonic() + 300
+    while time.monotonic() < deadline:
+        text = log_file.read_text(encoding="utf-8", errors="replace") if log_file.is_file() else ""
+        if "Installation process succeeded" in text or "Setup exit code" in text or "Log closed" in text:
+            succeeded = "Installation process succeeded" in text
+            break
+        time.sleep(2)
+    if not succeeded and log_file.is_file():
+        tail = log_file.read_text(encoding="utf-8", errors="replace").splitlines()[-15:]
+        print("安裝記錄檔最後幾行：\n" + "\n".join(tail))
+    checks.append(("程式內自動更新：程式結束後安裝程式繼續完成安裝（未被 Job Object 終止）", succeeded))
+    deadline = time.monotonic() + 60
+    while time.monotonic() < deadline and not app_running():
+        time.sleep(1)
+    checks.append(("程式內自動更新：安裝完成後重新開啟程式", app_running()))
+    subprocess.run([str(SYSTEM32 / "taskkill.exe"), "/F", "/IM", "YT_Media_Tool.exe"], capture_output=True, check=False)
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline and app_running():
+        time.sleep(1)
+    return checks
+
+
 def main(argv: list[str]) -> int:
     if not sys.platform.startswith("win"):
         print("此檢查只能在 Windows 上執行", file=sys.stderr)
@@ -112,6 +144,7 @@ def main(argv: list[str]) -> int:
                    ffmpeg_functional_checks(install_dir / "_internal" / "ffmpeg", ".exe")]
 
         checks += verify_self_update(setup, install_dir, work, env)
+        checks += verify_update_from_app(setup, install_dir, data_dir, env)
 
         # 解除安裝程式會複製自己到暫存資料夾後重新執行，原程序立即結束，因此輪詢等待完成
         subprocess.run([str(install_dir / "unins000.exe"), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"],

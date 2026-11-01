@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         self._apply_settings_to_ui()
         self._restore_geometry()
         self._refresh_dependency_banner()
+        self.check_previous_update()  # 需在建立橫幅之後
 
         self._idle_timer = QTimer(self, singleShot=True, interval=800)
         self._idle_timer.timeout.connect(self._check_queue_idle)
@@ -499,8 +500,26 @@ class MainWindow(QMainWindow):
         self.update_banner.setText(text)
         self.update_banner.show()
 
+    def check_previous_update(self) -> None:
+        """上次啟動了自動更新：確認是否已更新成功；沒有成功時在上方提示手動更新與記錄檔位置。"""
+        pending = self.ctx.settings.pending_update_version
+        if not pending:
+            return
+        self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, pending_update_version=""))
+        if not updates.is_newer(pending):
+            self.statusBar().showMessage(f"已更新到 {APP_DISPLAY_NAME}", 10000)
+            return
+        log.warning("自動更新到 %s 沒有完成（目前 %s）", pending, __version__)
+        self.update_banner.setText(
+            f"上次自動更新到 <b>{pending}</b> 沒有完成（目前仍是 {__version__}）。請到下載頁面下載安裝程式手動更新；"
+            "若問題持續，請提供安裝記錄檔給開發者。　"
+            '<a href="download">前往下載頁面</a>　<a href="openlog">開啟安裝記錄檔位置</a>')
+        self.update_banner.show()
+
     def _on_update_link(self, link: str) -> None:
-        if link == "download":
+        if link == "openlog":
+            system_open.reveal_file(updates.install_log_path())
+        elif link == "download":
             QDesktopServices.openUrl(QUrl(updates.RELEASES_PAGE))
         elif link == "update":
             self.start_update_download()
@@ -527,9 +546,12 @@ class MainWindow(QMainWindow):
             message += "\n\n目前進行中的下載會中斷，重新開啟後會排回佇列繼續下載。"
         if QMessageBox.question(self, "安裝更新", message) != QMessageBox.StandardButton.Yes:
             return False
+        # 記下正在更新的版本：下次啟動時若版本沒變，代表安裝沒有完成，提示使用者手動更新
+        self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, pending_update_version=release.version))
         try:
             updates.launch_installer(setup)
         except (OSError, updates.UpdateError) as exc:
+            self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, pending_update_version=""))
             QMessageBox.warning(self, "安裝更新", f"無法啟動安裝程式：{exc}\n\n可改到下載頁面手動更新。")
             return False
         self._closing_for_update = True

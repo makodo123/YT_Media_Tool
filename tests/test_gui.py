@@ -865,6 +865,7 @@ def test_installed_build_downloads_then_installs(window, qtbot, dialogs, monkeyp
     dialogs.answer = QMessageBox.StandardButton.Yes
     window._on_update_link("install")
     assert launched == [setup] and window._closing  # 啟動安裝程式並關閉程式
+    assert window.ctx.settings.pending_update_version == "99.0.0"  # 下次啟動時確認是否更新成功
     assert "安裝完成後會自動重新開啟" in dialogs.text()
 
 
@@ -1173,3 +1174,38 @@ def test_mix_playlist_folder_name_is_cleaned_on_download(window, qtbot, fake, mo
     # 貼上的那首不在讀到的清單中，會排在最前面：共 3 首
     qtbot.waitUntil(lambda: rows(window) == 3, timeout=5000)
     assert {Path(t.output_dir).name for t in window.ctx.queue.tasks()} == {"合輯 - 周深 × 五月天 - 如煙 (5525+2版)"}
+
+
+def test_failed_auto_update_is_reported_on_next_start(qtbot, tmp_path, db_path, fake, dialogs, monkeypatch):
+    import dataclasses
+
+    from yt_media_tool import __version__
+    from yt_media_tool.core import updates
+    from yt_media_tool.utils import system_open
+
+    ctx = create_context(db_path=db_path, downloader=fake, start_paused=True)
+    ctx.apply_settings(dataclasses.replace(ctx.settings, pending_update_version="99.0.0"))
+    win = MainWindow(ctx)  # 模擬安裝沒有完成：重新開啟後版本仍是舊的
+    qtbot.addWidget(win)
+    text = win.update_banner.text()
+    assert not win.update_banner.isHidden() and "99.0.0" in text and "沒有完成" in text and __version__ in text
+    assert ctx.settings.pending_update_version == ""  # 只提示一次
+    revealed = []
+    monkeypatch.setattr(system_open, "reveal_file", lambda path: revealed.append(path) or True)
+    win._on_update_link("openlog")
+    assert revealed == [updates.install_log_path()]
+    win.close()
+
+
+def test_successful_auto_update_shows_status(qtbot, db_path, fake, dialogs):
+    import dataclasses
+
+    from yt_media_tool import __version__
+
+    ctx = create_context(db_path=db_path, downloader=fake, start_paused=True)
+    ctx.apply_settings(dataclasses.replace(ctx.settings, pending_update_version=__version__))
+    win = MainWindow(ctx)
+    qtbot.addWidget(win)
+    assert win.update_banner.isHidden() and "已更新到" in win.statusBar().currentMessage()
+    assert ctx.settings.pending_update_version == ""
+    win.close()

@@ -137,3 +137,31 @@ def test_is_installed_build(tmp_path, monkeypatch):
     assert updates.is_installed_build()
     monkeypatch.setattr(updates.paths, "is_frozen", lambda: False)
     assert not updates.is_installed_build()  # 開發環境
+
+
+def test_launch_installer_breaks_away_from_job_and_logs(tmp_path, monkeypatch):
+    import os
+    import subprocess
+
+    calls, order = [], []
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    monkeypatch.setattr(updates, "updates_dir", lambda: tmp_path)
+    monkeypatch.setattr(updates.win_job, "allow_children_to_outlive", lambda: order.append("outlive") or True)
+    monkeypatch.setattr(updates.win_job, "release_app_mutex", lambda: order.append("mutex"))
+
+    def popen(args, creationflags=0, close_fds=True):
+        calls.append((args, creationflags))
+        if creationflags & updates.CREATE_BREAKAWAY_FROM_JOB:
+            raise PermissionError("外層 Job 不允許脫離")  # 模擬被拒絕：改為一般啟動
+        return object()
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    log_file = updates.launch_installer(tmp_path / "setup.exe")
+    assert order == ["outlive", "mutex"]  # 啟動前先取消子程序終止並釋放 mutex
+    assert log_file == tmp_path / "install.log"
+    (first_args, first_flags), (second_args, second_flags) = calls
+    assert first_flags & updates.CREATE_BREAKAWAY_FROM_JOB and not second_flags & updates.CREATE_BREAKAWAY_FROM_JOB
+    assert first_args == second_args
+    assert first_args[0] == str(tmp_path / "setup.exe")
+    assert {"/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RESTARTAPP=1", f"/WAITPID={os.getpid()}",
+            f"/LOG={tmp_path / 'install.log'}"} <= set(first_args)

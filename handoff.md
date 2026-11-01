@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.7.0 發布後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.7.1 自動更新修正，等待 CI 與測試版）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -34,20 +34,22 @@
 - **最新正式版 `v2.7.0`**（標示為 Latest）：2026-11-01 發布，4 個附件與 `.sha256` 已核對（安裝程式的 GitHub digest 與 `.sha256` 一致）。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.7.0
 - v2.7.0 的程式碼與使用者實測無誤的 `v2.7.0-beta.2`（d7de925）相同，之後只改 handoff.md。
-- **等待使用者驗證第一次自動更新（C27）**：請使用者開啟已安裝的 v2.6.0 → 應背景下載 v2.7.0 → 「立即安裝並重新開啟」→ 安裝後標題為 v2.7.0。
-  結果回報後更新本文件；若失敗，依使用者描述排查 `updates.py`、`installer.iss` 的 `/WAITPID`、`/RESTARTAPP`。
+- **第一次實機自動更新（v2.6.0 → v2.7.0）失敗**：使用者回報「點選立即安裝並重新開啟後沒開啟且版本還是卡在 2.6.0」。
+  原因與修正見 2.3 的 v2.7.1；**開發中的 v2.7.1 尚未發布**（版本號已改為 2.7.1，等 Windows CI 通過後請使用者 Run `v2.7.1-beta.1`）。
+  已安裝 v2.6.0 / v2.7.0 的使用者**必須手動安裝 v2.7.1 一次**（錯誤在舊版自己的程式碼裡，舊版無法自行更新成功）。
 - v2.7.0 開發中使用者回報與修正：beta.1 → 安裝說明「%LOCALAPPDATA%」不白話、選「Mix - …」資料夾「沒反應」（實為檔案已整理好、資料夾名稱亂）→ beta.2 修正；beta.2 實測無誤。
 - v2.6.0 開發中使用者回報與修正：beta.1 → YouTube「合輯」（`list=RD…`）讀不到「This playlist type is unviewable」（beta.2 修正）；
   beta.2 → MP4 沒有整理歌名、「[ 歌名 ] 5525版 Official Stage Video | 說明」與「周深《歌名》_ 描述」整理不對（beta.3 修正）；beta.3 實測無誤。
-- **從 v2.6.0 起才有自動更新**：下一個正式版發布時，是第一次能實際驗證「背景下載 → 立即安裝並重新開啟」（C27）。
+- **從 v2.6.0 起才有自動更新，但 v2.6.0 / v2.7.0 的自動更新會失敗**；v2.7.1 之後的下一個正式版才是第一次能實際驗證成功的自動更新（C27）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0 皆回報無誤。
-- 測試：345 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：347 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
 | 版本 | commit | 狀態 |
 |---|---|---|
+| v2.7.1（開發中） | — | 自動更新修正；尚未發布，等 Windows CI 通過後請使用者 Run `v2.7.1-beta.1` |
 | **v2.7.0** | ce659f2 | **正式版（Latest）**；程式碼同 v2.7.0-beta.2；setup.exe 106.2 MB（`092d10a3…cec8f7e5`）、zip 144.2 MB（`19dd347d…6225140`），sha256 已核對 |
 | v2.7.0-beta.2 | d7de925 | 預先發行；合輯資料夾整理、掃描摘要、安裝說明白話；setup.exe 106.2 MB（`1d14c24b…5ea7df0`）、zip 144.2 MB（`8fd0323a…02966ba`），sha256 已核對；**使用者實測無誤** |
 | v2.7.0-beta.1 | 88a1fd5 | 預先發行；整理舊檔案的歌名；setup.exe 106.1 MB（`ecc6812c…ade9521`）、zip 144.2 MB（`e9f43a2e…1ac0a1d`），sha256 已核對；使用者回報合輯資料夾與說明文字 → beta.2 |
@@ -77,6 +79,17 @@
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.7.1**（修正：使用者回報 v2.6.0 → v2.7.0 的「立即安裝並重新開啟」後程式沒有重新開啟、版本仍是 2.6.0）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 根本原因 | 程式啟動時把自己放進設有 `KILL_ON_JOB_CLOSE` 的 Windows Job Object（關閉程式時一併結束 ffmpeg）。舊的 `allow_children_to_outlive()` 用 **JobObjectBasicLimitInformation（class 2）** 想取消它，但 `KILL_ON_JOB_CLOSE` / `BREAKAWAY_OK` 是「延伸」旗標，class 2 **不會清除**；安裝程式又繼承了 Job，所以程式一關閉，剛啟動的安裝程式就被系統一起終止。舊的 CI 測試（`verify_self_update`）是由 CI 直接執行安裝程式，沒有經過程式的 Job，所以沒抓到 |
+| Job Object 修正 | `utils/win_job.py` 重寫：`_kernel32()` 定義 `JOBOBJECT_EXTENDED_LIMIT_INFORMATION`，`_set_job_flags()` 一律用 class 9；`kill_children_on_exit()` 設 `KILL_ON_JOB_CLOSE`；`allow_children_to_outlive()` 改設 `BREAKAWAY_OK`（不含 KILL）；`CloseHandle` 補 argtypes（64 位元 handle 才不會被截斷，mutex 才真的釋放） |
+| 啟動安裝程式 | `core/updates.py` `launch_installer()`：加 `CREATE_BREAKAWAY_FROM_JOB`（失敗時退回不加）、`/LOG=<資料資料夾>\updates\install.log`，回傳紀錄檔路徑；新增 `install_log_path()` |
+| 失敗時讓使用者知道 | `storage/settings.py` 新增 `pending_update_version`；`gui/main_window.py` `install_update()` 啟動前記下目標版本，`check_previous_update()`（`__init__` 最後呼叫）在下次開啟時比對：版本仍舊 → 視窗上方顯示「上次自動更新到 X 沒有完成」＋「下載安裝程式」「查看安裝紀錄」；成功 → 狀態列「已更新到 X」 |
+| CI 端到端驗證 | `app.py` 新增隱藏參數 `--install-update <setup.exe>`（只供 CI，經過與按鈕相同的 Job / mutex / `launch_installer()` 路徑）；`scripts/verify_installer.py` 新增 `verify_update_from_app()`：由已安裝的程式啟動安裝程式後立即結束，檢查 `install.log` 出現「Installation process succeeded」且程式被重新開啟 |
+| 測試與文件 | `tests/test_updates.py`（breakaway 與退回、紀錄檔）、`tests/test_gui.py`（失敗 / 成功的下次開啟提示）；版本號 2.7.1；RELEASE_NOTES「已知限制」、WINDOWS_INTEGRATION_TESTS C27 |
 
 **v2.7.0**（使用者從「實用小工具」建議中選了「整理舊檔案的歌名」；beta.2 依實測修正）
 
@@ -240,6 +253,10 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 | 決定 | 原因 |
 |---|---|
+| 自動更新的安裝程式**脫離 Job Object**（`BREAKAWAY_OK` ＋ `CREATE_BREAKAWAY_FROM_JOB`），而不是乾脆不用 Job | Job 仍需要：關閉程式時一併結束 ffmpeg，避免殘留程式鎖住檔案。只有自動更新那一刻放行安裝程式。 |
+| 新增 `--install-update` 隱藏參數讓 CI **經過程式本身**啟動安裝程式 | v2.6.0 的錯誤只在「由程式啟動、程式隨即結束」時出現；CI 直接執行安裝程式測不到。 |
+| 寫安裝紀錄檔＋下次開啟比對版本 | 安裝程式是靜默執行，失敗時使用者什麼都看不到；至少要告訴使用者沒更新成功、給手動下載與紀錄檔。 |
+| 不嘗試讓 v2.6.0 / v2.7.0「自己」更新成功 | 錯誤在舊版已安裝的程式碼裡，新版無法改變舊版的行為；只能請使用者手動安裝一次。 |
 | 整理舊檔案**只改檔名、不改檔案內容**（不重寫 MP3 標籤） | 重寫標籤需要 FFmpeg 重新封裝整個檔案，風險與時間都較高；改名可完整復原。舊檔名本身沒有頻道資訊，所以不用頻道名稱補演出者。 |
 | 改名時**同步字幕、.m3u8、佇列、歷史與播放清單紀錄** | 否則字幕不再自動載入、清單找不到歌、「雙擊播放」「在檔案總管中顯示」會說檔案不存在。 |
 | 合輯資料夾名稱**下載時就整理**，且整理工具也能改**合輯資料夾**（只限「Mix - …」，使用者自己命名的資料夾不動） | 使用者實測發現最亂的是資料夾名稱（YouTube 合輯標題含第一首的完整標題）；一般資料夾名稱是使用者自己取的，不應自動改。 |
@@ -316,9 +333,10 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦**：使用者開啟已安裝的 v2.6.0，驗證第一次自動更新（C27），回報結果後更新本文件。
-- **自動更新的完整流程（C27）要等 v2.6.0 之後的下一個正式版才能實測**：必須先裝有 v2.6.0（含自動更新功能），
-  再發布更新的正式版。2.5.0 以前的版本沒有自動更新，只會顯示提醒。下一次發版時請使用者特別確認 C27。
+- **待辦 1**：v2.7.1 已 push，等 Windows CI（特別是「安裝 / 啟動 / 解除安裝測試」中的 `verify_update_from_app`）通過 →
+  請使用者 Run `v2.7.1-beta.1` → 使用者**手動**安裝測試 → 正式版 v2.7.1。
+- **待辦 2**：自動更新的完整流程（C27）要等 **v2.7.1 已安裝後的下一個正式版**才能實測（v2.6.0 / v2.7.0 的自動更新有錯）。
+  下一次發版時請使用者開啟已安裝的 v2.7.1 確認 C27；若失敗，請使用者按「查看安裝紀錄」並提供 `install.log` 最後幾行。
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
@@ -363,6 +381,9 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - **任何改檔名的功能都要呼叫 `MainWindow.on_files_renamed()`**（或同等的 `queue.rename_output_path` 與 `PlaylistFileStore.rename_file`），否則佇列、歷史與播放清單紀錄會指向不存在的檔案。
 - 有勾選框的表格 / 清單一定要有 `::indicator` 樣式（`gui/theme.py` 已涵蓋 QCheckBox、QTreeView、QTableView），否則深色主題下未勾選的框看不到。
 - **YouTube「合輯」（`list=RD…`）不能用 `playlist?list=` 讀取**；讀取清單一律用 `ParsedUrl.playlist_source_url`。
+- **Job Object 的 `KILL_ON_JOB_CLOSE`、`BREAKAWAY_OK` 是延伸旗標，一律用 `JobObjectExtendedLimitInformation`（class 9）設定**；
+  用 Basic（class 2）不會報錯但旗標不會改，v2.6.0 的自動更新就是這樣失敗的。`win_job._set_job_flags()` 不要改回 Basic。
+- 自動更新的驗證**必須經過程式本身**（`--install-update` → `verify_update_from_app()`）；只直接執行安裝程式的測試抓不到 Job 問題。
 - **自動更新**：不要讓 `launch_installer()` 之外的地方啟動安裝程式；啟動前一定要 `allow_children_to_outlive()` 與 `release_app_mutex()`，
   否則安裝程式會被 Job Object 終止或停在「程式執行中」。`installer.iss` 的 `/WAITPID`、`/RESTARTAPP` 參數名稱與 `updates.launch_installer()` 必須一致，
   只能靠 Windows CI 的 `verify_self_update()` 驗證。`[Run]` 重新開啟程式那一行不可加 `skipifsilent`（自動更新是靜默安裝）。
