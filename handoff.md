@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-01（v2.8.0 發布後）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-01（v2.8.1 開發完成，等待 Windows CI 與測試版）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -33,6 +33,7 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 
 ### 2.1 目前狀態
 
+- **開發中 v2.8.1（尚未發布）**：GitHub API 額度用完時改用 Releases 網頁判斷最新版；等 Windows CI 通過後請使用者 Run `v2.8.1-beta.1`。
 - **最新正式版 `v2.8.0`**（標示為 Latest）：2026-11-01 發布（a213573），4 個附件與 `.sha256` 已核對（安裝程式的 GitHub digest 與 `.sha256` 一致）。
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.8.0
 - v2.8.0 的程式碼與使用者實測無誤的 `v2.8.0-beta.1`（b342233）相同，之後只改 handoff.md。
@@ -46,12 +47,13 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 - **從 v2.6.0 起才有自動更新，但 v2.6.0 / v2.7.0 的自動更新會失敗**；v2.7.1 之後的下一個正式版才是第一次能實際驗證成功的自動更新（C27）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0、v2.7.0-beta.2、v2.7.1-beta.1、v2.7.1、v2.8.0-beta.1 皆回報無誤。
-- 測試：398 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：404 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
 | 版本 | commit | 狀態 |
 |---|---|---|
+| v2.8.1（開發中） | — | 新版本檢查在 API 額度用完時改用 Releases 網頁；等 Windows CI 通過後請使用者 Run `v2.8.1-beta.1` |
 | **v2.8.0** | a213573 | **正式版（Latest）**；程式碼同 v2.8.0-beta.1；setup.exe 106.2 MB（`b6dd5785…be405bcd`）、zip 144.2 MB（`8edc8280…fa84d1b`），sha256 已核對 |
 | v2.8.0-beta.1 | b342233 | 預先發行；播放清單同步、已下載過提醒、只下載片段、選歌時的預計檔名；setup.exe 106.2 MB（`5edf5946…f354ffde`）、zip 144.2 MB（`e61115b3…ff818abb`），sha256 已核對；**使用者實測無誤** |
 | v2.7.1 | 4f08730 | 正式版；程式碼同 v2.7.1-beta.1；setup.exe 106.2 MB（`375108b7…77e014fb`）、zip 144.2 MB（`47abe6f5…6bdbee75`），sha256 已核對；**使用者實測無誤** |
@@ -85,6 +87,14 @@ v2.7.1 是修正版：第一次實機自動更新（v2.6.0 → v2.7.0）失敗�
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.8.1**（使用者測試自動更新時，日誌兩次出現 `HTTP Error 403: rate limit exceeded`，選擇「額度用完就改用網頁」）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 備用的版本查詢 | `core/updates.py`：`fetch_latest_release()` 先呼叫 `_fetch_from_api()`；任何 `OSError` / `ValueError`（含 403 / 429 額度用完）→ `_fetch_from_page()`：開啟 `RELEASES_PAGE`（`https://github.com/<repo>/releases/latest`），以轉址後的 `geturl()` 比對 `_TAG_URL`（只接受本儲存庫的 `/releases/tag/vX.Y.Z`，測試版與其他網址回傳 None），`setup_digest=None`；下載時只以 `.sha256` 驗證（`download_update` 原本就支援 digest 為 None）。兩者都失敗時拋出 `UpdateCheckError`（`RATE_LIMIT_MESSAGE` 或 `OFFLINE_MESSAGE`） |
+| 白話訊息 | `gui/main_window.py` `_on_update_failed()`：手動檢查失敗時顯示 `UpdateCheckError` 的訊息 |
+| 測試與文件 | `tests/test_updates.py`（額度用完改用網頁、網頁方式仍驗證 .sha256、異常轉址、兩者都失敗的訊息）、`tests/test_gui.py`；README、WINDOWS_INTEGRATION_TESTS（C27a）。已在雲端以真實 GitHub 確認網頁方式取得 2.8.0 |
 
 **v2.8.0**（使用者從第三次「實用小工具」建議中選了四項）
 
@@ -273,6 +283,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 | 決定 | 原因 |
 |---|---|
+| API 額度用完時改用 Releases 網頁的轉址判斷最新版（不讀網頁內容），驗證只靠 `.sha256` | 未登入的 GitHub API 每個網路每小時 60 次，家用 / 行動網路常多人共用同一個對外位址；網頁轉址沒有這個限制。少了 API 的第二份檢查碼，但 `.sha256` 與安裝程式都來自同一個 GitHub Release、走 https，仍能擋下下載不完整或被竄改的檔案。 |
 | 片段用 yt-dlp 的 `download_ranges`（只抓需要的部分），不重新編碼（`force_keyframes_at_cuts=False`） | 從兩小時的演唱會截一首歌時不必下載整部影片；重新編碼影片很慢。代價是 MP4 開頭可能提早 1～2 秒（從前一個關鍵畫面開始），已寫在提示中；MP3 不受影響。 |
 | 片段**一次只用於一部影片**，加入後自動取消勾選 | 多部影片很少需要同一段時間；忘記取消勾選會讓之後的下載都被截短。 |
 | 片段檔名加「（片段 開始-結束）」、歷史紀錄標記 `is_clip` | 避免與完整版同名；片段不能算「已下載過整部影片」。 |
@@ -361,16 +372,14 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- v2.8.0 正式版已發布。使用者的電腦已裝 beta.1（版本號 2.8.0），所以**不會**被提示更新到 v2.8.0 正式版，這是正常的。
-  C27（自動更新實測）要等 v2.8.0 之後的下一個正式版。
-- 使用者曾把 v2.7.1 直接裝在 v2.8.0-beta.1 上想測自動更新，v2.7.1 開啟時出現「資料庫版本 3 比程式支援的版本 2 新」（預期中的降版保護）。
-  已教使用者的測法：關閉程式 → 把 `%LOCALAPPDATA%\YT_Media_Tool\yt_media_tool.sqlite3`（含 `-wal`、`-shm`）移到備份資料夾 →
-  開 v2.7.1（像全新安裝）→ 自動更新到 v2.8.0 → 測完關閉程式、刪掉新產生的資料庫、把備份搬回來。結果待使用者回報。
-- 同一份日誌中 2026-11-01 19:28 檢查新版本得到 `HTTP Error 403: rate limit exceeded`：GitHub API 未登入時每個網路每小時 60 次，
-  短時間反覆開程式會用完；此時不會出現新版提示，等一小時或用「說明 → 檢查新版本」再試。
-  **不要建議使用者為了測 C27 改裝回 v2.7.1**：資料庫已升到 v3，舊版開啟會出現「資料庫版本比程式支援的版本新」。
-- **待辦 2**：自動更新的完整流程（C27）要等 **v2.7.1 已安裝後的下一個正式版**才能實測（v2.6.0 / v2.7.0 的自動更新有錯）。
-  下一次發版時請使用者開啟已安裝的 v2.7.1 確認 C27；若失敗，請使用者按「查看安裝紀錄」並提供 `install.log` 最後幾行。
+- **待辦 1**：v2.8.1 已推送，等 Windows CI 通過 → 請使用者 Run `v2.8.1-beta.1` → 實測 → 正式版 v2.8.1。
+- **待辦 2：自動更新實測（C27）**：使用者正在測「v2.7.1 自動更新到 v2.8.0」。
+  - 使用者曾把 v2.7.1 直接裝在 v2.8.0-beta.1 上，v2.7.1 開啟時出現「資料庫版本 3 比程式支援的版本 2 新」（預期中的降版保護）。
+  - 已教使用者的測法：關閉程式 → 把 `%LOCALAPPDATA%\YT_Media_Tool\yt_media_tool.sqlite3`（含 `-wal`、`-shm`）移到備份資料夾 →
+    開 v2.7.1（像全新安裝）→ 自動更新到 v2.8.0 → 測完關閉程式、刪掉新產生的資料庫、把備份搬回來。
+  - 測試時兩次遇到 GitHub API `403 rate limit exceeded`（v2.7.1 沒有備用查詢方式），已建議等一小時或改用手機熱點。結果待使用者回報。
+  - 若失敗，請使用者按「查看安裝紀錄」並提供 `install.log` 最後幾行。
+  - **不要建議使用者在正常資料下改裝回舊版**：資料庫已是 v3，v2.7.1 以前的版本打不開。
 
 之後可能的方向（**皆需使用者決定，未經同意不要做**）：
 
@@ -426,6 +435,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - **自動更新**：不要讓 `launch_installer()` 之外的地方啟動安裝程式；啟動前一定要 `allow_children_to_outlive()` 與 `release_app_mutex()`，
   否則安裝程式會被 Job Object 終止或停在「程式執行中」。`installer.iss` 的 `/WAITPID`、`/RESTARTAPP` 參數名稱與 `updates.launch_installer()` 必須一致，
   只能靠 Windows CI 的 `verify_self_update()`（直接執行安裝程式）與 `verify_update_from_app()`（經由程式本身）驗證。`[Run]` 重新開啟程式那一行不可加 `skipifsilent`（自動更新是靜默安裝）。
+- 新版本檢查的備用方式依賴 GitHub 的轉址網址格式（`/releases/latest` → `/releases/tag/vX.Y.Z`）；若 GitHub 改版導致比對失敗，`_fetch_from_page()` 會回傳 None（視為沒有新版），不會出錯。
 - `updates._request()` 只允許 `https://api.github.com/` 與 `https://github.com/`；不要改成使用 API 回傳的 `browser_download_url`。
 - 歌名整理的規則改動後務必跑 `tests/test_title_cleanup.py`；新增案例優先加在那裡。`DownloadResult.title` 必須保持原標題（佇列、歷史、播放清單比對都用它）。
 - **不要再在任何地方寫死版本號或「V2.0」**；顯示用名稱一律用 `APP_DISPLAY_NAME`（含版本）或 `APP_NAME`（不含版本）。`installer.iss` 的 `AppName` 不可加版本號（會影響升級辨識與捷徑名稱）。

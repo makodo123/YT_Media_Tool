@@ -898,6 +898,8 @@ def test_auto_download_can_be_disabled(window, monkeypatch):
 
 
 def test_manual_update_check_reports_result(window, dialogs):
+    from yt_media_tool.core import updates
+
     window._update_manual = True
     window._on_update_checked(_release("0.0.1"))
     assert "目前已是最新的正式版" in dialogs.text() and "測試版" in dialogs.text()
@@ -907,6 +909,9 @@ def test_manual_update_check_reports_result(window, dialogs):
     window._update_manual = False
     window._on_update_failed(OSError("offline"))
     assert dialogs.text().count("無法連線到 GitHub") == 1  # 自動檢查失敗時不打擾
+    window._update_manual = True
+    window._on_update_failed(updates.UpdateCheckError(updates.RATE_LIMIT_MESSAGE))
+    assert "GitHub 暫時限制查詢次數" in dialogs.text()
 
 
 def test_check_for_updates_runs_in_background(window, qtbot, monkeypatch):

@@ -1,6 +1,8 @@
 """檢查、下載並安裝 GitHub 上的新正式版本。
 
 - 只向 GitHub API 讀取最新正式版的版本號與檔案檢查碼（不含測試版），不傳送任何個人資料。
+- GitHub API 未登入時每個網路每小時只能查詢 60 次；額度用完（或 API 無法連線）時，
+  改從 Releases 網頁的「最新版」轉址得知版本號，此時只以 Release 附的 .sha256 檔驗證。
 - 下載網址由固定的儲存庫與版本號組成，不採用 API 回傳的連結。
 - 下載的安裝程式須同時符合 GitHub 計算的檢查碼（API 的 digest）與 Release 附的 .sha256 檔，才會被使用。
 - 只有「安裝版」能自動安裝；免安裝版（zip）請使用者自行下載。
@@ -16,6 +18,7 @@ import re
 import subprocess
 import sys
 import threading
+import urllib.error
 import urllib.request
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -35,6 +38,7 @@ MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_SETUP_BYTES = 1024 * 1024 * 1024  # 安裝程式大小上限（防止異常回應塞滿磁碟）
 CHUNK = 256 * 1024
 
+_TAG_URL = re.compile(rf"^https://github\.com/{re.escape(REPO)}/releases/tag/(v?\d+\.\d+\.\d+)/?$")
 _VERSION = re.compile(r"^v?(\d+)\.(\d+)\.(\d+)$")
 _SHA256 = re.compile(r"^[0-9a-fA-F]{64}$")
 Opener = Callable[..., Any]
@@ -42,6 +46,15 @@ Opener = Callable[..., Any]
 
 class UpdateError(Exception):
     """下載或驗證更新失敗；訊息為顯示給使用者的中文說明。"""
+
+
+class UpdateCheckError(UpdateError):
+    """查詢最新版本失敗。"""
+
+
+RATE_LIMIT_MESSAGE = ("GitHub 暫時限制查詢次數（同一個網路每小時約 60 次），而且備用的查詢方式也無法連線。\n"
+                      "請稍後（約一小時）再試；程式下次開啟時也會自動再檢查。")
+OFFLINE_MESSAGE = "無法連線到 GitHub 檢查新版本，請確認網路連線後再試。"
 
 
 class UpdateCancelledError(UpdateError):
@@ -87,8 +100,42 @@ def _request(url: str, accept: str = "*/*") -> urllib.request.Request:
                                                 "User-Agent": f"YT-Media-Tool/{__version__}"})
 
 
+def _rate_limited(exc: BaseException) -> bool:
+    return isinstance(exc, urllib.error.HTTPError) and exc.code in (403, 429)
+
+
 def fetch_latest_release(timeout: float = 10.0, opener: Opener = urllib.request.urlopen) -> LatestRelease | None:
-    """讀取最新正式版；網路錯誤由呼叫端處理，回應格式不符時回傳 None。"""
+    """讀取最新正式版；回應格式不符時回傳 None。
+
+    先查 GitHub API（含檔案檢查碼）；API 額度用完或無法連線時改用 Releases 網頁（只有版本號）。
+    兩種方式都失敗時拋出 UpdateCheckError（訊息可直接顯示給使用者）。
+    """
+    try:
+        return _fetch_from_api(timeout, opener)
+    except (OSError, ValueError) as exc:  # HTTPError / URLError 皆為 OSError；ValueError：回應不是 JSON
+        api_error = exc
+        log.info("GitHub API 無法使用（%s），改從 Releases 網頁判斷最新版", exc)
+    try:
+        return _fetch_from_page(timeout, opener)
+    except OSError as exc:
+        log.warning("Releases 網頁也無法讀取：%s", exc)
+        message = RATE_LIMIT_MESSAGE if _rate_limited(api_error) else OFFLINE_MESSAGE
+        raise UpdateCheckError(message) from exc
+
+
+def _fetch_from_page(timeout: float, opener: Opener) -> LatestRelease | None:
+    """Releases 的「最新版」網址會轉到 …/releases/tag/vX.Y.Z（不受 API 每小時次數限制）。"""
+    with opener(_request(RELEASES_PAGE, "text/html"), timeout=timeout) as response:
+        final_url = response.geturl()
+    match = _TAG_URL.match(final_url or "")
+    version = parse_version(match.group(1) if match else None)
+    if not version:
+        return None
+    text = ".".join(map(str, version))
+    return LatestRelease(text, f"YT_Media_Tool-{text}-win64-setup.exe", None)
+
+
+def _fetch_from_api(timeout: float, opener: Opener) -> LatestRelease | None:
     with opener(_request(LATEST_RELEASE_API, "application/vnd.github+json"), timeout=timeout) as response:
         data = json.loads(response.read(MAX_RESPONSE_BYTES).decode("utf-8"))
     tag = data.get("tag_name") if isinstance(data, dict) else None

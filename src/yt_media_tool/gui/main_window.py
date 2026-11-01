@@ -455,7 +455,8 @@ class MainWindow(QMainWindow):
     def _on_update_failed(self, exc: Exception) -> None:
         self._update_job = None
         if self._update_manual and not self._closing:
-            QMessageBox.warning(self, "檢查新版本", "無法連線到 GitHub 檢查新版本，請確認網路連線後再試。")
+            message = str(exc) if isinstance(exc, updates.UpdateCheckError) else updates.OFFLINE_MESSAGE
+            QMessageBox.warning(self, "檢查新版本", message)
 
     def update_downloading(self) -> bool:
         return self._update_thread is not None and self._update_thread.is_alive()

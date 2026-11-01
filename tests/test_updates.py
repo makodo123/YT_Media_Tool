@@ -165,3 +165,70 @@ def test_launch_installer_breaks_away_from_job_and_logs(tmp_path, monkeypatch):
     assert first_args[0] == str(tmp_path / "setup.exe")
     assert {"/SILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/RESTARTAPP=1", f"/WAITPID={os.getpid()}",
             f"/LOG={tmp_path / 'install.log'}"} <= set(first_args)
+
+
+# ---- GitHub API 額度用完時改用 Releases 網頁 ----
+
+class _PageResponse(_Response):
+    def __init__(self, url):
+        super().__init__(b"<html></html>")
+        self._url = url
+
+    def geturl(self):
+        return self._url
+
+
+def _api_then_page(api_error, page_url=None, calls=None):
+    import urllib.error
+
+    def opener(request, timeout):
+        if calls is not None:
+            calls.append(request.full_url)
+        if request.full_url == updates.LATEST_RELEASE_API:
+            raise api_error
+        assert request.full_url == updates.RELEASES_PAGE
+        if page_url is None:
+            raise urllib.error.URLError("offline")
+        return _PageResponse(page_url)
+    return opener
+
+
+def _rate_limit():
+    import urllib.error
+
+    return urllib.error.HTTPError(updates.LATEST_RELEASE_API, 403, "rate limit exceeded", {}, None)
+
+
+def test_rate_limited_api_falls_back_to_releases_page():
+    calls = []
+    opener = _api_then_page(_rate_limit(), "https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.9.0", calls)
+    release = updates.fetch_latest_release(opener=opener)
+    assert release == updates.LatestRelease("2.9.0", "YT_Media_Tool-2.9.0-win64-setup.exe", None)
+    assert calls == [updates.LATEST_RELEASE_API, updates.RELEASES_PAGE]
+    assert release.setup_url == ("https://github.com/makodo123/YT_Media_Tool/releases/download/v2.9.0/"
+                                 "YT_Media_Tool-2.9.0-win64-setup.exe")
+
+
+def test_page_fallback_still_verifies_sha256(tmp_path):
+    rel = release(digest=None)  # 網頁方式沒有 API 的檢查碼，只靠 .sha256 檔
+    with pytest.raises(updates.UpdateError, match="檢查碼不符"):
+        updates.download_update(rel, tmp_path, opener=make_opener(server(setup=b"tampered")))
+    assert updates.download_update(rel, tmp_path, opener=make_opener(server())).read_bytes() == SETUP_BYTES
+
+
+@pytest.mark.parametrize("url", [
+    "https://github.com/makodo123/YT_Media_Tool/releases",  # 還沒有任何正式版
+    "https://github.com/someone/else/releases/tag/v9.9.9",
+    "https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.9.0-beta.1",
+])
+def test_page_fallback_ignores_unexpected_redirects(url):
+    assert updates.fetch_latest_release(opener=_api_then_page(_rate_limit(), url)) is None
+
+
+def test_both_failing_reports_friendly_message():
+    import urllib.error
+
+    with pytest.raises(updates.UpdateCheckError, match="GitHub 暫時限制查詢次數"):
+        updates.fetch_latest_release(opener=_api_then_page(_rate_limit()))
+    with pytest.raises(updates.UpdateCheckError, match="無法連線到 GitHub"):
+        updates.fetch_latest_release(opener=_api_then_page(urllib.error.URLError("offline")))
