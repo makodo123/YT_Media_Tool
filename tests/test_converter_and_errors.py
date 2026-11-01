@@ -124,6 +124,7 @@ def winerror(code: int) -> OSError:
     (DownloadError("ERROR: [youtube] x: Private video. Sign in if you've been granted access"), "私人影片"),
     (DownloadError("ERROR: [youtube] x: This video is DRM protected"), "DRM"),
     (DownloadError("ERROR: Sign in to confirm your age"), "年齡限制"),
+    (DownloadError("ERROR: [youtube:tab] RDx: YouTube said: This playlist type is unviewable."), "合輯"),
     (DownloadError("ERROR: unable to download video data: HTTP Error 403: Forbidden"), "HTTP 403"),
     (DownloadError("ERROR: HTTP Error 429: Too Many Requests"), "請求次數過多"),
     (DownloadError("ERROR: [youtube] x: Video unavailable"), "無法觀看"),

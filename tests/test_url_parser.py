@@ -96,3 +96,18 @@ def test_parse_urls_removes_duplicates_and_reports_invalid():
 def test_video_in_playlist_is_distinct_from_plain_video():
     result = parse_urls(f"https://youtu.be/{VID}\nhttps://www.youtube.com/watch?v={VID}&list={LIST}")
     assert len(result.valid) == 2
+
+
+@pytest.mark.parametrize(("url", "expected"), [
+    # YouTube 自動產生的「合輯」沒有清單頁面：用播放頁面網址讀取
+    ("https://www.youtube.com/watch?v=uzVdsZbYibQ&list=RDuzVdsZbYibQ&start_radio=1",
+     "https://www.youtube.com/watch?v=uzVdsZbYibQ&list=RDuzVdsZbYibQ"),
+    ("https://www.youtube.com/playlist?list=RDuzVdsZbYibQ",
+     "https://www.youtube.com/watch?v=uzVdsZbYibQ&list=RDuzVdsZbYibQ"),
+    # 一般播放清單維持清單頁面
+    ("https://www.youtube.com/watch?v=uzVdsZbYibQ&list=PLabcdefghij123456",
+     "https://www.youtube.com/playlist?list=PLabcdefghij123456"),
+    ("https://www.youtube.com/playlist?list=PLabcdefghij123456", "https://www.youtube.com/playlist?list=PLabcdefghij123456"),
+])
+def test_playlist_source_url_handles_youtube_mixes(url, expected):
+    assert parse_url(url).playlist_source_url == expected

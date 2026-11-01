@@ -680,7 +680,7 @@ class MainWindow(QMainWindow):
             results: list[tuple[ParsedUrl, PlaylistInfo | Exception]] = []
             for item in playlists:
                 try:
-                    results.append((item, downloader.extract_playlist(item.playlist_url, MAX_PLAYLIST_ITEMS)))
+                    results.append((item, downloader.extract_playlist(item.playlist_source_url, MAX_PLAYLIST_ITEMS)))
                 except Exception as exc:  # noqa: BLE001
                     results.append((item, exc))
             return results

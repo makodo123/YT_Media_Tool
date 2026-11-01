@@ -47,6 +47,20 @@ class ParsedUrl:
         return f"https://www.youtube.com/playlist?list={self.playlist_id}" if self.playlist_id else None
 
     @property
+    def playlist_source_url(self) -> str | None:
+        """讀取播放清單內容用的網址。
+
+        YouTube 自動產生的「合輯」（Mix，清單 ID 以 RD 開頭）沒有獨立的清單頁面，用 playlist?list= 讀取會得到
+        「This playlist type is unviewable」；改用播放頁面網址（watch?v=…&list=RD…），yt-dlp 會從播放頁面讀取清單。
+        """
+        pid = self.playlist_id
+        if pid and pid.startswith("RD"):
+            video_id = self.video_id or (pid[2:] if _VIDEO_ID.match(pid[2:]) else None)
+            if video_id:
+                return f"https://www.youtube.com/watch?v={video_id}&list={pid}"
+        return self.playlist_url
+
+    @property
     def normalized(self) -> str:
         """正規化後的網址（播放清單網址回傳清單，其餘回傳單一影片網址）。"""
         if self.kind is UrlKind.PLAYLIST:

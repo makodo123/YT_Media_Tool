@@ -23,6 +23,25 @@ from yt_media_tool.core.title_cleanup import clean_channel, clean_title
     ("告白氣球 Remix", "周杰倫 Jay Chou", "周杰倫 - 告白氣球 Remix"),  # 版本字不是翻譯
     ("周杰倫【晴天 Live】", "某頻道", "周杰倫 - 晴天 Live"),
     ("Coldplay - Yellow [Acoustic]", "Coldplay", "Coldplay - Yellow (Acoustic)"),
+    # 使用者的「合輯」（相信音樂的寫法：[ 歌名 ]、合唱以 ╳ 連接、名稱後附英文）
+    ("周深 ZHOU SHEN ╳ MAYDAY 五月天 [ 如煙 Like Smoke ] Official Live Video", "相信音樂BinMusic",
+     "周深 ╳ 五月天 - 如煙"),
+    ("李現 Li Xian ╳ 五月天阿信 Ashin [ 那些女孩教我的事 The Things Girls Taught Me ]", "相信音樂BinMusic",
+     "李現 ╳ 五月天阿信 - 那些女孩教我的事"),
+    ("宋雨琦 YUQI ╳ MAYDAY 五月天 [ 後來的我們 Here, After, Us ] Official Live Video", "相信音樂BinMusic",
+     "宋雨琦 ╳ 五月天 - 後來的我們"),
+    ("MAYDAY五月天 [ 笑忘歌 The Song of Laughter and Forgetting ] Official Live Video", "相信音樂BinMusic",
+     "五月天 - 笑忘歌"),
+    ("MAYDAY五月天 [ 為你寫下這首情歌 Song for You ] Official Music Video", "相信音樂BinMusic",
+     "五月天 - 為你寫下這首情歌"),
+    ("MAYDAY五月天 ╳ 劉芯妤 Roselyn [ 玫瑰少年 Womxnly ] Official Live Video", "相信音樂BinMusic",
+     "五月天 ╳ 劉芯妤 - 玫瑰少年"),
+    ("[ 愛人啊 ✦ Finding Lovers ] 言承旭 Jerry ╳ 五月天阿信 Ashin Official Live Video", "相信音樂BinMusic",
+     "言承旭 ╳ 五月天阿信 - 愛人啊"),
+    ("【纯享】光良联手陈卓璇对唱《勇气》，一开口就让人泪流满面", "SMG音乐频道", "勇气"),  # 括號外是一句話，不當演出者
+    ("Simon & Garfunkel - The Sound of Silence (Audio)", "Simon & Garfunkel",
+     "Simon & Garfunkel - The Sound of Silence"),
+    ("Queen - Bohemian Rhapsody [Remastered 2011]", "Queen Official", "Queen - Bohemian Rhapsody (Remastered 2011)"),
 ])
 def test_clean_title_examples(title, channel, expected):
     result = clean_title({"title": title, "channel": channel})
@@ -42,7 +61,7 @@ def test_nothing_left_returns_none(title):
 
 @pytest.mark.parametrize(("channel", "expected"), [
     ("周杰倫 - Topic", "周杰倫"), ("AdeleVEVO", "Adele"), ("五月天 官方頻道", "五月天"),
-    ("周杰倫 Jay Chou", "周杰倫"), ("Queen Official", "Queen"),
+    ("周杰倫 Jay Chou", "周杰倫"), ("Queen Official", "Queen"), ("SMG音乐频道", "SMG音乐"),
 ])
 def test_clean_channel(channel, expected):
     assert clean_channel(channel) == expected

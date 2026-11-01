@@ -37,6 +37,8 @@
 - **進行中：v2.6.0**（歌名自動整理、自動下載並安裝更新）。`v2.6.0-beta.1` 已發布（預先發行）：
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.1 ；等使用者實測，無誤再以 tag `v2.6.0` 發布正式版。
   已確認實際 Release 的安裝程式有 GitHub `digest`，且與 `.sha256` 一致（自動更新的雙重檢查可用）。
+- 使用者實測 beta.1 回報（2026-11-01）：YouTube「合輯」（Mix，`list=RD…`）網址讀取失敗「This playlist type is unviewable」。
+  修正已推送到 `main`（版本號仍 2.6.0），CI 通過後請使用者發布 `v2.6.0-beta.2`。
 - v2.5.0 開發中使用者回報（beta.1 實測時）：標題「YT Media Tool V2.0」與版本不一致 → beta.2 改由 `__version__` 產生；
   2.4.0 檢查不到 2.5.0 → 因當時只有測試版（設計如此），已改寫訊息說明。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
@@ -47,7 +49,7 @@
 
 | 版本 | commit | 狀態 |
 |---|---|---|
-| v2.6.0-beta.1 | d67afc0 | 預先發行；歌名自動整理、自動下載並安裝更新；setup.exe 106.1 MB（`3ddc1a30…b63759`）、zip 144.2 MB（`7d9b6966…c925e59`），sha256 已核對；待使用者實測 |
+| v2.6.0-beta.1 | d67afc0 | 預先發行；歌名自動整理、自動下載並安裝更新；setup.exe 106.1 MB（`3ddc1a30…b63759`）、zip 144.2 MB（`7d9b6966…c925e59`），sha256 已核對；使用者回報合輯網址讀不到 → beta.2 |
 | **v2.5.0** | dba2aa7 | **正式版（Latest）**；程式碼同 v2.5.0-beta.2；setup.exe 106.1 MB（`cd2314ba…a4edc67`）、zip 144.1 MB（`665fd29c…2ca060`），sha256 已核對；**使用者實測無誤** |
 | v2.5.0-beta.2 | e5ddb36 | 預先發行；標題顯示實際版本、檢查新版本的說明；setup.exe 106.1 MB（`c962ac44…4828edb`）、zip 144.2 MB（`c46e0958…01fd121`），sha256 已核對；**使用者實測無誤** |
 | v2.5.0-beta.1 | b913ab3 | 預先發行；本機檔案轉 MP3、播放清單檔 .m3u8；setup.exe 106.1 MB（`3094a708…2caac9f`）、zip 144.2 MB（`46b3cc1a…6305d7a`），sha256 已核對；使用者回報標題版本不一致 → beta.2（第一次 Run 的 tag 打成 `v2.5.0beta.1` 被擋下，第二次成功） |
@@ -75,6 +77,8 @@
 
 | 項目 | 修改的檔案與重點 |
 |---|---|
+| beta.2 修正：YouTube「合輯」讀不到 | `core/url_parser.py` 新增 `ParsedUrl.playlist_source_url`：清單 ID 以 `RD` 開頭（YouTube 自動產生的合輯）時改用播放頁面網址 `watch?v=…&list=RD…`（`playlist?list=RD<影片ID>` 也從 ID 推回影片），yt-dlp 會從播放頁面讀取合輯；一般清單仍用 `playlist?list=`。`gui/main_window.py` `_expand_playlists` 改用它。`core/errors.py`：「unviewable」錯誤改為中文說明 |
+| beta.2 修正：相信音樂等的標題寫法 | `core/title_cleanup.py`：`[ ]` 內含中文時視為歌名（「歌手 [ 歌名 ]」）；合唱以 ╳ × ＆ 連接時每位演出者分別去掉英文（`_drop_translations`）；中英文之間沒有空格（「MAYDAY五月天」）也能拆（頻道名稱不拆，避免「SMG音乐」變「音乐」）；「Official Live Video」「纯享」視為雜訊；✦★♪ 等裝飾符號去掉；括號外是一句話（含，。！？或超過 40 字）時不當演出者。使用者合輯的 8 個標題已加入 `tests/test_title_cleanup.py` |
 | 歌名自動整理（MP3） | 新檔 `core/title_cleanup.py`：`clean_title(info)` 優先用 YouTube 的 `track`＋`artists`；否則移除含雜訊字（Official、MV、Lyrics、動態歌詞、4K…）的括號與前後雜訊字，`【】《》「」『』` 內的文字視為歌名、括號外為演出者，否則以「 - 」「｜」拆成演出者與歌名（頻道名出現在哪邊，哪邊就是演出者），沒有演出者時用 `clean_channel()`（去掉 - Topic、VEVO、官方頻道…）；中文後的英文翻譯（以大寫開頭）去掉，但 Remix / Live / Acoustic 等版本字保留；`( )`、`[ ]` 中非雜訊的內容保留在歌名後。`core/downloader.py`：MP3 且 `DownloadPreferences.clean_titles` 時設定 `info["track"]`、`info["artist"]`、`info["artists"]`（供 FFmpegMetadata），檔名用 `演出者 - 歌名`；`DownloadResult.title` 仍為原標題。設定 `clean_titles`（預設開） |
 | 自動下載並安裝更新 | `core/updates.py`：`fetch_latest_release()`（版本＋安裝程式在 API 的 `digest`）、`LatestRelease`（下載網址由固定的 `DOWNLOAD_BASE`＋tag 組成）、`download_update()`（先取 `.sha256`，與 API digest 不一致即停止；下載到 `.part` 邊算 SHA256，相符才改名；已下載且驗證過則沿用；清除舊檔；可取消；大小上限 1 GB）、`is_installed_build()`（frozen 且有 `unins000.exe`）、`launch_installer()`（`win_job.allow_children_to_outlive()`＋`release_app_mutex()` 後以 `/SILENT /SUPPRESSMSGBOXES /NORESTART /WAITPID=<pid> /RESTARTAPP=1` 啟動）；`_request()` 只允許 GitHub 的 https 網址。`gui/main_window.py`：`_on_update_checked` 接 `LatestRelease`、`start_update_download()`（背景執行緒＋`_UpdateSignals`）、`show_update_banner()`（下載中 / 已下載 / 失敗重試 / 安裝版 / 免安裝版五種狀態）、`install_update()`（確認、轉檔中拒絕、`_closing_for_update` 略過關閉時的下載詢問）。`utils/win_job.py`：`allow_children_to_outlive()`、`release_app_mutex()`。`packaging/installer.iss`：`InitializeSetup` 依 `/WAITPID` 用 OpenProcess＋WaitForSingleObject 等待（最多 60 秒）、`[Run]` 依 `/RESTARTAPP=1` 以 `runasoriginaluser` 重新開啟。設定 `auto_download_updates`（預設開）。下載位置 `%LOCALAPPDATA%\YT_Media_Tool\updates` |
 | 測試與文件 | `tests/test_title_cleanup.py`（新，26 種標題）、`tests/test_updates.py`（下載驗證、檢查碼不符、不完整、取消、網址限制、安裝版判斷）、`tests/test_gui.py`（橫幅各狀態、安裝流程）、`tests/integration/test_local_pipeline.py`（整理後的檔名與 MP3 標籤）；`scripts/verify_installer.py` 新增 `verify_self_update()`：CI 實測覆蓋安裝會等待執行中的程序、完成後重新開啟程式；README、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（C26–C28） |
@@ -287,7 +291,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- **待辦**：使用者實測 `v2.6.0-beta.1`（C26、C28）
+- **待辦**：v2.6.0-beta.2 的 Windows CI 通過 → 請使用者發布 `v2.6.0-beta.2` → 確認附件 → 使用者實測（合輯網址、C26、C28）
   → 發布正式版 `v2.6.0` → 確認附件與 Latest → 更新本文件。
 - **自動更新的完整流程（C27）要等 v2.6.0 之後的下一個正式版才能實測**：必須先裝有 v2.6.0（含自動更新功能），
   再發布更新的正式版。2.5.0 以前的版本沒有自動更新，只會顯示提醒。下一次發版時請使用者特別確認 C27。
@@ -331,6 +335,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `system_open.open_media()` 的副檔名白名單（.mp3 / .mp4）不要放寬。
 
 ### 近期新增功能的雷
+- **YouTube「合輯」（`list=RD…`）不能用 `playlist?list=` 讀取**；讀取清單一律用 `ParsedUrl.playlist_source_url`。
 - **自動更新**：不要讓 `launch_installer()` 之外的地方啟動安裝程式；啟動前一定要 `allow_children_to_outlive()` 與 `release_app_mutex()`，
   否則安裝程式會被 Job Object 終止或停在「程式執行中」。`installer.iss` 的 `/WAITPID`、`/RESTARTAPP` 參數名稱與 `updates.launch_installer()` 必須一致，
   只能靠 Windows CI 的 `verify_self_update()` 驗證。`[Run]` 重新開啟程式那一行不可加 `skipifsilent`（自動更新是靜默安裝）。

@@ -1015,3 +1015,19 @@ def test_playlist_m3u_can_be_disabled(window, qtbot, monkeypatch):
     qtbot.waitUntil(lambda: rows(window) == 3 and all(model.task_at(i).status is TaskStatus.COMPLETED
                                                      for i in range(3)), timeout=10000)
     assert not list((Path(window.folder_edit.text()) / "清單").glob("*.m3u8"))
+
+
+def test_youtube_mix_is_read_from_watch_page(window, qtbot, fake, monkeypatch):
+    requested = []
+    original = fake.extract_playlist
+
+    def record(url, limit=500):
+        requested.append(url)
+        return original(url, limit)
+
+    monkeypatch.setattr(fake, "extract_playlist", record)
+    monkeypatch.setattr(window, "choose_playlist_entries", lambda groups, *_: [[groups[0].entries[0].url]])
+    window.url_input.setPlainText("https://www.youtube.com/watch?v=uzVdsZbYibQ&list=RDuzVdsZbYibQ&start_radio=1")
+    window.add_from_input()
+    qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
+    assert requested == ["https://www.youtube.com/watch?v=uzVdsZbYibQ&list=RDuzVdsZbYibQ"]

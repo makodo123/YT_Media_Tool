@@ -51,6 +51,8 @@ _YTDLP_PATTERNS: list[tuple[str, str]] = [
     (r"not available in your country|geo.?restrict|blocked it in your country",
      "此影片在您所在的地區無法觀看。"),
     (r"Premieres? in|This live event will begin", "影片尚未首播或直播尚未開始，無法下載。"),
+    (r"playlist type is unviewable",
+     "這是 YouTube 自動產生的「合輯」，無法用清單網址讀取。請改貼正在播放的歌曲網址（含 watch?v=…&list=RD…）。"),
     (r"is not a valid URL|Unsupported URL", "不支援的網址。"),
     (r"Video unavailable|This video has been removed|does not exist|"
      r"account associated with this video has been terminated",
