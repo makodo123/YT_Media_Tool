@@ -38,7 +38,7 @@
   https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.6.0-beta.1 ；等使用者實測，無誤再以 tag `v2.6.0` 發布正式版。
   已確認實際 Release 的安裝程式有 GitHub `digest`，且與 `.sha256` 一致（自動更新的雙重檢查可用）。
 - 使用者實測 beta.1 回報（2026-11-01）：YouTube「合輯」（Mix，`list=RD…`）網址讀取失敗「This playlist type is unviewable」。
-  修正已推送到 `main`（版本號仍 2.6.0），CI 通過後請使用者發布 `v2.6.0-beta.2`。
+  修正已推送到 `main`（版本號仍 2.6.0），Windows CI 通過（8744a12，run 41266889745），已請使用者發布 `v2.6.0-beta.2`。
 - v2.5.0 開發中使用者回報（beta.1 實測時）：標題「YT Media Tool V2.0」與版本不一致 → beta.2 改由 `__version__` 產生；
   2.4.0 檢查不到 2.5.0 → 因當時只有測試版（設計如此），已改寫訊息說明。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
