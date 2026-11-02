@@ -161,6 +161,11 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(check_action)
 
         help_menu = self.menuBar().addMenu("說明(&H)")
+        self.help_action = QAction("使用說明（開啟網頁）", self)
+        self.help_action.setShortcut(QKeySequence(QKeySequence.StandardKey.HelpContents))  # F1
+        self.help_action.triggered.connect(self.open_help)
+        help_menu.addAction(self.help_action)
+        help_menu.addSeparator()
         notice = QAction("使用聲明", self)
         notice.triggered.connect(lambda: QMessageBox.information(self, "使用聲明", DISCLAIMER))
         help_menu.addAction(notice)
@@ -170,6 +175,11 @@ class MainWindow(QMainWindow):
         about = QAction("關於", self)
         about.triggered.connect(self._show_about)
         help_menu.addAction(about)
+
+    def open_help(self) -> None:
+        """以預設瀏覽器開啟使用說明（固定網址的 README）。"""
+        if not QDesktopServices.openUrl(QUrl(updates.HELP_PAGE)):
+            QMessageBox.information(self, "使用說明", f"無法開啟瀏覽器，請手動前往：\n{updates.HELP_PAGE}")
 
     def _build_ui(self) -> None:
         central = QWidget(self)

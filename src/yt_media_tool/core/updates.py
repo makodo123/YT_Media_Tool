@@ -33,6 +33,7 @@ log = logging.getLogger(__name__)
 REPO = "makodo123/YT_Media_Tool"
 LATEST_RELEASE_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 RELEASES_PAGE = f"https://github.com/{REPO}/releases/latest"
+HELP_PAGE = f"https://github.com/{REPO}#readme"  # 使用說明（README）
 DOWNLOAD_BASE = f"https://github.com/{REPO}/releases/download"
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_SETUP_BYTES = 1024 * 1024 * 1024  # 安裝程式大小上限（防止異常回應塞滿磁碟）

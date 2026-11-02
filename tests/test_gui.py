@@ -1562,3 +1562,23 @@ def test_picker_hides_select_new_without_downloaded(qtbot):
     dialog = PlaylistPickerDialog([PlaylistGroup("清單", [PlaylistEntry(VIDEO, "歌")])], 500)
     qtbot.addWidget(dialog)
     assert not dialog.select_new.isVisibleTo(dialog)
+
+
+def test_help_menu_opens_user_guide(window, dialogs, monkeypatch):
+    from PySide6.QtGui import QDesktopServices
+
+    from yt_media_tool.core import updates
+
+    help_menu = next(a.menu() for a in window.menuBar().actions() if a.text().startswith("說明"))
+    assert help_menu.actions()[0] is window.help_action
+    assert window.help_action.shortcut().toString() == "F1"
+
+    opened = []
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: opened.append(url.toString()) or True)
+    window.help_action.trigger()
+    assert opened == [updates.HELP_PAGE] and dialogs.messages == []
+
+    # 無法開啟瀏覽器時顯示網址，讓使用者自行前往
+    monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: False)
+    window.help_action.trigger()
+    assert updates.HELP_PAGE in dialogs.text()
