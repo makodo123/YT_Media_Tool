@@ -419,6 +419,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 | Windows CI 的打包工作與 Release 完全相同（只差不發布） | 讓每次 push 都驗證完整發行路徑（含安裝程式），不必請使用者反覆按 Run workflow 試錯。 |
 | one-folder（`_internal`）而非 one-file | 原始規格要求；啟動快、防毒誤判少。 |
 | Apache-2.0 授權 | 使用者建立 repo 時選擇。 |
+| **繼續使用 Python＋PySide6（Qt），不改寫成 R 或 Rust / GPUI Component**（2026-11，使用者決定） | 使用者先後問過改用 R、GPUI Component（看到 Discord 以 GPUI 取代 Electron 的貼文）。本程式本來就是原生 Qt 介面、不經瀏覽器，該貼文的理由（擺脫 Chromium 的記憶體用量）不適用；yt-dlp 是 Python，改寫會失去程序內的進度 / 取消掛鉤；發行檔大部分是 FFmpeg（約 140 MB）與 Deno（約 90 MB），換框架省不了；GPUI 尚未 1.0。若使用者在意外觀或效能，在現有架構內改善。 |
 
 ---
 
