@@ -12,6 +12,13 @@ from yt_media_tool.utils.win_job import create_app_mutex, kill_children_on_exit
 
 log = logging.getLogger(__name__)
 
+# 裝回舊版時，較新版本建立的資料無法開啟；直接告訴使用者該怎麼做（網址與 updates.RELEASES_PAGE 相同）
+TOO_NEW_DATA_MESSAGE = (
+    "這台電腦上的設定與紀錄是由較新版本的 YT Media Tool 建立的，這個版本比較舊，無法開啟。\n\n"
+    "請安裝最新版（設定、佇列與歷史紀錄都會保留）：\n"
+    "https://github.com/makodo123/YT_Media_Tool/releases/latest"
+)
+
 
 def main(argv: list[str] | None = None) -> int:
     argv = list(sys.argv if argv is None else argv)
@@ -45,7 +52,7 @@ def main(argv: list[str] | None = None) -> int:
     from yt_media_tool.gui.i18n import install_qt_translations
     from yt_media_tool.gui.main_window import MainWindow
     from yt_media_tool.gui.theme import apply_dark_theme
-    from yt_media_tool.storage.database import DatabaseError
+    from yt_media_tool.storage.database import DatabaseError, DatabaseTooNewError
 
     app = QApplication(argv)
     app.setApplicationName(APP_ID)
@@ -66,6 +73,10 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         ctx = create_context(start_paused=True)
+    except DatabaseTooNewError:
+        log.exception("資料庫是由較新版本建立的")
+        QMessageBox.critical(None, APP_DISPLAY_NAME, TOO_NEW_DATA_MESSAGE)
+        return 2
     except DatabaseError as exc:
         log.exception("資料庫初始化失敗")
         QMessageBox.critical(None, APP_DISPLAY_NAME, f"無法開啟資料庫：\n{exc}\n\n日誌：{log_path}")

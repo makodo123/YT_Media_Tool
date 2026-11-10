@@ -93,6 +93,10 @@ class DatabaseError(RuntimeError):
     pass
 
 
+class DatabaseTooNewError(DatabaseError):
+    """資料庫是由較新版本的程式建立的（例如裝回舊版）；需安裝新版才能開啟。"""
+
+
 class Database:
     def __init__(self, path: Path | str) -> None:
         self.path = Path(path) if str(path) != ":memory:" else path
@@ -137,7 +141,7 @@ class Database:
     def migrate(self, target: int = SCHEMA_VERSION) -> None:
         current = self.schema_version
         if current > SCHEMA_VERSION:
-            raise DatabaseError(f"資料庫版本 {current} 比程式支援的版本 {SCHEMA_VERSION} 新，請更新程式")
+            raise DatabaseTooNewError(f"資料庫版本 {current} 比程式支援的版本 {SCHEMA_VERSION} 新，請更新程式")
         for version, statements in MIGRATIONS:
             if current < version <= target:
                 log.info("資料庫 migration：%s -> %s", current, version)

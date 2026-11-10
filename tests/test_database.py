@@ -3,7 +3,9 @@ import sqlite3
 import pytest
 
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus
-from yt_media_tool.storage.database import MIGRATIONS, SCHEMA_VERSION, Database, DatabaseError
+from yt_media_tool.storage.database import (
+    MIGRATIONS, SCHEMA_VERSION, Database, DatabaseError, DatabaseTooNewError,
+)
 from yt_media_tool.storage.settings import AppSettings, SettingsStore
 
 
@@ -96,7 +98,7 @@ def test_newer_schema_is_rejected(tmp_path):
     conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION + 1}")
     conn.commit()
     conn.close()
-    with pytest.raises(DatabaseError):
+    with pytest.raises(DatabaseTooNewError):  # 也是 DatabaseError；啟動時會顯示「請安裝最新版」的說明
         Database(path)
 
 

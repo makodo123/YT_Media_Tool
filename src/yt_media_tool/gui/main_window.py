@@ -52,6 +52,7 @@ from yt_media_tool.utils import system_open
 log = logging.getLogger(__name__)
 
 MAX_PLAYLIST_ITEMS = 500
+MAX_INVALID_SHOWN = 8  # 「無法加入」訊息中最多列出幾個網址，避免視窗過長
 PASTED_VIDEO_TITLE = "（您貼上的影片）"  # 貼上的影片不在讀到的播放清單中時，選擇對話框顯示的名稱
 DISCLAIMER = (
     "本工具僅供下載您擁有權利、已獲授權或平台明確允許下載的內容。\n"
@@ -827,12 +828,19 @@ class MainWindow(QMainWindow):
         result = parse_urls(self.url_input.toPlainText())
         notes: list[str] = []
         if result.invalid:
-            notes.append("以下網址不支援：\n"
-                         + "\n".join(f"• {i.original}\n   原因：{i.reason}" for i in result.invalid))
+            shown = result.invalid[:MAX_INVALID_SHOWN]
+            more = len(result.invalid) - len(shown)
+            notes.append("以下網址無法加入：\n"
+                         + "\n".join(f"• {i.original}\n   原因：{i.reason}" for i in shown)
+                         + (f"\n…等共 {len(result.invalid)} 個" if more > 0 else ""))
         if result.duplicates:
             notes.append(f"已略過 {len(result.duplicates)} 個重複網址。")
         if not result.valid:
-            QMessageBox.warning(self, "無法加入", "\n\n".join(notes) or "請先輸入 YouTube 網址。")
+            if not notes:  # 一起貼上的一般文字（歌名、留言）不當成錯誤列出，只在完全沒有網址時提醒
+                notes.append("輸入的內容中找不到 YouTube 網址。\n請貼上影片、Shorts 或播放清單的網址"
+                             "（例如 https://www.youtube.com/watch?v=…）。" if result.ignored
+                             else "請先輸入 YouTube 網址。")
+            QMessageBox.warning(self, "無法加入", "\n\n".join(notes))
             return
         try:
             clip = self.clip_range()

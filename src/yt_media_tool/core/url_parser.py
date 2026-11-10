@@ -85,8 +85,9 @@ class InvalidUrl:
 @dataclass
 class ParseResult:
     valid: list[ParsedUrl] = field(default_factory=list)
-    invalid: list[InvalidUrl] = field(default_factory=list)
+    invalid: list[InvalidUrl] = field(default_factory=list)  # 看起來是網址但不支援
     duplicates: list[str] = field(default_factory=list)
+    ignored: list[str] = field(default_factory=list)  # 不是網址的文字（例如一起貼上的歌名、留言），不視為錯誤
 
     @property
     def has_playlists(self) -> bool:
@@ -98,7 +99,8 @@ class UrlParseError(ValueError):
 
 
 _VIDEO_ID = re.compile(r"^[A-Za-z0-9_-]{11}$")
-_PLAYLIST_ID = re.compile(r"^[A-Za-z0-9_-]{10,64}$")
+# 清單 ID 長度不一：一般清單 34 碼，「稍後觀看」WL、「喜歡的影片」LL、「我的合輯」RDMM 等只有 2～4 碼
+_PLAYLIST_ID = re.compile(r"^[A-Za-z0-9_-]{2,64}$")
 _YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com"}
 _SHORT_HOSTS = {"youtu.be", "www.youtu.be"}
 _CHANNEL_PREFIXES = ("/channel/", "/c/", "/user/", "/@")
@@ -146,9 +148,9 @@ def parse_url(raw: str) -> ParsedUrl:
     if host in _SHORT_HOSTS:
         video_id = _check_video_id(path.strip("/").split("/")[0] or None)
         list_id = query.get("list", [None])[0]
-        if list_id:
-            return ParsedUrl(raw.strip(), UrlKind.VIDEO_IN_PLAYLIST, video_id, _check_playlist_id(list_id))
-        return ParsedUrl(raw.strip(), UrlKind.VIDEO, video_id)
+        if list_id and _PLAYLIST_ID.match(list_id):
+            return ParsedUrl(raw.strip(), UrlKind.VIDEO_IN_PLAYLIST, video_id, list_id)
+        return ParsedUrl(raw.strip(), UrlKind.VIDEO, video_id)  # list 參數無法辨識時仍可下載這支影片
 
     if host not in _YOUTUBE_HOSTS:
         raise UrlParseError(f"不支援的網站：{host}（僅支援 YouTube 網址）")
@@ -159,9 +161,9 @@ def parse_url(raw: str) -> ParsedUrl:
         return ParsedUrl(raw.strip(), UrlKind.SHORTS, video_id)
     if path in ("/watch", "/watch/"):
         video_id = _check_video_id(query.get("v", [None])[0])
-        if list_id:
-            return ParsedUrl(raw.strip(), UrlKind.VIDEO_IN_PLAYLIST, video_id, _check_playlist_id(list_id))
-        return ParsedUrl(raw.strip(), UrlKind.VIDEO, video_id)
+        if list_id and _PLAYLIST_ID.match(list_id):
+            return ParsedUrl(raw.strip(), UrlKind.VIDEO_IN_PLAYLIST, video_id, list_id)
+        return ParsedUrl(raw.strip(), UrlKind.VIDEO, video_id)  # list 參數無法辨識時仍可下載這支影片
     if path.startswith(("/embed/", "/live/", "/v/")):
         segment = path.strip("/").split("/")
         video_id = _check_video_id(segment[1] if len(segment) > 1 else None)
@@ -177,10 +179,33 @@ def parse_url(raw: str) -> ParsedUrl:
     raise UrlParseError("無法辨識的 YouTube 網址（需為影片、Shorts 或播放清單）")
 
 
+_URL_IN_TEXT = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[\x21-\x7e]+")
+_URL_TRAILING = ".,;:!?)]}>'\""  # 句子結尾或括號，不會是 YouTube 網址的最後一個字元
+_DOMAIN_LIKE = re.compile(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(/|$)")
+
+
 def split_input(text: str) -> list[str]:
-    """將使用者輸入（可能多行、以空白或逗號分隔）拆成候選網址。"""
-    tokens = re.split(r"[\s,，、]+", text or "")
-    return [t for t in (tok.strip().strip("<>\"'") for tok in tokens) if t]
+    """將使用者輸入（可能多行、以空白或逗號分隔，或夾在一段文字裡）拆成候選項目。
+
+    網址常連同前後文字一起貼上（「推薦這首https://youtu.be/…。」「(https://…)」），
+    因此只取其中的網址部分，並去掉結尾的標點。
+    """
+    spaced = re.sub(r"(?i)(?=https?://)", " ", text or "")  # 網址前面緊接文字時先分開
+    tokens: list[str] = []
+    for token in re.split(r"[\s,，、]+", spaced):
+        token = token.strip().strip("<>\"'")
+        match = _URL_IN_TEXT.search(token)
+        if match:
+            token = match.group(0).rstrip(_URL_TRAILING)
+        elif _DOMAIN_LIKE.match(token):  # 沒有 https:// 的網址（youtube.com/…）：去掉緊接在後的中文與標點
+            token = re.sub(r"[^\x21-\x7e].*$", "", token).rstrip(_URL_TRAILING)
+        if token:
+            tokens.append(token)
+    return tokens
+
+
+def looks_like_url(token: str) -> bool:
+    return "://" in token or bool(_DOMAIN_LIKE.match(token))
 
 
 def parse_urls(text: str) -> ParseResult:
@@ -188,6 +213,9 @@ def parse_urls(text: str) -> ParseResult:
     result = ParseResult()
     seen: set[str] = set()
     for candidate in split_input(text):
+        if not looks_like_url(candidate):
+            result.ignored.append(candidate)
+            continue
         try:
             parsed = parse_url(candidate)
         except UrlParseError as exc:

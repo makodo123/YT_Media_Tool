@@ -34,7 +34,7 @@ _CREATIONFLAGS = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 FFMPEG_INSTALL_GUIDE = (
     "找不到 FFmpeg / FFprobe，無法合併影音或轉換 MP3。\n\n"
     "解決方式（擇一）：\n"
-    "1. 使用隨附 FFmpeg 的完整發行版本。\n"
+    "1. 重新安裝本程式的最新版（已隨附 FFmpeg，最簡單）。\n"
     "2. 自行下載 Windows 版 FFmpeg（例如 https://www.gyan.dev/ffmpeg/builds/ 或 "
     "https://github.com/BtbN/FFmpeg-Builds/releases ），解壓縮後在「設定 → FFmpeg 資料夾」"
     "指定含有 ffmpeg.exe 與 ffprobe.exe 的 bin 資料夾。\n"
@@ -42,9 +42,8 @@ FFMPEG_INSTALL_GUIDE = (
 )
 
 JS_RUNTIME_GUIDE = (
-    "未偵測到 JavaScript 執行環境（Deno）。yt-dlp 需要它來取得完整的 YouTube 格式清單，"
-    "缺少時部分影片可能只剩低畫質或無法下載。\n"
-    "請使用隨附 Deno 的發行版本，或執行：winget install --id DenoLand.Deno -e"
+    "找不到 Deno（處理 YouTube 網頁用的元件）。缺少時部分影片可能只剩低畫質或無法下載。\n"
+    "請重新安裝本程式的最新版（已隨附 Deno）；或自行安裝：winget install --id DenoLand.Deno -e"
 )
 
 

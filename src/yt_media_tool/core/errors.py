@@ -45,7 +45,7 @@ _YTDLP_PATTERNS: list[tuple[str, str]] = [
     (r"Sign in to confirm your age|age[- ]restricted|inappropriate for some users",
      "此影片有年齡限制，需要登入才能觀看。可到「設定 → YouTube 登入資訊」使用已登入 YouTube 的帳號後重試。"),
     (r"Sign in to confirm you.?re not a bot",
-     "YouTube 要求登入以確認不是機器人。可到「設定 → YouTube 登入資訊」選擇已登入 YouTube 的 Firefox"
+     "YouTube 要求登入以確認不是機器人。可到「設定 → YouTube 登入資訊」選擇已登入 YouTube 的 Firefox "
      "或 cookies.txt 後重試；若已設定，登入資訊可能已過期，請重新登入 YouTube 或重新匯出 cookies.txt。"
      "也可更換網路（例如關閉 VPN）後再試。"),
     (r"not available in your country|geo.?restrict|blocked it in your country",
@@ -53,6 +53,9 @@ _YTDLP_PATTERNS: list[tuple[str, str]] = [
     (r"Premieres? in|This live event will begin", "影片尚未首播或直播尚未開始，無法下載。"),
     (r"playlist type is unviewable",
      "這是 YouTube 自動產生的「合輯」，無法用清單網址讀取。請改貼正在播放的歌曲網址（含 watch?v=…&list=RD…）。"),
+    (r"playlist does not exist|playlist is private",
+     "讀不到這個播放清單：可能是私人清單（例如「稍後觀看」「喜歡的影片」）或已被刪除。"
+     "私人清單需要先到「設定 → YouTube 登入資訊」設定您的登入資訊才能讀取。"),
     (r"is not a valid URL|Unsupported URL", "不支援的網址。"),
     (r"Video unavailable|This video has been removed|does not exist|"
      r"account associated with this video has been terminated",

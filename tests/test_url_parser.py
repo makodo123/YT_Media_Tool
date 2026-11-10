@@ -111,3 +111,43 @@ def test_video_in_playlist_is_distinct_from_plain_video():
 ])
 def test_playlist_source_url_handles_youtube_mixes(url, expected):
     assert parse_url(url).playlist_source_url == expected
+
+
+@pytest.mark.parametrize("list_id", ["WL", "LL", "RDMM"])
+def test_short_special_list_ids_are_accepted(list_id):
+    """「稍後觀看」「喜歡的影片」「我的合輯」的清單 ID 只有 2～4 碼，不可因此拒絕整個網址。"""
+    parsed = parse_url(f"https://www.youtube.com/watch?v={VID}&list={list_id}")
+    assert parsed.kind is UrlKind.VIDEO_IN_PLAYLIST and parsed.playlist_id == list_id
+    assert parsed.video_url == f"https://www.youtube.com/watch?v={VID}"
+
+
+def test_video_with_unrecognized_list_param_is_still_a_video():
+    for url in (f"https://www.youtube.com/watch?v={VID}&list=bad!id", f"https://youtu.be/{VID}?list=x"):
+        parsed = parse_url(url)
+        assert parsed.kind is UrlKind.VIDEO and parsed.video_id == VID and parsed.playlist_id is None
+    with pytest.raises(UrlParseError):  # 純清單網址的 ID 仍須合法
+        parse_url("https://www.youtube.com/playlist?list=bad!id")
+
+
+@pytest.mark.parametrize("text", [
+    f"看這個 https://youtu.be/{VID} 很讚",
+    f"推薦這首https://youtu.be/{VID}很好聽",
+    f"(https://www.youtube.com/watch?v={VID})",
+    f"https://www.youtube.com/watch?v={VID}。",
+    f"https://www.youtube.com/watch?v={VID}.",
+    f"youtube.com/watch?v={VID}。謝謝",
+    f"1. https://youtu.be/{VID}",
+    f"周杰倫 - 晴天\nhttps://youtu.be/{VID}",
+])
+def test_urls_are_found_inside_pasted_text(text):
+    """網址常連同前後文字、編號或標點一起貼上：只取網址，其餘文字不當成「不支援的網址」。"""
+    result = parse_urls(text)
+    assert [p.video_id for p in result.valid] == [VID]
+    assert result.invalid == []
+
+
+def test_plain_text_is_ignored_but_url_like_text_is_reported():
+    result = parse_urls(f"只有文字 hello https://vimeo.com/1 example.com/x https://youtu.be/{VID}https://youtu.be/aaaaaaaaaaa")
+    assert result.ignored == ["只有文字", "hello"]
+    assert [i.original for i in result.invalid] == ["https://vimeo.com/1", "example.com/x"]
+    assert [p.video_id for p in result.valid] == [VID, "aaaaaaaaaaa"]  # 兩個網址黏在一起也能分開

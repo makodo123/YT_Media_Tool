@@ -1582,3 +1582,40 @@ def test_help_menu_opens_user_guide(window, dialogs, monkeypatch):
     monkeypatch.setattr(QDesktopServices, "openUrl", lambda url: False)
     window.help_action.trigger()
     assert updates.HELP_PAGE in dialogs.text()
+
+
+def test_pasted_text_around_urls_is_not_reported(window, dialogs):
+    """連同歌名、留言一起貼上時，只加入其中的網址，不把一般文字列為「無法加入的網址」。"""
+    window.url_input.setPlainText("周杰倫 - 晴天\n推薦這首https://youtu.be/aaaaaaaaaaa。\n"
+                                  "2. (https://www.youtube.com/watch?v=bbbbbbbbbbb&list=WL)")
+    window._update_detection_summary()  # 平常由輸入後的計時器觸發
+    assert window.detection_label.text() == "偵測到：影片 1、播放清單中的影片 1"
+    window.url_input.setPlainText("周杰倫 - 晴天\n推薦這首https://youtu.be/aaaaaaaaaaa。")
+    window.add_from_input()
+    assert rows(window) == 1 and dialogs.messages == []
+
+
+def test_text_without_any_url_explains_what_to_paste(window, dialogs):
+    window.url_input.setPlainText("周杰倫 晴天")
+    window._update_detection_summary()
+    assert window.detection_label.text() == ""
+    window.add_from_input()
+    assert rows(window) == 0 and "找不到 YouTube 網址" in dialogs.text()
+    dialogs.messages.clear()
+    window.url_input.setPlainText("   ")
+    window.add_from_input()
+    assert "請先輸入 YouTube 網址" in dialogs.text()
+
+
+def test_long_list_of_unsupported_urls_is_shortened(window, dialogs):
+    window.url_input.setPlainText("\n".join(f"https://example.com/{i}" for i in range(30)))
+    window.add_from_input()
+    text = dialogs.text()
+    assert "https://example.com/7" in text and "https://example.com/8" not in text and "等共 30 個" in text
+
+
+def test_newer_database_message_tells_user_to_install_latest():
+    from yt_media_tool.app import TOO_NEW_DATA_MESSAGE
+    from yt_media_tool.core import updates
+
+    assert updates.RELEASES_PAGE in TOO_NEW_DATA_MESSAGE and "較新版本" in TOO_NEW_DATA_MESSAGE
