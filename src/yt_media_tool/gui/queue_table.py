@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus, format_eta, format_speed
+from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.gui.theme import STATUS_COLORS
 
 COLUMNS = ["編號", "影片名稱", "格式", "品質", "進度", "速度", "剩餘時間", "狀態", "操作"]
@@ -115,7 +116,7 @@ class QueueTableModel(QAbstractTableModel):
             }.get(col)
         if role == Qt.ItemDataRole.ToolTipRole:
             if col == COL_TITLE:
-                return f"{task.display_title}\n{task.url}"
+                return plain(f"{task.display_title}\n{task.url}")
             if col == COL_QUALITY and task.actual_quality:
                 return f"目標：{task.quality_text}\n實際：{task.actual_quality}"
             if col == COL_STATUS and task.error_message:

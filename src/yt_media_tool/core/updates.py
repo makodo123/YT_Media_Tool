@@ -176,6 +176,28 @@ def _sha256_of(path: Path) -> str:
     return digest.hexdigest()
 
 
+# 本次執行中已通過檢查碼驗證的安裝程式：路徑 → SHA256。安裝前再核對一次，
+# 確認檔案在「下載完成」到「按下安裝」之間沒有被其他程式更換（背景下載後可能隔很久才安裝）。
+_verified: dict[str, str] = {}
+
+
+def _remember_verified(path: Path, sha256: str) -> None:
+    _verified[os.path.normcase(os.path.abspath(path))] = sha256
+
+
+def ensure_unchanged(setup: Path) -> None:
+    """安裝前確認安裝程式仍是當初驗證過的那個檔案；不是時刪除並拋出 UpdateError。"""
+    expected = _verified.get(os.path.normcase(os.path.abspath(setup)))
+    try:
+        actual = _sha256_of(Path(setup)) if expected else ""
+    except OSError:
+        actual = ""
+    if not expected or actual != expected:
+        _verified.pop(os.path.normcase(os.path.abspath(setup)), None)
+        Path(setup).unlink(missing_ok=True)
+        raise UpdateError("下載的安裝程式在安裝前被變更或已遺失，為了安全已停止安裝。請重新下載更新。")
+
+
 def download_update(release: LatestRelease, dest_dir: Path | None = None,
                     on_progress: Callable[[float], None] | None = None,
                     cancel: threading.Event | None = None,
@@ -201,6 +223,7 @@ def download_update(release: LatestRelease, dest_dir: Path | None = None,
         if old != target and old.is_file():
             old.unlink(missing_ok=True)
     if target.is_file() and _sha256_of(target) == expected:
+        _remember_verified(target, expected)
         if on_progress:
             on_progress(100.0)
         return target
@@ -225,6 +248,7 @@ def download_update(release: LatestRelease, dest_dir: Path | None = None,
         if digest.hexdigest() != expected:
             raise UpdateError("下載的安裝程式檢查碼不符（檔案可能不完整），請重試。")
         os.replace(part, target)
+        _remember_verified(target, expected)
     except OSError as exc:
         raise UpdateError(f"下載更新失敗，請確認網路連線後重試（{exc}）") from exc
     finally:

@@ -34,6 +34,7 @@ from yt_media_tool.core.cookies import CookieConfig, ydl_cookie_options
 from yt_media_tool.core.errors import DownloadCancelledError, InsufficientDiskSpaceError
 from yt_media_tool.core.task_models import DownloadTask, MediaFormat, TaskStatus, clip_text, format_clock
 from yt_media_tool.core.title_cleanup import clean_title
+from yt_media_tool.utils import paths
 from yt_media_tool.utils.paths import FileNameReserver, sanitize_filename
 
 log = logging.getLogger(__name__)
@@ -318,6 +319,7 @@ class Downloader:
 
         temp_root = output_dir / TEMP_ROOT_NAME
         temp_dir = temp_root / f"task_{task.id}_{uuid.uuid4().hex[:8]}"
+        cookie_dir: Path | None = None
         reserved: Path | None = None
         logger = _YdlLogger(task.id)
         success = False
@@ -325,8 +327,13 @@ class Downloader:
             _make_task_dir(temp_dir)
             _hide_on_windows(temp_root)
             on_progress(ProgressUpdate(TaskStatus.DOWNLOADING, progress=0.0, stage="取得影片資訊中"))
-            # cookies.txt 副本放在本任務暫存資料夾，任務結束時隨資料夾刪除
-            cookie_options = ydl_cookie_options(self._cookies_provider(), temp_dir)
+            cookie_config = self._cookies_provider()
+            if cookie_config.source == "file":
+                # cookies.txt 副本放在 AppData 的私有暫存資料夾，不放進下載資料夾（可能是隨身碟或雲端同步資料夾）；
+                # 任務結束時刪除，異常結束留下的副本在下次啟動時清除
+                cookie_dir = paths.private_temp_dir() / f"cookies_{task.id}_{uuid.uuid4().hex[:8]}"
+                cookie_dir.mkdir(parents=True, exist_ok=False)
+            cookie_options = ydl_cookie_options(cookie_config, cookie_dir or temp_dir)
             prefs = self._preferences_provider()
 
             info_opts = self._base_options(logger, tools, cookie_options)
@@ -414,6 +421,8 @@ class Downloader:
                 raise DownloadCancelledError(token.reason) from exc
             raise
         finally:
+            if cookie_dir is not None:
+                _remove_tree(cookie_dir)
             _remove_tree(temp_dir)
             try:
                 temp_root.rmdir()  # 只有在沒有其他任務使用時（空資料夾）才會成功

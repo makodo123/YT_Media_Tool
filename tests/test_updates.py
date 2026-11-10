@@ -260,3 +260,16 @@ def test_summarize_exception_and_generic(tmp_path):
     assert updates.summarize_install_log(path)[0] == "安裝程式顯示：Access is denied."
     assert "安裝沒有完成" in updates.summarize_install_log(_log(tmp_path, "Log opened.", "Log closed."))[0]
     assert "版本沒有改變" in updates.summarize_install_log(_log(tmp_path, "Installation process succeeded."))[0]
+
+
+def test_ensure_unchanged_accepts_only_the_verified_file(tmp_path):
+    path = updates.download_update(release(), tmp_path, opener=make_opener(server()))
+    updates.ensure_unchanged(path)  # 剛驗證過：通過
+    unknown = tmp_path / "other-setup.exe"
+    unknown.write_bytes(SETUP_BYTES)
+    with pytest.raises(updates.UpdateError, match="已停止安裝"):
+        updates.ensure_unchanged(unknown)  # 沒有經過下載驗證的檔案一律不執行
+    path.write_bytes(SETUP_BYTES + b"tampered")
+    with pytest.raises(updates.UpdateError, match="已停止安裝"):
+        updates.ensure_unchanged(path)
+    assert not path.exists()  # 被變更的檔案已刪除

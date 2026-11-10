@@ -71,6 +71,7 @@ def main(argv: list[str] | None = None) -> int:
         QMessageBox.warning(None, APP_DISPLAY_NAME, "YT Media Tool 已在執行中。")
         return 1
 
+    paths.clear_private_temp()  # 上次異常結束留下的 cookies.txt 副本等
     try:
         ctx = create_context(start_paused=True)
     except DatabaseTooNewError:

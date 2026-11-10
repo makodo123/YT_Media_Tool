@@ -854,6 +854,7 @@ def test_installed_build_downloads_then_installs(window, qtbot, dialogs, monkeyp
     monkeypatch.setattr(updates, "is_installed_build", lambda: True)
     monkeypatch.setattr(updates, "download_update", fake_download)
     monkeypatch.setattr(updates, "launch_installer", lambda path: launched.append(path))
+    monkeypatch.setattr(updates, "ensure_unchanged", lambda path: None)  # 檢查碼核對另有測試
     window._on_update_checked(_release())
     qtbot.waitUntil(lambda: "已下載完成並通過檢查" in window.update_banner.text(), timeout=5000)
     assert "立即安裝並重新開啟" in window.update_banner.text()
@@ -1339,6 +1340,7 @@ def test_install_failure_to_launch_is_shown(window, monkeypatch, dialogs, tmp_pa
         raise OSError("存取被拒")
 
     monkeypatch.setattr(updates, "launch_installer", broken)
+    monkeypatch.setattr(updates, "ensure_unchanged", lambda path: None)
     assert not window.install_update()
     dialog = window._update_dialog
     assert dialog.state == ud.INSTALL_FAILED and "存取被拒" in dialog.message.text()
@@ -1619,3 +1621,50 @@ def test_newer_database_message_tells_user_to_install_latest():
     from yt_media_tool.core import updates
 
     assert updates.RELEASES_PAGE in TOO_NEW_DATA_MESSAGE and "較新版本" in TOO_NEW_DATA_MESSAGE
+
+
+def test_installer_changed_after_download_is_not_run(window, monkeypatch, dialogs, tmp_path):
+    """背景下載後、按下安裝前，安裝程式若被換掉（檢查碼不同）就不執行並刪除，可重新下載。"""
+    from yt_media_tool.core import updates
+    from yt_media_tool.gui import update_dialog as ud
+
+    setup = tmp_path / "setup.exe"
+    setup.write_bytes(b"verified installer")
+    updates._remember_verified(setup, updates._sha256_of(setup))
+    setup.write_bytes(b"something else")
+    window._available_update, window._update_path = _release(), setup
+    monkeypatch.setattr(updates, "launch_installer", lambda path: pytest.fail("不可執行被變更的安裝程式"))
+    assert not window.install_update()
+    assert window._update_dialog.state == ud.INSTALL_FAILED and "已停止安裝" in window._update_dialog.message.text()
+    assert not setup.exists() and window._update_path is None and not window._closing
+
+
+@pytest.mark.parametrize("text,changed", [
+    ('<b>粗體</b> 標題\nhttps://youtu.be/x', True),
+    ('• 播放清單「<a href="http://example.com">點我</a>」中沒有可下載的影片。', True),
+    ('<img src="C:/x.png">', True),
+    ("一般標題 <3", False),
+    ("周杰倫 - 晴天 (Official MV)", False),
+    ("", False),
+])
+def test_external_text_is_never_shown_as_html(qapp, text, changed):
+    """影片標題由上傳者決定：不可讓它在提示或訊息視窗中變成連結、圖片或格式。"""
+    from PySide6.QtGui import Qt as QtGuiQt
+
+    from yt_media_tool.gui.safe_text import plain
+
+    result = plain(text)
+    assert (result != text) is changed
+    assert not QtGuiQt.mightBeRichText(result)
+
+
+def test_title_tooltip_is_plain_text(window):
+    from PySide6.QtGui import Qt as QtGuiQt
+
+    from yt_media_tool.gui.queue_table import COL_TITLE
+
+    window.ctx.queue.add_tasks([TaskSpec("https://youtu.be/aaaaaaaaaaa", MediaFormat.MP4, "720",
+                                         window.folder_edit.text(), title='<a href="http://example.com">免費下載</a>')])
+    model = window.table.queue_model
+    tip = model.data(model.index(0, COL_TITLE), QtGuiQt.ItemDataRole.ToolTipRole)
+    assert "免費下載" in tip and not QtGuiQt.mightBeRichText(tip)

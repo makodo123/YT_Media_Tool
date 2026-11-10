@@ -9,6 +9,7 @@ from yt_media_tool.core.cookies import COOKIE_SOURCES, CookieConfig, CookieFileE
 from yt_media_tool.core.downloader import TEMP_ROOT_NAME, CancelToken, Downloader
 from yt_media_tool.core.errors import explain_error
 from yt_media_tool.storage.settings import AppSettings, SettingsStore
+from yt_media_tool.utils import paths
 
 COOKIE_TEXT = "# Netscape HTTP Cookie File\n.youtube.com\tTRUE\t/\tTRUE\t0\tSID\tsecret\n"
 
@@ -68,8 +69,10 @@ def test_downloader_uses_copy_and_removes_it(tmp_path):
     used = {p["cookiefile"] for p in captured}
     assert len(used) == 1
     copy = Path(used.pop())
-    assert copy.parent.parent.name == TEMP_ROOT_NAME  # 位於任務暫存資料夾
-    assert not copy.exists()  # 任務結束後隨暫存資料夾刪除
+    # 副本在 AppData 的私有暫存資料夾，不在下載資料夾（可能是隨身碟或雲端同步資料夾）
+    assert copy.parent.parent == paths.private_temp_dir() and out not in copy.parents
+    assert not copy.parent.exists()  # 任務結束後刪除
+    assert not (out / TEMP_ROOT_NAME).exists()
     assert original.read_text(encoding="utf-8") == COOKIE_TEXT  # 原檔未被修改
 
 
@@ -142,3 +145,13 @@ def test_real_ytdlp_browser_cookie_failure_is_explained(monkeypatch, tmp_path):
         with yt_dlp.YoutubeDL({"quiet": True, "cookiesfrombrowser": ("chrome",)}) as ydl:
             _ = ydl.cookiejar  # 觸發載入 cookies
     assert "無法讀取瀏覽器的登入資訊" in explain_error(info.value)
+
+
+def test_leftover_cookie_copies_are_cleared_on_startup(isolated_app_data):
+    """程式被強制結束時留下的 cookies 副本，下次啟動時清除。"""
+    leftover = paths.private_temp_dir() / "cookies_7_deadbeef"
+    leftover.mkdir()
+    (leftover / "cookies.txt").write_text(COOKIE_TEXT, encoding="utf-8")
+    (paths.private_temp_dir() / "stray.tmp").write_text("x", encoding="utf-8")
+    assert paths.clear_private_temp() == 2
+    assert list(paths.private_temp_dir().iterdir()) == []

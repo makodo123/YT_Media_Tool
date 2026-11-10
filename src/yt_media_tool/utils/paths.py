@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 import threading
 from pathlib import Path
@@ -64,6 +65,32 @@ def app_data_dir() -> Path:
 
 def database_path() -> Path:
     return app_data_dir() / "yt_media_tool.sqlite3"
+
+
+def private_temp_dir() -> Path:
+    """只有本程式使用的暫存資料夾（位於 AppData），用來放 cookies.txt 副本等不該出現在下載資料夾的檔案。
+
+    下載資料夾可能是隨身碟、網路磁碟或雲端同步資料夾；登入資訊的副本不可放在那裡，
+    否則程式被強制結束時會把副本留在外部裝置上。
+    """
+    path = app_data_dir() / "tmp"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
+def clear_private_temp() -> int:
+    """啟動時清除上次異常結束留下的私有暫存資料（例如 cookies.txt 副本）；回傳清除的項目數。"""
+    removed = 0
+    for item in private_temp_dir().iterdir():
+        try:
+            if item.is_dir() and not item.is_symlink():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
+            removed += 1
+        except OSError:
+            pass  # 仍被占用時留到下次啟動
+    return removed
 
 
 def log_dir() -> Path:

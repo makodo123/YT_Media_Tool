@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from yt_media_tool.core.task_models import STATUS_LABELS, MediaFormat, TaskStatus, quality_label
+from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.gui.theme import STATUS_COLORS
 from yt_media_tool.storage.database import Database
 from yt_media_tool.utils import system_open
@@ -103,7 +104,7 @@ class HistoryDialog(QDialog):
                     output or row["error_message"]]
             for c, value in enumerate(values):
                 item = QTableWidgetItem(str(value))
-                item.setToolTip(tips[c] or str(value))
+                item.setToolTip(plain(tips[c] or str(value)))
                 if c == 4:
                     item.setForeground(QColor(STATUS_COLORS.get(row["status"], "#e6e9ee")))
                 self.table.setItem(r, c, item)

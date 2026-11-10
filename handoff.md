@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-10（v2.9.1 正式版已發布）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-11（v2.9.2 安全性強化已推送，等待 CI 與發布 v2.9.2-beta.1）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -54,7 +54,7 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
   測試自動更新時曾把 v2.7.1 直接裝在 v2.8.0-beta.1 上 → 「資料庫版本 3 比程式支援的版本 2 新」（預期中的降版保護），以及 GitHub API「rate limit exceeded」（促成 beta.1 的備用查詢）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0、v2.7.0-beta.2、v2.7.1-beta.1、v2.7.1、v2.8.0-beta.1、v2.8.1-beta.2、v2.8.1、v2.8.2-beta.1、v2.8.2、v2.9.0-beta.1、v2.9.0、v2.9.1-beta.1 皆回報無誤。
-- 測試：436 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：446 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
@@ -102,6 +102,16 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.9.2**（使用者：「以使用者角度檢查文字與功能及漏洞」第六次；這次做安全性檢查，三項強化）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| cookies.txt 副本不再放進下載資料夾 | 原本副本在 `<下載資料夾>\.ytmt_tmp\task_*\cookies.txt`：下載到隨身碟 / 網路磁碟 / 雲端同步資料夾時，程式被強制結束會把登入資訊留在那裡。`utils/paths.py` 新增 `private_temp_dir()`（`%LOCALAPPDATA%\YT_Media_Tool\tmp`）與 `clear_private_temp()`；`core/downloader.py` `download()` 只在來源為 file 時建立 `tmp\cookies_<id>_<亂數>`，`finally` 刪除；`app.py` 取得單一執行個體鎖後清除上次殘留 |
+| 安裝更新前再核對一次檢查碼 | `core/updates.py`：`_verified`（路徑 → SHA256，由 `download_update` 記錄）、`ensure_unchanged(setup)`——沒有記錄或檢查碼不同時刪除檔案並拋出 `UpdateError`；`gui/main_window.py` `install_update()` 在 `launch_installer` 前呼叫，檔案被刪時清掉 `_update_path` 讓使用者可重新下載。原因：背景下載後可能隔很久才按安裝，期間檔案可能被其他程式更換 |
+| 外部文字一律以純文字顯示 | Qt 的訊息視窗與 tooltip 會自動判斷 HTML（第一行有 `<b>`、`<a href>`、`<img>` 等標籤就整段當 HTML）。新檔 `gui/safe_text.py` `plain()`（會被判定為 HTML 時把 `<` 換成全形 `＜`；`mightBeRichText` 在 **`PySide6.QtGui.Qt`**，不是 QtCore）。套用在：佇列 / 選歌視窗 / 歷史紀錄 / 本機轉檔的 tooltip，以及「無法加入」「加入佇列」「播放清單」三個訊息視窗 |
+| 已檢查、沒有問題的部分 | 外部程式都以參數清單呼叫（無 shell）；檔名（影片標題、使用者修改的名稱、播放清單資料夾、.m3u8）都經 `sanitize_filename`，`..`、路徑分隔字元、保留名稱無法跳出資料夾；SQL 皆參數化；更新只連 GitHub 的 https 固定網址且版本號以正則驗證；`open_media` 只開 .mp3 / .mp4；workflow 的輸入值經環境變數傳入、權限最小化 |
+| 測試與文件 | `tests/test_cookies.py`、`tests/test_updates.py`、`tests/test_gui.py`；README（cookies 副本位置）、WINDOWS_INTEGRATION_TESTS（H6 改寫、C37） |
 
 **v2.9.1**（使用者：「以使用者角度檢查文字與功能」第五次；這次著重實際貼網址的情境）
 
@@ -438,7 +448,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 4. 還沒做的下一步
 
-- `v2.9.1-beta.1`（6330fe2）使用者實測下載無誤，已以 `v2.9.1` 發布正式版；目前沒有進行中的開發。
+- `v2.9.1-beta.1`（6330fe2）使用者實測下載無誤，已以 `v2.9.1` 發布正式版。
+- **進行中：v2.9.2（第六次檢查：文字、功能與「漏洞」）已推送，等 Windows CI 通過後請使用者以 tag `v2.9.2-beta.1` 發布測試版**；實測無誤後再發 `v2.9.2`。
   （使用者在 CI 通過後自行按了 Run workflow，本 session 當時重新啟動、未監看到；事後以 API 核對附件與 `.sha256`。）
 - v2.9.0 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.2 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
@@ -479,6 +490,9 @@ THIRD_PARTY_NOTICES.md              第三方授權
 ## 5. 有哪些地方不要碰、有什麼雷
 
 ### 檔案安全（最重要）
+- **cookies.txt 副本只能放在 `paths.private_temp_dir()`**（AppData），不可放回下載資料夾的 `.ytmt_tmp`（v2.9.2 修正的問題；`tests/test_cookies.py` 守著）。
+- **顯示影片標題、播放清單名稱、yt-dlp 錯誤訊息的 tooltip 與訊息視窗要包 `safe_text.plain()`**；第一行是固定文字的訊息不必（Qt 只看第一行判斷是否為 HTML）。
+- 安裝更新一定要先 `updates.ensure_unchanged()` 再 `launch_installer()`；GUI 測試若自行指定 `_update_path`，要 monkeypatch `ensure_unchanged`。
 - **不要**把 yt-dlp 的 `paths.home` 或 `outtmpl` 改回下載資料夾，也不要開 `overwrites`——會重現「刪除使用者檔案」的嚴重問題（`tests/test_downloader.py::test_same_name_files_are_not_overwritten` 守著）。
 - 取消 / 失敗只能刪 `temp_dir`（任務自己的暫存資料夾），不可刪 `.ytmt_tmp` 底下其他東西或下載資料夾內任何檔案。
 - 縮圖（`writethumbnail`）也必須留在暫存資料夾；`_run_download` 只挑副檔名為 .mp3 / .mp4 的成品，縮圖會隨暫存資料夾刪除。

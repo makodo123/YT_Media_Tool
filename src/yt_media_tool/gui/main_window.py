@@ -40,6 +40,7 @@ from yt_media_tool.gui.history_dialog import HistoryDialog
 from yt_media_tool.gui.rename_dialog import RenameDialog
 from yt_media_tool.gui.playlist_dialog import PlaylistGroup, PlaylistPickerDialog
 from yt_media_tool.gui.qt_bridge import QueueEventBridge
+from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RETRY, QueueTableView
 from yt_media_tool.gui import update_dialog
 from yt_media_tool.gui.settings_dialog import SettingsDialog
@@ -678,8 +679,11 @@ class MainWindow(QMainWindow):
         self.open_update_dialog()
         QApplication.processEvents()
         try:
+            updates.ensure_unchanged(setup)  # 背景下載後可能隔很久才安裝：執行前再核對一次檢查碼
             updates.launch_installer(setup)
         except (OSError, updates.UpdateError) as exc:
+            if not setup.is_file():  # 檔案已被判定不可信而刪除：讓使用者可以重新下載
+                self._update_path = None
             self.ctx.apply_settings(dataclasses.replace(self.ctx.settings, pending_update_version=""))
             self._install_details = ""
             self._install_view = UpdateView(update_dialog.INSTALL_FAILED,
@@ -840,7 +844,7 @@ class MainWindow(QMainWindow):
                 notes.append("輸入的內容中找不到 YouTube 網址。\n請貼上影片、Shorts 或播放清單的網址"
                              "（例如 https://www.youtube.com/watch?v=…）。" if result.ignored
                              else "請先輸入 YouTube 網址。")
-            QMessageBox.warning(self, "無法加入", "\n\n".join(notes))
+            QMessageBox.warning(self, "無法加入", plain("\n\n".join(notes)))
             return
         try:
             clip = self.clip_range()
@@ -905,7 +909,7 @@ class MainWindow(QMainWindow):
     def _on_playlists_failed(self, exc: Exception) -> None:
         self._jobs.clear()
         self._set_expanding(False)
-        QMessageBox.warning(self, "播放清單", explain_error(exc))
+        QMessageBox.warning(self, "播放清單", plain(explain_error(exc)))
 
     def _set_expanding(self, busy: bool) -> None:
         self._busy_expanding = busy
@@ -1131,7 +1135,7 @@ class MainWindow(QMainWindow):
                 self.statusBar().showMessage(
                     f"已加入 {len(added)} 筆任務（佇列目前暫停中，按「開始佇列」開始下載）", 8000)
         if notes:
-            QMessageBox.information(self, "加入佇列", "\n\n".join(notes))
+            QMessageBox.information(self, "加入佇列", plain("\n\n".join(notes)))
         return added
 
     def _confirm_already_downloaded(self, specs: list[TaskSpec], fmt: MediaFormat) -> list[TaskSpec] | None:

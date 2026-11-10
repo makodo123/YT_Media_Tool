@@ -73,6 +73,7 @@
 | C34 | 「說明 → 使用說明」，以及在主視窗按 F1 | 以預設瀏覽器開啟 GitHub 上的使用說明（README） |
 | C35 | 貼上夾雜文字的內容：「推薦這首https://youtu.be/<ID>。」與「周杰倫 - 晴天」＋下一行網址 | 只加入其中的影片，不跳出「無法加入」訊息；只貼文字（沒有網址）時提示「找不到 YouTube 網址」 |
 | C36 | 從「稍後觀看」或「我的合輯」播放影片，複製網址列的網址（`…&list=WL`、`…&list=RDMM`）貼上 | 可以加入；未設定登入資訊時「稍後觀看」讀不到清單，改為只加入該影片並說明原因（私人清單需設定登入資訊）；已設定登入資訊時列出清單內容 |
+| C37 | 下載標題含有 `<b>`、`<a href=…>` 等字樣的影片，滑鼠停在佇列的影片名稱上 | 提示以純文字顯示標題（「＜b＞…」），沒有變成粗體、連結或圖片 |
 
 ## D. 取消、重試與檔案安全
 
@@ -130,7 +131,7 @@
 | H3 | 開啟「設定 → YouTube 登入資訊 → 來源」下拉選單 | 只有「不使用」「Firefox」「cookies.txt 檔案」；說明文字提示 Chrome / Edge 改用 cookies.txt |
 | H4 | 以 v2.1.1 以前設定為 Chrome / Edge 的資料升級後開啟設定 | 來源顯示「不使用」，程式正常啟動 |
 | H5 | 匯出 cookies.txt，設定來源為檔案後下載 | 下載成功；記錄原始 cookies.txt 的修改時間，下載後不變 |
-| H6 | 下載中檢查 `<下載資料夾>\.ytmt_tmp\task_*\cookies.txt` | 存在副本；任務結束後連同暫存資料夾刪除 |
+| H6 | 下載中檢查 `%LOCALAPPDATA%\YT_Media_Tool\tmp\cookies_*\cookies.txt` 與 `<下載資料夾>\.ytmt_tmp` | 副本只在 AppData 的 `tmp` 中，下載資料夾的 `.ytmt_tmp` 裡沒有 cookies.txt；任務結束後副本刪除。下載中以工作管理員強制結束程式再重新開啟，`tmp` 中殘留的副本被清除 |
 | H7 | 刪除 H5 指定的 cookies.txt 後下載 | 失敗並提示「找不到 cookies 檔案」與設定位置 |
 | H8 | 檢查 `%LOCALAPPDATA%\YT_Media_Tool\logs\yt_media_tool.log` | 日誌中沒有 cookies 內容（例如 SID 值） |
 

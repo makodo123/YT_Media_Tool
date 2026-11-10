@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from yt_media_tool.core.downloader import PlaylistEntry
 from yt_media_tool.core.task_models import format_eta
+from yt_media_tool.gui.safe_text import plain
 
 UrlRole = Qt.ItemDataRole.UserRole + 1
 AutoNameRole = Qt.ItemDataRole.UserRole + 2  # 自動產生的檔名（判斷使用者是否修改過）
@@ -140,7 +141,7 @@ class PlaylistPickerDialog(QDialog):
             item.setData(COL_TITLE, UrlRole, entry.url)
             item.setData(COL_TITLE, AutoNameRole, name)
             item.setData(COL_TITLE, DownloadedRole, bool(downloaded))
-            item.setToolTip(COL_TITLE, f"{entry.title}\n{entry.url}" if entry.title else entry.url)
+            item.setToolTip(COL_TITLE, plain(f"{entry.title}\n{entry.url}" if entry.title else entry.url))
             item.setToolTip(COL_NAME, "點兩下可修改檔名")
             if downloaded:
                 item.setToolTip(COL_STATUS, f"已下載：{downloaded}")

@@ -16,6 +16,7 @@ from yt_media_tool.core.converter import ToolInfo
 from yt_media_tool.core.local_convert import (
     BITRATES, MEDIA_SUFFIXES, ConvertCancelledError, ConvertError, convert_to_mp3, is_media_file,
 )
+from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.gui.theme import STATUS_COLORS
 from yt_media_tool.utils import system_open
 from yt_media_tool.utils.paths import FileNameReserver
@@ -271,7 +272,7 @@ class ConvertDialog(QDialog):
         if item is None:
             return
         item.setText(text)
-        item.setToolTip(text + ("\n雙擊可在檔案總管中顯示" if ok else ""))
+        item.setToolTip(plain(text + ("\n雙擊可在檔案總管中顯示" if ok else "")))
         item.setData(PathRole, output or None)
         status = "completed" if ok else ("cancelled" if text == "已取消" else "failed")
         item.setForeground(QColor(STATUS_COLORS[status]))
