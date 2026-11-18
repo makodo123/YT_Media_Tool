@@ -177,6 +177,8 @@ def test_state_is_persisted_and_restored(db, fake_downloader, spec_factory):
     assert {t.id for t in unfinished} == {running.id, waiting.id}
     assert restored_queue.get(running.id).status is TaskStatus.WAITING
     assert restored_queue.get(done.id).status is TaskStatus.COMPLETED
+    assert restored_queue.get(done.id).progress == 100  # 重新開啟後已完成的任務顯示 100%，不是 0%
+    assert restored_queue.get(running.id).progress == 0 and restored_queue.get(waiting.id).progress == 0
     assert db.get_task(running.id).status is TaskStatus.WAITING
     fake_downloader.release(BLOCK_1)
     queue.shutdown(5)

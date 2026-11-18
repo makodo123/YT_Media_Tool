@@ -236,7 +236,10 @@ class Database:
     @staticmethod
     def _row_to_task(row: sqlite3.Row) -> DownloadTask:
         data = {key: row[key] for key in row.keys()}
-        return DownloadTask(**data)
+        task = DownloadTask(**data)
+        if task.status is TaskStatus.COMPLETED:
+            task.progress = 100.0  # 進度只在執行時記錄，不寫入資料庫；已完成的任務重新開啟後應顯示 100%
+        return task
 
     # ---- download_history ----
     def add_history(self, task: DownloadTask) -> int:
