@@ -42,6 +42,18 @@ jobs:
           foreach ($a in $win | Where-Object { $_.name -like "ffmpeg-n$newest*" }) {
             $candidates += [pscustomobject]@{ source = "BtbN/FFmpeg-Builds@$($release.tag_name)"; asset = $a }
           }
+          # 建置者公布的檢查碼（更新 manifest 時與 GitHub digest、實際下載檔三方交叉驗證用）
+          $sumAsset = $release.assets | Where-Object { $_.name -eq 'checksums.sha256' } | Select-Object -First 1
+          $publishedSums = @{}
+          if ($sumAsset) {
+            $sumText = (Invoke-WebRequest -Uri $sumAsset.browser_download_url -UseBasicParsing).Content
+            if ($sumText -is [byte[]]) { $sumText = [Text.Encoding]::UTF8.GetString($sumText) }
+            foreach ($l in ($sumText -split "`n")) {
+              $parts = $l.Trim() -split '\s+'
+              if ($parts.Count -ge 2) { $publishedSums[$parts[-1].TrimStart('*')] = $parts[0].ToLower() }
+            }
+            Write-Output "::notice title=BtbN checksums::$($sumAsset.browser_download_url)"
+          }
 
           $summary = @()
           foreach ($c in $candidates) {
@@ -59,7 +71,10 @@ jobs:
               $probe = Test-Path (Join-Path $bin 'ffprobe.exe')
               $version = (& $exe.FullName -hide_banner -version | Select-Object -First 1)
               $line = "{0}  bin={1} MB（不含 ffplay={2} MB）  mp3lame={3}  ffprobe={4}  zip={5} MB" -f $a.name, $binMB, $neededMB, $mp3, $probe, [math]::Round($a.size / 1MB, 1)
-              Write-Output "::notice title=$($a.name)::來源 $($c.source)%0A$line%0A$version%0Adigest $($a.digest)%0A$($a.browser_download_url)"
+              $fileSha = ([Security.Cryptography.SHA256]::Create().ComputeHash([IO.File]::ReadAllBytes("$dir.zip")) |
+                          ForEach-Object { $_.ToString('x2') }) -join ''
+              $published = $publishedSums[$a.name]
+              Write-Output "::notice title=$($a.name)::來源 $($c.source)%0A$line%0A$version%0Adigest $($a.digest)%0Afile sha256 $fileSha%0Achecksums.sha256 $published%0A$($a.browser_download_url)"
               $summary += $line
             } catch {
               Write-Output "::warning title=$($a.name)::無法測試：$($_.Exception.Message)"
