@@ -20,6 +20,14 @@ def test_version_is_consistent_everywhere():
     assert pyproject["project"]["version"] == __version__
 
 
+def test_release_notes_describe_current_version():
+    """Release 頁面的說明取自 docs/RELEASE_NOTES.md：每次升版都要在「最近更新」寫這一版改了什麼。"""
+    notes = (ROOT / "docs" / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+    recent = notes.split("## 最近更新", 1)[1].split("\n## ", 1)[0]
+    first = re.search(r"^### v(\d+\.\d+\.\d+)", recent, re.MULTILINE)
+    assert first and first.group(1) == __version__, "請在 RELEASE_NOTES.md「最近更新」最上面加上這一版的說明"
+
+
 def test_installer_names_match_code():
     assert re.search(r"^AppMutex=(.+)$", ISS, re.M).group(1).strip() == APP_MUTEX_NAME
     assert re.search(r'#define AppDataFolder "([^"]+)"', ISS).group(1) == APP_ID

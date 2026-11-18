@@ -491,7 +491,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 1. 修改程式並補測試；本機跑完整測試數次與 ruff（見第 5 節「流程習慣」）。
 2. 同步更新版本號：`src/yt_media_tool/__init__.py`、`scripts/build_exe.bat` 的 `VERSION`、`pyproject.toml`
    （`tests/test_release_config.py` 會檢查三者一致；EXE 與安裝程式版本自動取 `__init__.py`）。修正升 patch、新功能升 minor。
-3. 更新 `docs/RELEASE_NOTES.md`（Release 頁面內容來源）、README 與 `docs/WINDOWS_INTEGRATION_TESTS.md`。
+3. 在 `docs/RELEASE_NOTES.md`（Release 頁面內容來源）的「## 最近更新」**最上面加上 `### vX.Y.Z` 與這一版的白話說明**（`tests/test_release_config.py::test_release_notes_describe_current_version` 會檢查；只保留最近幾版）；同時更新 README 與 `docs/WINDOWS_INTEGRATION_TESTS.md`。
+   （2026-11-18 使用者發現 v2.9.1～v2.9.3 的 Release 頁面都沒寫改了什麼，才加上這一段；這三個舊 Release 的頁面需使用者自行在 GitHub 編輯補上。）
 4. 推送到 `main`（本環境的工作分支也一併推送），等該 commit 的 Windows CI 兩個工作（測試；打包 EXE 與安裝程式）都 success。
 5. 請使用者開 https://github.com/makodo123/YT_Media_Tool/actions/workflows/release.yml → Run workflow，
    tag 填 `vX.Y.Z-beta.1`；使用者實測無誤後再以 `vX.Y.Z` 發布正式版（程式碼不必再改）。
