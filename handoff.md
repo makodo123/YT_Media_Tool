@@ -481,7 +481,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
   - 選項 B：同時下載數量上限從 3 提高（例如 5），需註明可能觸發 YouTube 機器人驗證。
   - 不建議外接 aria2c 多連線（需多附程式，且易被 YouTube 限速或要求驗證）。
 - 依 `docs/WINDOWS_INTEGRATION_TESTS.md` 完整跑一次實機清單。
-- `actions/upload-artifact@v5` 的 Node.js 20 淘汰警告可評估升級。
+- （已完成）`actions/upload-artifact` 升到 v6（Node.js 24），消除 Node.js 20 淘汰警告；checkout@v5、setup-python@v6 已是 Node.js 24。
 
 ### 發布新版本的流程
 
