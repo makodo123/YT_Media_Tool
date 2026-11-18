@@ -17,14 +17,14 @@ YT Media Tool 本身以 Apache License 2.0 授權（見專案根目錄 `LICENSE`
 
 - 隨附版本、下載網址與 SHA256 記錄於 `packaging/ffmpeg_manifest.json`，發行版本中另存於
   `_internal/ffmpeg/VERSION.json`。
-- 建置來源：BtbN/FFmpeg-Builds 的 `win64-lgpl-shared` 建置（FFmpeg n9.0.2-37-gae19868753，
-  release `autobuild-2026-10-29-19-17`）。SHA256 已與 GitHub release asset digest 及建置者公布的
+- 建置來源：FFmpeg-Builds（原 BtbN/FFmpeg-Builds）的 `win64-lgpl-shared` 建置（FFmpeg n9.0.2-57-gd838f9f9ae，
+  release `autobuild-2026-11-17-12-40`）。SHA256 已與 GitHub release asset digest 及建置者公布的
   `checksums.sha256` 交叉驗證。
 - 授權：LGPL-2.1-or-later（LGPL 建置，未啟用 GPL 或 nonfree 元件）。授權全文隨附於 `_internal/ffmpeg/LICENSE*`；
   說明：https://www.ffmpeg.org/legal.html 。
 - FFmpeg 以共用函式庫（`_internal/ffmpeg/*.dll`）形式散布，本程式以子程序方式呼叫 `ffmpeg.exe` / `ffprobe.exe`，
   使用者可自行以相容版本替換這些 DLL 或執行檔。
-- 對應原始碼：https://github.com/FFmpeg/FFmpeg/tree/ae19868753 ；建置腳本與設定：https://github.com/BtbN/FFmpeg-Builds 。
+- 對應原始碼：https://github.com/FFmpeg/FFmpeg/tree/d838f9f9ae ；建置腳本與設定：https://github.com/FFmpeg-Builds/FFmpeg-Builds 。
 - 注意：BtbN 的每日建置不保證長期保留。若日後該 release 被移除，需在 manifest 改用新的版本並重新驗證 SHA256。
 - 也可使用 `scripts\build_exe.bat --no-ffmpeg` 建置不隨附 FFmpeg 的版本，由使用者自行安裝。
 

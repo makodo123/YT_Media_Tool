@@ -567,6 +567,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 ### 打包
 - FFmpeg 檔案在 spec 的 **COLLECT 之後**手動複製，不要改回 `datas`（會重複打包約 140 MB）。`verify_dist.py` 會檢查。
 - `packaging/ffmpeg_manifest.json` 的 `sha256` 只能填**交叉驗證過**的值；`fetch_ffmpeg.ps1` 在 sha256 為空時預設拒絕建置。
+- **2026-11-18 已發生一次**：v2.9.3 打包時 `autobuild-2026-10-29-19-17` 已 404；以 `ffmpeg-candidates.yml`（已加上列出 checksums.sha256 與下載檔 SHA256）找到 `autobuild-2026-11-17-12-40` 的 n9.0.2-57-gd838f9f9ae，三方雜湊一致（`8388f846…1b0279`）後更新 manifest。GitHub 回傳的下載網址已變成 **`FFmpeg-Builds/FFmpeg-Builds`**（原 BtbN 儲存庫移到組織），manifest 改用新網址。本雲端環境的代理不允許直接讀取該儲存庫的 API（`add_repo` 也被拒），只能靠 workflow 查詢。
 - **BtbN 的 autobuild release 可能被刪除**：若 fetch 404，用 `ffmpeg-candidates.yml`（修改該檔觸發）比較新版本，更新 manifest（url、checksum_url、sha256）後由 `ffmpeg-verify.yml` 驗證。
 - **CI 的整合測試用 choco 安裝的 FFmpeg，不是隨附的 BtbN 版本**；隨附版本只由 `verify_dist.py` 驗證 MP3 / MP4 轉檔。換 FFmpeg 版本後，歌名與封面嵌入需請使用者實機確認（或擴充 `verify_dist.py`）。
 - spec 的 `_keep()` 會刪除非 `qtbase_zh_TW.qm` / `qt_zh_TW.qm` 的 Qt 翻譯與 `opengl32sw.dll`；若改用 Qt OpenGL / 其他語系需調整。

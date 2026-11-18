@@ -319,7 +319,7 @@ scripts\build_installer.bat
   `checksums.sha256` 交叉比對。
 - BtbN 的每日建置不保證長期保留。若來源被移除，可用 `.github/workflows/ffmpeg-candidates.yml` 比較新的候選版本，
   更新 manifest 後重新驗證。
-- 離線建置：`scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-n9.0.2-37-gae19868753-win64-lgpl-shared-9.0.zip`
+- 離線建置：`scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-shared-9.0.zip`
 - 授權與原始碼取得方式請見 `THIRD_PARTY_NOTICES.md`。
 
 #### FFmpeg 尋找順序
