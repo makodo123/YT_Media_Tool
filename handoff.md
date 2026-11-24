@@ -610,6 +610,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ### 本雲端環境的限制
 - tag 格式常出錯：曾打成 `v2.0.0beta.5`、`v2.5.0beta.1`（少 `-`，發測試版時最常見）、「 v2.1.1」（前面有空白，`release.yml` 現已 `Trim()`）。請提醒格式 `vX.Y.Z` 或 `vX.Y.Z-beta.N`，
+  （2026-11-24 起）同一個標籤已發布過時，`release.yml` 的「檢查是否已發布」會略過之後所有步驟並以成功結束（註解「已發布，略過」）；同時按兩次會因 `concurrency` 排隊，第二次略過。
   且要從 workflow 頁面重新 Run，**不要 Re-run 失敗的那次**（會沿用錯誤的輸入與舊 commit）。使用者回報時常貼上舊的 run 連結：先用 API 確認是否真的有新 run。
 - 背景監看 Release 時，**不要只看「監看開始後才建立」的 run**：使用者常在 CI 通過的同時就按下 Run workflow（v2.4.0-beta.1 的監看因此漏掉）。
   改用「run id 大於上一次 Release run 的 id」判斷，成功或失敗都回報（v2.4.0 正式版即以此方式監看，附錄 B 有範例）。
