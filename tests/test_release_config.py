@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from yt_media_tool import APP_ID, __version__
-from yt_media_tool.utils.win_job import APP_MUTEX_NAME
+from yt_media_tool.utils.win_job import APP_MUTEX_NAME, SETUP_MUTEX_NAME
 
 ROOT = Path(__file__).resolve().parents[1]
 ISS = (ROOT / "packaging" / "installer.iss").read_text(encoding="utf-8-sig")
@@ -30,6 +30,7 @@ def test_release_notes_describe_current_version():
 
 def test_installer_names_match_code():
     assert re.search(r"^AppMutex=(.+)$", ISS, re.M).group(1).strip() == APP_MUTEX_NAME
+    assert re.search(r"^SetupMutex=(.+)$", ISS, re.M).group(1).strip() == SETUP_MUTEX_NAME
     assert re.search(r'#define AppDataFolder "([^"]+)"', ISS).group(1) == APP_ID
     assert re.search(r'#define AppExeName "([^"]+)"', ISS).group(1) == "YT_Media_Tool.exe"
     assert "OutputBaseFilename=YT_Media_Tool-{#AppVersion}-win64-setup" in ISS

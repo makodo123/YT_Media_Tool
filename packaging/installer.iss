@@ -63,6 +63,8 @@ WizardStyle=modern
 CloseApplications=yes
 RestartApplications=no
 AppMutex=YTMediaTool_AppMutex
+; 安裝程式執行期間存在的 mutex：AI 助理啟動的 --mcp 程序偵測到後會自行結束，避免程式檔被占用而無法升級
+SetupMutex=YTMediaTool_SetupMutex
 SetupLogging=yes
 VersionInfoVersion={#AppVersion}
 VersionInfoProductName={#AppName}

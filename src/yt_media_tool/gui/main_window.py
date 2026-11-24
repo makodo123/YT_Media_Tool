@@ -34,6 +34,7 @@ from yt_media_tool.core.queue_manager import (
 from yt_media_tool.core.task_models import (
     DownloadTask, MediaFormat, TaskStatus, format_speed, parse_clock, quality_options,
 )
+from yt_media_tool import mcp_server
 from yt_media_tool.core.url_parser import ParsedUrl, UrlKind, parse_urls
 from yt_media_tool.gui.convert_dialog import ConvertDialog
 from yt_media_tool.gui.history_dialog import HistoryDialog
@@ -131,6 +132,10 @@ class MainWindow(QMainWindow):
         self._parse_timer = QTimer(self, singleShot=True, interval=250)
         self._parse_timer.timeout.connect(self._update_detection_summary)
         self.url_input.textChanged.connect(self._parse_timer.start)
+        # AI 助理（MCP）帶入的網址：由另一個程序寫入 AppData 的收件資料夾，這裡定期取出放進輸入框
+        self._mcp_timer = QTimer(self, interval=1500)
+        self._mcp_timer.timeout.connect(self.check_mcp_inbox)
+        self._mcp_timer.start()
 
     # ================= 介面建置 =================
     def _build_menu(self) -> None:
@@ -730,6 +735,37 @@ class MainWindow(QMainWindow):
         self._append_urls("\n".join(new))
         self.statusBar().showMessage(f"已從剪貼簿帶入 {len(new)} 個網址，按「加入佇列」開始下載（可在設定關閉）", 8000)
         return len(new)
+
+    def check_mcp_inbox(self) -> int:
+        """把 AI 助理（MCP）送來的網址放進輸入框（不自動加入佇列）。回傳帶入的網址數。
+
+        功能關閉時直接丟棄收到的請求，之後開啟也不會冒出舊的網址。
+        """
+        if self._closing:
+            return 0
+        requests = mcp_server.take_inbox()
+        if not requests or not self.ctx.settings.mcp_enabled:
+            return 0
+        added, client, choice = [], "", None
+        for request in requests:
+            present = {p.dedupe_key for p in parse_urls(self.url_input.toPlainText()).valid}
+            new = [p.original for p in parse_urls("\n".join(request["urls"])).valid if p.dedupe_key not in present]
+            if new:
+                self._append_urls("\n".join(new))
+                added += new
+                client = request["client"] or client
+                if request["format"]:
+                    choice = (request["format"], mcp_server.valid_quality(request["format"], request["quality"]))
+        if not added:
+            return 0
+        if choice is not None:  # 預先選好 AI 助理指定的格式與品質；使用者仍可在加入前修改
+            (self.mp3_radio if choice[0] == MediaFormat.MP3.value else self.mp4_radio).setChecked(True)
+            if choice[1] is not None:
+                self.quality_combo.setCurrentIndex(max(0, self.quality_combo.findData(choice[1])))
+        who = plain(client) if client else "AI 助理"
+        self.statusBar().showMessage(f"{who} 帶入了 {len(added)} 個網址，請確認後按「加入佇列」開始下載", 15000)
+        QApplication.alert(self)  # 程式不在前景時讓工作列閃爍，提醒使用者確認
+        return len(added)
 
     def _paste_clipboard(self) -> None:
         text = QGuiApplication.clipboard().text()

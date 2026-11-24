@@ -13,10 +13,11 @@ LOG_FORMAT = "%(asctime)s [%(levelname)s] %(threadName)s %(name)s: %(message)s"
 _configured = False
 
 
-def setup_logging(level: int = logging.INFO, directory: Path | None = None) -> Path:
+def setup_logging(level: int = logging.INFO, directory: Path | None = None,
+                  filename: str = "yt_media_tool.log") -> Path:
     """設定根記錄器，回傳日誌檔路徑。重複呼叫不會重複加入 handler。"""
     global _configured
-    log_path = (directory or paths.log_dir()) / "yt_media_tool.log"
+    log_path = (directory or paths.log_dir()) / filename
     if _configured:
         return log_path
 

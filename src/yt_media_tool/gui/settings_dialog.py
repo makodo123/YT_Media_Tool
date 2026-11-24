@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from yt_media_tool.core import converter
 from yt_media_tool.core.cookies import COOKIE_SOURCES
 from yt_media_tool.core.task_models import MP3_QUALITIES, MP4_QUALITIES, MediaFormat
+from yt_media_tool.mcp_server import launch_command
 from yt_media_tool.storage.settings import MAX_CONCURRENT, MAX_RATE_LIMIT_MBPS, MIN_CONCURRENT, AppSettings
 
 
@@ -169,6 +170,31 @@ class SettingsDialog(QDialog):
         cookies_form.addRow("cookies.txt：", self.cookies_file_row)
         cookies_form.addRow(cookies_note)
 
+        # ---- AI 助理（MCP）----
+        self.mcp_enabled = QCheckBox("允許 AI 助理（MCP）查詢紀錄與帶入網址")
+        self.mcp_enabled.setChecked(settings.mcp_enabled)
+        mcp_note = QLabel(
+            "開啟後，Claude、Codex 等支援 MCP 的 AI 助理可以：查詢下載歷史紀錄、查看佇列，"
+            "以及把 YouTube 網址放進主視窗的輸入框。\n"
+            "AI 助理不能開始下載、刪除紀錄或更改設定：帶入的網址一定要由您按「加入佇列」才會下載。\n"
+            "設定方式：在 AI 助理的 MCP 設定中加入下方的啟動指令（詳見「說明 → 使用說明」）。")
+        mcp_note.setObjectName("hintLabel")
+        mcp_note.setWordWrap(True)
+        self.mcp_command = QLineEdit(" ".join(f'"{part}"' if " " in part else part for part in launch_command()))
+        self.mcp_command.setReadOnly(True)
+        copy_mcp = QPushButton("複製")
+        copy_mcp.clicked.connect(self._copy_mcp_command)
+        mcp_row = QWidget(self)
+        mcp_layout = QHBoxLayout(mcp_row)
+        mcp_layout.setContentsMargins(0, 0, 0, 0)
+        mcp_layout.addWidget(self.mcp_command, 1)
+        mcp_layout.addWidget(copy_mcp)
+        mcp_group = QGroupBox("AI 助理（MCP，選用）")
+        mcp_form = QFormLayout(mcp_group)
+        mcp_form.addRow(self.mcp_enabled)
+        mcp_form.addRow("啟動指令：", mcp_row)
+        mcp_form.addRow(mcp_note)
+
         note = QLabel("影片沒有所選的畫質或音質時，會下載可取得的最高品質，並在佇列的「品質」欄標示 ⚠。")
         note.setObjectName("hintLabel")
         note.setWordWrap(True)
@@ -184,7 +210,7 @@ class SettingsDialog(QDialog):
         content = QWidget()
         content_layout = QVBoxLayout(content)
         content_layout.setContentsMargins(0, 0, 0, 0)
-        for group in (download_group, files_group, ffmpeg_group, cookies_group):
+        for group in (download_group, files_group, ffmpeg_group, cookies_group, mcp_group):
             content_layout.addWidget(group)
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -246,6 +272,10 @@ class SettingsDialog(QDialog):
             return
         self.accept()
 
+    def _copy_mcp_command(self) -> None:
+        QApplication.clipboard().setText(self.mcp_command.text())
+        self.mcp_command.selectAll()
+
     def result_settings(self) -> AppSettings:
         return dataclasses.replace(
             self._original,
@@ -268,4 +298,5 @@ class SettingsDialog(QDialog):
             ffmpeg_dir=self.ffmpeg_dir.text().strip(),
             cookies_source=self.cookies_source.currentData(),
             cookies_file=self.cookies_file.text().strip(),
+            mcp_enabled=self.mcp_enabled.isChecked(),
         ).validated()

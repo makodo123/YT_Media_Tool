@@ -1668,3 +1668,41 @@ def test_title_tooltip_is_plain_text(window):
     model = window.table.queue_model
     tip = model.data(model.index(0, COL_TITLE), QtGuiQt.ItemDataRole.ToolTipRole)
     assert "免費下載" in tip and not QtGuiQt.mightBeRichText(tip)
+
+
+def test_mcp_urls_go_into_input_box_not_queue(window, dialogs):
+    """AI 助理帶入的網址只放進輸入框、預先選好格式與品質；不會自己開始下載。"""
+    from yt_media_tool import mcp_server
+
+    window.ctx.settings.mcp_enabled = True
+    window.url_input.setPlainText("https://youtu.be/aaaaaaaaaaa")
+    mcp_server.write_inbox(["https://youtu.be/aaaaaaaaaaa", "https://youtu.be/bbbbbbbbbbb"], "mp3", "320",
+                           '<a href="x">Claude</a>')
+    assert window.check_mcp_inbox() == 1  # 輸入框已有的網址不重複帶入
+    assert window.url_input.toPlainText().splitlines() == ["https://youtu.be/aaaaaaaaaaa", "https://youtu.be/bbbbbbbbbbb"]
+    assert window.mp3_radio.isChecked() and window.quality_combo.currentData() == "320"
+    assert rows(window) == 0 and "加入佇列" in window.statusBar().currentMessage()
+    assert "<a" not in window.statusBar().currentMessage()  # 用戶端名稱以純文字顯示
+    assert window.check_mcp_inbox() == 0  # 已取出
+
+
+def test_mcp_requests_are_discarded_when_disabled(window):
+    from yt_media_tool import mcp_server
+
+    window.ctx.settings.mcp_enabled = False
+    mcp_server.write_inbox(["https://youtu.be/aaaaaaaaaaa"], None, None, "Claude")
+    assert window.check_mcp_inbox() == 0 and window.url_input.toPlainText() == ""
+    window.ctx.settings.mcp_enabled = True
+    assert window.check_mcp_inbox() == 0  # 關閉期間收到的不會在開啟後冒出來
+
+
+def test_settings_dialog_mcp_option(qtbot, window):
+    from PySide6.QtWidgets import QApplication
+
+    dialog = SettingsDialog(window.ctx.settings, window)
+    qtbot.addWidget(dialog)
+    assert not dialog.mcp_enabled.isChecked() and "--mcp" in dialog.mcp_command.text()
+    dialog._copy_mcp_command()
+    assert QApplication.clipboard().text() == dialog.mcp_command.text()
+    dialog.mcp_enabled.setChecked(True)
+    assert dialog.result_settings().mcp_enabled is True

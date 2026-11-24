@@ -25,6 +25,13 @@ def main(argv: list[str] | None = None) -> int:
     if "--version" in argv:
         print(APP_DISPLAY_NAME)
         return 0
+    if "--mcp" in argv:
+        # AI 助理（Claude、Codex 等）啟動的 MCP 伺服器：不開視窗、不取得單一執行個體鎖與程式 mutex
+        # （否則安裝程式會以為程式正在執行），日誌另寫一個檔案，避免與視窗程式同時輪替同一個檔案
+        setup_logging(filename="mcp.log")
+        from yt_media_tool import mcp_server
+
+        return mcp_server.run()
     # --smoke-test：建立主視窗、檢查相依元件後自動結束（供打包後驗證用，不會開始任何下載）
     smoke_test = "--smoke-test" in argv
     argv = [a for a in argv if a != "--smoke-test"]

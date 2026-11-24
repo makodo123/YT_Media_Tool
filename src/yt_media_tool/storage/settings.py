@@ -41,6 +41,7 @@ class AppSettings:
     auto_download_updates: bool = True  # 有新版本時自動在背景下載（安裝前會先詢問；僅安裝版）
     skipped_update_version: str = ""  # 使用者選擇「略過這個版本」的版本號
     pending_update_version: str = ""  # 已啟動自動更新、等待安裝完成的版本（下次啟動時確認是否成功）
+    mcp_enabled: bool = False  # 允許 AI 助理透過 MCP 查詢紀錄、佇列並把網址帶入輸入框（mcp_server 直接讀取此值）
 
     def validated(self) -> AppSettings:
         defaults = AppSettings()
@@ -72,6 +73,7 @@ class AppSettings:
         s.auto_paste_clipboard = bool(s.auto_paste_clipboard)
         s.check_updates = bool(s.check_updates)
         s.auto_download_updates = bool(s.auto_download_updates)
+        s.mcp_enabled = s.mcp_enabled is True  # 只接受明確的 True（與 mcp_server.McpServer.enabled 相同）
         s.skipped_update_version = s.skipped_update_version if isinstance(s.skipped_update_version, str) else ""
         s.pending_update_version = s.pending_update_version if isinstance(s.pending_update_version, str) else ""
         s.ffmpeg_dir = s.ffmpeg_dir if isinstance(s.ffmpeg_dir, str) else ""

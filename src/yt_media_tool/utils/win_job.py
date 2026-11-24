@@ -99,6 +99,8 @@ def kill_children_on_exit() -> bool:
 
 
 APP_MUTEX_NAME = "YTMediaTool_AppMutex"  # 須與 packaging/installer.iss 的 AppMutex 相同
+SETUP_MUTEX_NAME = "YTMediaTool_SetupMutex"  # 須與 packaging/installer.iss 的 SetupMutex 相同（安裝程式執行中）
+SYNCHRONIZE = 0x00100000
 _mutex_handle = None
 
 
@@ -131,6 +133,24 @@ def allow_children_to_outlive() -> bool:
         return True
     except Exception:
         log.warning("無法取消 Job Object 的子程序終止設定", exc_info=True)
+        return False
+
+
+def mutex_exists(name: str) -> bool:
+    """具名 mutex 是否存在（例如安裝程式正在執行）。非 Windows 或無法判斷時回傳 False。"""
+    if not sys.platform.startswith("win"):
+        return False
+    try:
+        ctypes, kernel32, _ = _kernel32()
+        kernel32.OpenMutexW.restype = ctypes.c_void_p
+        kernel32.OpenMutexW.argtypes = [ctypes.c_uint32, ctypes.c_int, ctypes.c_wchar_p]
+        handle = kernel32.OpenMutexW(SYNCHRONIZE, False, name)
+        if not handle:
+            return False
+        kernel32.CloseHandle(ctypes.c_void_p(handle))
+        return True
+    except Exception:
+        log.debug("無法檢查 mutex %s", name, exc_info=True)
         return False
 
 

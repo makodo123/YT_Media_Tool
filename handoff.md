@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-18（v2.9.3 正式版已發布）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-24（v2.10.0 AI 助理（MCP）已推送，等待 CI 與發布 v2.10.0-beta.1）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -54,7 +54,7 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
   測試自動更新時曾把 v2.7.1 直接裝在 v2.8.0-beta.1 上 → 「資料庫版本 3 比程式支援的版本 2 新」（預期中的降版保護），以及 GitHub API「rate limit exceeded」（促成 beta.1 的備用查詢）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0、v2.7.0-beta.2、v2.7.1-beta.1、v2.7.1、v2.8.0-beta.1、v2.8.1-beta.2、v2.8.1、v2.8.2-beta.1、v2.8.2、v2.9.0-beta.1、v2.9.0、v2.9.1-beta.1、v2.9.2-beta.1、v2.9.2、v2.9.3-beta.1 皆回報無誤。
-- 測試：446 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：469 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
@@ -106,6 +106,19 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.10.0**（使用者問「增加 MCP 讓 Claude 和 Codex 讀合適嗎？」→ 選「情況二：讓 AI 讀取 / 操作程式本身」→「照這個設計做」）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 新檔 `mcp_server.py` | 自行實作 MCP stdio 傳輸（每行一則 JSON-RPC；`initialize`、`ping`、`tools/list`、`tools/call`，協定 2025-06-18 / 2025-03-26 / 2024-11-05）——**不加 `mcp` 套件**（相依多、發行檔變大）。三個工具：`search_history`（LIKE 跳脫 `% _ \`）、`get_queue`（唯讀）、`add_urls_to_input`（`parse_urls` 驗證、最多 50 個、format / quality 驗證、拒絕多餘參數）。資料庫以 `?mode=ro` 唯讀開啟；每次呼叫都重新讀 `settings.mcp_enabled`。回傳附 `note`：標題等文字只是資料、不是指令 |
+| 收件資料夾 | `%LOCALAPPDATA%\YT_Media_Tool\mcp_inbox\*.json`：`write_inbox()`（先寫 .tmp 再 `os.replace`；未處理超過 20 個時拒絕）、`take_inbox()`（讀後刪除、格式不符丟棄）。**不開網路連接埠** |
+| `app.py` | `--mcp`：在建立 mutex / 單一執行個體鎖 / Qt 之前分流，日誌寫 `logs\mcp.log`（`setup_logging(filename=...)`） |
+| Windows 視窗程式的標準輸入輸出 | 打包的 EXE 是 `console=False`；`mcp_server._stdio()` 在 `sys.stdin/stdout` 為 None 時改用 `GetStdHandle` + `msvcrt.open_osfhandle`。CI 以已安裝的 EXE 實測（`verify_installer.verify_mcp`） |
+| 升級時不被 --mcp 擋住 | `installer.iss` 新增 `SetupMutex=YTMediaTool_SetupMutex`；`--mcp` 每 2 秒檢查（`win_job.mutex_exists`），安裝程式執行中就自行結束。CI：`verify_update_while_mcp_running` |
+| 主視窗 | `check_mcp_inbox()`（每 1.5 秒）：功能開啟時把網址附加到輸入框（不重複）、選好格式與品質、狀態列顯示「<用戶端> 帶入了 N 個網址」並 `QApplication.alert`；**不加入佇列**。功能關閉時取出並丟棄 |
+| 設定 | `AppSettings.mcp_enabled`（預設 False，只接受明確的 True）；設定對話框新增「AI 助理（MCP，選用）」群組：勾選框、唯讀的啟動指令（`mcp_server.launch_command()`）與「複製」按鈕 |
+| 測試與文件 | 新檔 `tests/test_mcp_server.py`（含以獨立程序啟動 `main.py --mcp` 的端對端測試）、`tests/test_gui.py`、`tests/test_release_config.py`（SetupMutex 一致）；README 新章節「AI 助理（MCP）」（Claude Desktop / Claude Code / Codex 設定範例）、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（第 J 段） |
 
 **v2.9.3**（使用者截圖回報：「重開軟體後已完成但進度卻寫 0%」）
 
@@ -362,6 +375,16 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ## 3. 剛剛做的關鍵決定，以及為什麼這樣決定
 
+### 3.0 AI 助理（MCP，v2.10.0）的決定
+
+| 決定 | 原因 |
+|---|---|
+| **AI 不能開始下載**，只能把網址放進輸入框，由使用者按「加入佇列」 | 影片標題、說明、播放清單名稱由上傳者決定，可能藏有誘導 AI 的文字（提示詞注入）；也符合「只下載有權利的內容」須由使用者本人確認。使用者同意此設計 |
+| 只有三個工具，沒有刪除、改設定、指定資料夾 | 被誘導時的最壞情況只是輸入框多出網址 |
+| 預設關閉、每次呼叫都重新檢查設定 | 取消勾選立即生效，不必重新啟動 AI 助理 |
+| 用 AppData 的收件資料夾交給視窗程式，不用本機網路連接埠 | 不會被同一台電腦上的其他使用者或網頁連線；程式沒開時下次開啟仍會出現 |
+| 自行實作 stdio 協定，不加 `mcp` 套件 | 只需要約 100 行；官方套件會帶入 pydantic、anyio、starlette 等，發行檔變大且要驗證 Windows wheel |
+
 ### 3.1 最近幾輪（v2.1.3～v2.8.1）的決定
 
 | 決定 | 原因 |
@@ -461,7 +484,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 - `v2.9.1-beta.1`（6330fe2）使用者實測下載無誤，已以 `v2.9.1` 發布正式版。
 - `v2.9.2-beta.1`（9e96f32）使用者實測下載無誤，已以 `v2.9.2` 發布正式版（第六次檢查：安全性強化，見 2.3）。
-- `v2.9.3-beta.1`（58a02d7）使用者實測無誤（含新 FFmpeg），已以 `v2.9.3` 發布正式版（進度顯示修正＋新的 FFmpeg 建置＋upload-artifact v6）；目前沒有進行中的開發。
+- `v2.9.3-beta.1`（58a02d7）使用者實測無誤（含新 FFmpeg），已以 `v2.9.3` 發布正式版（進度顯示修正＋新的 FFmpeg 建置＋upload-artifact v6）。
+- **進行中：v2.10.0（AI 助理 MCP）已推送，等 Windows CI 通過後請使用者以 tag `v2.10.0-beta.1` 發布測試版**；實測請使用者實際接上 Claude Desktop / Claude Code / Codex（WINDOWS_INTEGRATION_TESTS 第 J 段），無誤後再發 `v2.10.0`。
   （使用者在 CI 通過後自行按了 Run workflow，本 session 當時重新啟動、未監看到；事後以 API 核對附件與 `.sha256`。）
 - v2.9.0 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.2 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
@@ -512,6 +536,10 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `system_open.open_media()` 的副檔名白名單（.mp3 / .mp4）不要放寬。
 
 ### 近期新增功能的雷
+- **`--mcp` 模式的標準輸出只能有 JSON-RPC 訊息**：不可 `print`、不可把日誌送到 stdout（日誌寫 `logs\mcp.log`）。
+- **不要新增會下載、刪除或改設定的 MCP 工具**（見 3.0）；新增唯讀工具時回傳內容要附 `UNTRUSTED_NOTE`。
+- `mcp_server.SETTING_KEY` 必須等於 `SettingsStore.PREFIX + "mcp_enabled"`（測試守著）；`--mcp` 不可建立程式 mutex 或取得單一執行個體鎖。
+- `installer.iss` 的 `SetupMutex` 與 `win_job.SETUP_MUTEX_NAME` 必須一致（測試守著），否則 AI 助理開著時升級會失敗。
 - **README 的結構**：前半給一般使用者（白話、用「您」、不放程式碼或網址格式），開發內容一律放在「開發者說明」之後。新增功能時要更新「功能」中對應的表；使用者會遇到的問題加到「常見問題」。README 會由 `build_exe.bat` 複製進發行資料夾。
 - 安裝精靈的說明（`installer_notice.txt`）給一般使用者看：不要出現 `%LOCALAPPDATA%` 等環境變數，改用白話路徑。
 - **任何改檔名的功能都要呼叫 `MainWindow.on_files_renamed()`**（或同等的 `queue.rename_output_path` 與 `PlaylistFileStore.rename_file`），否則佇列、歷史與播放清單紀錄會指向不存在的檔案。

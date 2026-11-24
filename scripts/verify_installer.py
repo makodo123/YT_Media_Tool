@@ -2,7 +2,7 @@
 
 用法：python scripts/verify_installer.py [dist\\YT_Media_Tool-<版本>-win64-setup.exe]
 
-檢查：安裝檔可執行、檔案與捷徑建立、「應用程式」清單登錄、已安裝的 EXE 可啟動、
+檢查：安裝檔可執行、檔案與捷徑建立、「應用程式」清單登錄、已安裝的 EXE 可啟動（含 AI 助理 --mcp 模式）、
 隨附 FFmpeg 可實際轉檔，以及解除安裝後檔案、捷徑與登錄都被移除。
 會在目前使用者的開始功能表 / 桌面短暫建立捷徑，結束時由解除安裝移除。
 """
@@ -34,6 +34,60 @@ def uninstall_key_exists() -> tuple[bool, str]:
             return True, str(winreg.QueryValueEx(key, "DisplayVersion")[0])
     except OSError:
         return False, ""
+
+
+def verify_mcp(exe: Path, data_dir: Path, env: dict[str, str]) -> list[tuple[str, bool]]:
+    """以 AI 助理的方式啟動 `--mcp`（視窗程式也要能透過標準輸入 / 輸出交換 JSON-RPC）。"""
+    import json
+    import sqlite3
+
+    with sqlite3.connect(data_dir / "yt_media_tool.sqlite3") as conn:  # 開啟功能（等同在設定中勾選）
+        conn.execute("INSERT OR REPLACE INTO application_settings (key, value, updated_at) VALUES (?, ?, ?)",
+                     ("settings.mcp_enabled", "true", "2026-01-01T00:00:00+00:00"))
+    messages = [
+        {"jsonrpc": "2.0", "id": 1, "method": "initialize",
+         "params": {"protocolVersion": "2025-06-18", "clientInfo": {"name": "ci"}}},
+        {"jsonrpc": "2.0", "method": "notifications/initialized"},
+        {"jsonrpc": "2.0", "id": 2, "method": "tools/list"},
+        {"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {
+            "name": "add_urls_to_input", "arguments": {"urls": ["https://youtu.be/dQw4w9WgXcQ"]}}},
+    ]
+    payload = b"".join(json.dumps(m).encode() + b"\n" for m in messages)
+    try:
+        proc = subprocess.run([str(exe), "--mcp"], input=payload, capture_output=True, env=env, timeout=120,
+                              check=False)
+        replies = [json.loads(line) for line in proc.stdout.splitlines() if line.strip()]
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        print(f"  MCP 錯誤：{exc}")
+        return [("AI 助理模式（--mcp）可透過標準輸入 / 輸出回應", False)]
+    if [r.get("id") for r in replies] != [1, 2, 3]:
+        print(f"  MCP 輸出：{proc.stdout[:500]!r}\n  stderr：{proc.stderr[:500]!r}")
+    ids_ok = [r.get("id") for r in replies] == [1, 2, 3]
+    tools_ok = ids_ok and len(replies[1]["result"]["tools"]) == 3
+    inbox_ok = ids_ok and not replies[2]["result"]["isError"] and any((data_dir / "mcp_inbox").glob("*.json"))
+    return [("AI 助理模式（--mcp）可透過標準輸入 / 輸出回應", ids_ok),
+            ("AI 助理模式列出 3 個工具、可把網址放進收件資料夾", tools_ok and inbox_ok)]
+
+
+def verify_update_while_mcp_running(setup: Path, install_dir: Path, work: Path,
+                                    env: dict[str, str]) -> list[tuple[str, bool]]:
+    """AI 助理開著 `--mcp`（程式檔被占用）時升級：--mcp 程序須自行結束，安裝須成功。"""
+    exe = install_dir / "YT_Media_Tool.exe"
+    mcp = subprocess.Popen([str(exe), "--mcp"], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE, env=env)
+    time.sleep(3)
+    running_before = mcp.poll() is None
+    result = subprocess.run([str(setup), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/CURRENTUSER",
+                             f"/DIR={install_dir}", f"/LOG={work / 'update_mcp.log'}"], timeout=600, check=False)
+    try:
+        mcp.wait(timeout=30)
+    except subprocess.TimeoutExpired:
+        mcp.kill()
+    if result.returncode != 0:
+        log = (work / "update_mcp.log")
+        print(log.read_text(encoding="utf-8", errors="replace")[-3000:] if log.is_file() else "（沒有安裝記錄）")
+    return [("AI 助理模式執行中時可升級（--mcp 程序自行結束）",
+             running_before and result.returncode == 0 and mcp.returncode is not None and exe.is_file())]
 
 
 def shortcuts() -> list[Path]:
@@ -142,6 +196,8 @@ def main(argv: list[str]) -> int:
                        (data_dir / "yt_media_tool.sqlite3").is_file() and not any(install_dir.rglob("*.sqlite3"))))
         checks += [(f"安裝後 {name}", ok) for name, ok in
                    ffmpeg_functional_checks(install_dir / "_internal" / "ffmpeg", ".exe")]
+        checks += verify_mcp(exe, data_dir, env)
+        checks += verify_update_while_mcp_running(setup, install_dir, work, env)
 
         checks += verify_self_update(setup, install_dir, work, env)
         checks += verify_update_from_app(setup, install_dir, data_dir, env)
