@@ -60,7 +60,8 @@ InfoBeforeFile=installer_notice.txt
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
-CloseApplications=yes
+; force：沒有視窗的 AI 助理（--mcp）程序無法被正常關閉，需強制結束；視窗程式另由 AppMutex 保護（執行中會先要求使用者關閉）
+CloseApplications=force
 RestartApplications=no
 AppMutex=YTMediaTool_AppMutex
 ; 安裝程式執行期間存在的 mutex：AI 助理啟動的 --mcp 程序偵測到後會自行結束，避免程式檔被占用而無法升級

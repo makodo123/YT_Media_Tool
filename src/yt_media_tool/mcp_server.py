@@ -410,10 +410,12 @@ def _stdio() -> tuple[BinaryIO, BinaryIO]:
     return os.fdopen(handles[0], "rb"), os.fdopen(handles[1], "wb")
 
 
-def _exit_when_installer_runs(interval: float = 2.0) -> None:
+def _exit_when_installer_runs(interval: float = 0.5) -> None:
     """安裝新版時結束本程序：AI 助理啟動的 `--mcp` 會占用程式檔，留著會讓安裝程式無法覆蓋。
 
     AI 助理會看到連線中斷，重新開啟 AI 助理（或重新連線）即可使用新版。
+    互動式安裝時使用者看精靈頁面的期間就會結束；靜默安裝（自動更新）來不及時，由安裝程式的
+    CloseApplications=force 強制結束。
     """
     import threading
 

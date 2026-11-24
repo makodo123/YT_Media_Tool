@@ -115,7 +115,7 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 | 收件資料夾 | `%LOCALAPPDATA%\YT_Media_Tool\mcp_inbox\*.json`：`write_inbox()`（先寫 .tmp 再 `os.replace`；未處理超過 20 個時拒絕）、`take_inbox()`（讀後刪除、格式不符丟棄）。**不開網路連接埠** |
 | `app.py` | `--mcp`：在建立 mutex / 單一執行個體鎖 / Qt 之前分流，日誌寫 `logs\mcp.log`（`setup_logging(filename=...)`） |
 | Windows 視窗程式的標準輸入輸出 | 打包的 EXE 是 `console=False`；`mcp_server._stdio()` 在 `sys.stdin/stdout` 為 None 時改用 `GetStdHandle` + `msvcrt.open_osfhandle`。CI 以已安裝的 EXE 實測（`verify_installer.verify_mcp`） |
-| 升級時不被 --mcp 擋住 | `installer.iss` 新增 `SetupMutex=YTMediaTool_SetupMutex`；`--mcp` 每 2 秒檢查（`win_job.mutex_exists`），安裝程式執行中就自行結束。CI：`verify_update_while_mcp_running` |
+| 升級時不被 --mcp 擋住 | `installer.iss` 新增 `SetupMutex=YTMediaTool_SetupMutex`，`--mcp` 每 0.5 秒檢查（`win_job.mutex_exists`），安裝程式執行中就自行結束；並改為 **`CloseApplications=force`**——第一次 CI 發現靜默安裝在啟動後 0.3 秒內就檢查占用中的檔案，沒有視窗的 `--mcp` 無法被 Restart Manager 正常關閉而中止安裝（視窗程式仍由 AppMutex 保護）。CI：`verify_update_while_mcp_running` |
 | 主視窗 | `check_mcp_inbox()`（每 1.5 秒）：功能開啟時把網址附加到輸入框（不重複）、選好格式與品質、狀態列顯示「<用戶端> 帶入了 N 個網址」並 `QApplication.alert`；**不加入佇列**。功能關閉時取出並丟棄 |
 | 設定 | `AppSettings.mcp_enabled`（預設 False，只接受明確的 True）；設定對話框新增「AI 助理（MCP，選用）」群組：勾選框、唯讀的啟動指令（`mcp_server.launch_command()`）與「複製」按鈕 |
 | 測試與文件 | 新檔 `tests/test_mcp_server.py`（含以獨立程序啟動 `main.py --mcp` 的端對端測試）、`tests/test_gui.py`、`tests/test_release_config.py`（SetupMutex 一致）；README 新章節「AI 助理（MCP）」（Claude Desktop / Claude Code / Codex 設定範例）、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（第 J 段） |
