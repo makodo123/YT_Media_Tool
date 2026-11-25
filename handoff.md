@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-25（v2.10.0-beta.3：AI 助理自動下載頻道白名單，等待 CI 與發布）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-25（v2.10.0-beta.3 已發布，等待使用者實測 AI 助理與自動下載頻道）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -60,7 +60,8 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 
 | 版本 | commit | 狀態 |
 |---|---|---|
-| v2.10.0-beta.2 | 6b2665a | 預先發行；AI 助理（MCP）＋一鍵加入 Claude Desktop / Codex 設定；setup.exe 106.2 MB（`40393ab5…e640a6`）、zip 144.2 MB（`ba9cb2d3…02fd56`），sha256 已核對；**等待使用者實測** |
+| v2.10.0-beta.3 | f161f6c | 預先發行；AI 助理（MCP）＋一鍵加入設定＋自動下載頻道白名單；setup.exe 106.2 MB（`22728c9c…5e3a70`）、zip 144.2 MB（`300adfb9…162111`），sha256 已核對；**等待使用者實測** |
+| v2.10.0-beta.2 | 6b2665a | 預先發行；AI 助理（MCP）＋一鍵加入 Claude Desktop / Codex 設定；setup.exe 106.2 MB（`40393ab5…e640a6`）、zip 144.2 MB（`ba9cb2d3…02fd56`），sha256 已核對；未實測（由 beta.3 取代） |
 | v2.10.0-beta.1 | 04c702d | 預先發行；AI 助理（MCP）；setup.exe 106.2 MB（`6fae51b3…37e01a`）、zip 144.2 MB（`e4f6496a…a215c`），sha256 已核對；未實測（由 beta.2 取代）。使用者按了兩次 Run workflow：第二次（45418101910）在「建立 GitHub Release」因 tag 已存在而失敗，屬預期、不影響已發布的檔案 |
 | **v2.9.3** | e15eae8 | **正式版（Latest）**；程式碼同 v2.9.3-beta.1；setup.exe 106.1 MB（`dbbcc921…0183fb`）、zip 144.1 MB（`212b11ef…533ebd`），sha256 已核對 |
 | v2.9.3-beta.1 | 58a02d7 | 預先發行；重新開啟後已完成任務顯示 100%、FFmpeg 改用 autobuild-2026-11-17-12-40、upload-artifact v6；setup.exe 106.1 MB（`b8af3681…02c458`）、zip 144.1 MB（`72991d7d…aeb532`），sha256 已核對；**使用者實測無誤** |
@@ -490,7 +491,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `v2.9.1-beta.1`（6330fe2）使用者實測下載無誤，已以 `v2.9.1` 發布正式版。
 - `v2.9.2-beta.1`（9e96f32）使用者實測下載無誤，已以 `v2.9.2` 發布正式版（第六次檢查：安全性強化，見 2.3）。
 - `v2.9.3-beta.1`（58a02d7）使用者實測無誤（含新 FFmpeg），已以 `v2.9.3` 發布正式版（進度顯示修正＋新的 FFmpeg 建置＋upload-artifact v6）。
-- **進行中：v2.10.0 加入「自動下載頻道（白名單）」，等 Windows CI 通過後請使用者以 tag `v2.10.0-beta.3` 發布**（beta.1、beta.2 已發布、未實測，由 beta.3 取代）；實測請使用者實際接上 Claude Desktop / Claude Code / Codex（WINDOWS_INTEGRATION_TESTS 第 J 段），無誤後再發 `v2.10.0`。
+- **進行中：`v2.10.0-beta.3`（f161f6c）已發布為預先發行，等待使用者實測**（AI 助理＋一鍵加入 Claude Desktop / Codex＋自動下載頻道白名單；beta.1、beta.2 未實測，由 beta.3 取代）；實測請使用者實際接上 Claude Desktop / Claude Code / Codex（WINDOWS_INTEGRATION_TESTS 第 J 段），無誤後再發 `v2.10.0`。
   （使用者在 CI 通過後自行按了 Run workflow，本 session 當時重新啟動、未監看到；事後以 API 核對附件與 `.sha256`。）
 - v2.9.0 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.2 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
