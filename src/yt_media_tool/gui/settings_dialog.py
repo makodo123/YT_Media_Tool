@@ -5,20 +5,31 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from collections.abc import Callable
+
+from PySide6.QtCore import Qt, QThreadPool
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog, QFormLayout, QFrame,
-    QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
+    QFormLayout, QFrame, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget, QListWidgetItem,
+    QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
 )
 
 from yt_media_tool.core import converter
 from yt_media_tool.core.cookies import COOKIE_SOURCES
 from yt_media_tool.core.task_models import MP3_QUALITIES, MP4_QUALITIES, MediaFormat
 from yt_media_tool.core import ai_clients
+from yt_media_tool.core.downloader import ChannelInfo
+from yt_media_tool.core.errors import explain_error
+from yt_media_tool.core.url_parser import UrlParseError, parse_channel_url
+from yt_media_tool.gui.workers import BackgroundJob
 from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.mcp_server import launch_command
 
-from yt_media_tool.storage.settings import MAX_CONCURRENT, MAX_RATE_LIMIT_MBPS, MIN_CONCURRENT, AppSettings
+from yt_media_tool.storage.settings import (
+    MAX_AUTO_CHANNELS, MAX_CONCURRENT, MAX_RATE_LIMIT_MBPS, MIN_CONCURRENT, AppSettings,
+)
+
+MAX_AUTO_DOWNLOADS = 10  # 與 MainWindow 相同：AI 助理每批最多自動加入佇列的影片數
 
 # AI 助理設定檔的狀態 → （顯示文字, 按鈕文字；None 表示不顯示按鈕）
 AI_CLIENT_TEXT = {
@@ -49,8 +60,11 @@ def _folder_row(parent: QWidget, line_edit: QLineEdit, title: str) -> QWidget:
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, settings: AppSettings, parent: QWidget | None = None) -> None:
+    def __init__(self, settings: AppSettings, parent: QWidget | None = None,
+                 channel_resolver: Callable[[str], ChannelInfo] | None = None) -> None:
         super().__init__(parent)
+        self._channel_resolver = channel_resolver  # 頻道網址 → 頻道 ID 與名稱（需連網，在背景執行）
+        self._channel_job: BackgroundJob | None = None
         self.setWindowTitle("設定")
         self.setMinimumWidth(560)
         self._original = settings
@@ -212,6 +226,35 @@ class SettingsDialog(QDialog):
         mcp_form.addRow(mcp_note)
         self._refresh_ai_clients()
 
+        # 自動下載頻道（白名單）：AI 助理帶入的影片屬於這些頻道時直接加入佇列
+        self.auto_channels = QListWidget()
+        self.auto_channels.setMaximumHeight(110)
+        self.auto_channels.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
+        for channel in settings.mcp_auto_channels:
+            self._add_channel_item(channel["id"], channel["name"])
+        self.add_channel_button = QPushButton("加入頻道…")
+        self.add_channel_button.clicked.connect(self._ask_channel)
+        self.add_channel_button.setEnabled(channel_resolver is not None)
+        remove_channel = QPushButton("移除")
+        remove_channel.clicked.connect(self._remove_channels)
+        channel_buttons = QVBoxLayout()
+        channel_buttons.addWidget(self.add_channel_button)
+        channel_buttons.addWidget(remove_channel)
+        channel_buttons.addStretch(1)
+        channel_row = QWidget(self)
+        channel_layout = QHBoxLayout(channel_row)
+        channel_layout.setContentsMargins(0, 0, 0, 0)
+        channel_layout.addWidget(self.auto_channels, 1)
+        channel_layout.addLayout(channel_buttons)
+        channel_note = QLabel(
+            "AI 助理帶入的影片若屬於這些頻道，會直接加入佇列開始下載，不再需要您確認（每次最多 "
+            f"{MAX_AUTO_DOWNLOADS} 部；播放清單仍會放進輸入框讓您勾選）。其他頻道的影片一律放進輸入框等您確認。\n"
+            "請只加入您有權利下載的頻道，例如您自己的頻道。清單是空的時候不會自動下載。")
+        channel_note.setObjectName("hintLabel")
+        channel_note.setWordWrap(True)
+        mcp_form.addRow("自動下載頻道：", channel_row)
+        mcp_form.addRow(channel_note)
+
         note = QLabel("影片沒有所選的畫質或音質時，會下載可取得的最高品質，並在佇列的「品質」欄標示 ⚠。")
         note.setObjectName("hintLabel")
         note.setWordWrap(True)
@@ -288,6 +331,67 @@ class SettingsDialog(QDialog):
             QMessageBox.warning(self, "設定", "請指定存在的 cookies.txt 檔案，或將登入資訊來源改為「不使用」。")
             return
         self.accept()
+
+    # ---- 自動下載頻道 ----
+    def _add_channel_item(self, channel_id: str, name: str) -> None:
+        item = QListWidgetItem(name)
+        item.setData(Qt.ItemDataRole.UserRole, {"id": channel_id, "name": name})
+        item.setToolTip(plain(f"{name}\nhttps://www.youtube.com/channel/{channel_id}"))
+        self.auto_channels.addItem(item)
+
+    def channels(self) -> list[dict[str, str]]:
+        return [self.auto_channels.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.auto_channels.count())]
+
+    def _ask_channel(self) -> None:
+        text, ok = QInputDialog.getText(self, "加入自動下載頻道",
+                                        "貼上頻道網址（到頻道首頁複製，例如 https://www.youtube.com/@帳號）：")
+        if ok and text.strip():
+            self.add_channel(text)
+
+    def add_channel(self, text: str) -> None:
+        try:
+            url = parse_channel_url(text)
+        except UrlParseError as exc:
+            QMessageBox.warning(self, "自動下載頻道", str(exc))
+            return
+        if self._channel_resolver is None or self._channel_job is not None:
+            return
+        resolver = self._channel_resolver
+        job = BackgroundJob(lambda: resolver(url))
+        job.signals.succeeded.connect(self._on_channel_resolved)
+        job.signals.failed.connect(self._on_channel_failed)
+        self._channel_job = job
+        self.add_channel_button.setEnabled(False)
+        self.add_channel_button.setText("讀取中…")
+        QThreadPool.globalInstance().start(job)
+
+    def _channel_done(self) -> None:
+        self._channel_job = None
+        self.add_channel_button.setEnabled(True)
+        self.add_channel_button.setText("加入頻道…")
+
+    def _on_channel_failed(self, exc: Exception) -> None:
+        self._channel_done()
+        QMessageBox.warning(self, "自動下載頻道", plain(f"讀不到這個頻道：{explain_error(exc)}"))
+
+    def _on_channel_resolved(self, channel: ChannelInfo) -> None:
+        self._channel_done()
+        if any(c["id"] == channel.channel_id for c in self.channels()):
+            QMessageBox.information(self, "自動下載頻道", plain(f"「{channel.name}」已經在清單中。"))
+            return
+        if len(self.channels()) >= MAX_AUTO_CHANNELS:
+            QMessageBox.warning(self, "自動下載頻道", f"最多 {MAX_AUTO_CHANNELS} 個頻道。")
+            return
+        answer = QMessageBox.question(
+            self, "自動下載頻道",
+            plain(f"加入「{channel.name}」後，AI 助理帶入這個頻道的影片會直接開始下載，不再需要您確認。\n\n"
+                  "請確認您有權利下載這個頻道的內容。確定要加入嗎？"))
+        if answer == QMessageBox.StandardButton.Yes:
+            self._add_channel_item(channel.channel_id, channel.name)
+
+    def _remove_channels(self) -> None:
+        for item in self.auto_channels.selectedItems():
+            self.auto_channels.takeItem(self.auto_channels.row(item))
 
     def _copy_mcp_command(self) -> None:
         self._copy_text(self.mcp_command)
@@ -374,4 +478,5 @@ class SettingsDialog(QDialog):
             cookies_source=self.cookies_source.currentData(),
             cookies_file=self.cookies_file.text().strip(),
             mcp_enabled=self.mcp_enabled.isChecked(),
+            mcp_auto_channels=self.channels(),
         ).validated()

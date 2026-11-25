@@ -76,7 +76,8 @@ TOOLS: list[dict[str, Any]] = [
         "name": "add_urls_to_input",
         "title": "把 YouTube 網址放進輸入框",
         "description": (f"把 YouTube 影片、Shorts 或播放清單網址放進 {APP_NAME} 主視窗的輸入框，"
-                        "並可預先選好格式與品質。不會開始下載：使用者確認後在程式中按「加入佇列」才會下載。"
+                        "並可預先選好格式與品質。一般不會開始下載，由使用者確認後在程式中按「加入佇列」；"
+                        "只有屬於使用者自行設定之「自動下載頻道」的影片（每次最多 10 部）會直接加入下載佇列。"
                         f"只接受 YouTube 網址，一次最多 {MAX_URLS_PER_CALL} 個。"
                         "請只放入使用者在對話中明確要求下載的網址。"),
         "inputSchema": {
@@ -204,6 +205,16 @@ class McpServer:
         except ValueError:
             return False
 
+    def has_auto_channels(self) -> bool:
+        """使用者是否設定了自動下載頻道（只讀取是否有設定，AI 助理不能讀取或修改清單內容）。"""
+        try:
+            with self._connect() as conn:
+                row = conn.execute("SELECT value FROM application_settings WHERE key = ?",
+                                   ("settings.mcp_auto_channels",)).fetchone()
+            return row is not None and bool(json.loads(row["value"]))
+        except (sqlite3.Error, ValueError, ToolError):
+            return False
+
     # ---- 工具 ----
     def search_history(self, query: str = "", limit: int = 20) -> dict[str, Any]:
         query = str(query or "").strip()[:200]
@@ -272,8 +283,12 @@ class McpServer:
                             "且需同時指定 format。")
         accepted = [p.original for p in result.valid]
         write_inbox(accepted, media_format, chosen_quality, self.client_name or "AI 助理")
-        message = (f"已把 {len(accepted)} 個網址放進 {APP_NAME} 的輸入框。尚未開始下載："
-                   "請使用者在程式中確認後按「加入佇列」。若程式沒有開啟，下次開啟時會出現在輸入框。")
+        if self.has_auto_channels():
+            message = (f"已把 {len(accepted)} 個網址交給 {APP_NAME}。屬於使用者設定之「自動下載頻道」的影片會直接加入"
+                       "下載佇列；其他網址放進輸入框，需使用者確認後按「加入佇列」。若程式沒有開啟，下次開啟時處理。")
+        else:
+            message = (f"已把 {len(accepted)} 個網址放進 {APP_NAME} 的輸入框。尚未開始下載："
+                       "請使用者在程式中確認後按「加入佇列」。若程式沒有開啟，下次開啟時會出現在輸入框。")
         response: dict[str, Any] = {"message": message, "accepted": accepted}
         if result.invalid:
             response["rejected"] = [{"url": i.original, "reason": i.reason} for i in result.invalid]

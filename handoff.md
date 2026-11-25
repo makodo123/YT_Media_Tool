@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-25（v2.10.0-beta.2 已發布，等待使用者實測 AI 助理）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-25（v2.10.0-beta.3：AI 助理自動下載頻道白名單，等待 CI 與發布）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -54,7 +54,7 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
   測試自動更新時曾把 v2.7.1 直接裝在 v2.8.0-beta.1 上 → 「資料庫版本 3 比程式支援的版本 2 新」（預期中的降版保護），以及 GitHub API「rate limit exceeded」（促成 beta.1 的備用查詢）。
 - 使用者實測紀錄：v2.1.0（下載、cookies、MP4 / MP3、批次移除、總進度、安裝 / 升級 / 解除安裝）、v2.1.2、
   v2.2.0-beta.2、v2.2.0、v2.3.0-beta.1、v2.3.0、v2.4.0-beta.1、v2.4.0、v2.5.0-beta.2、v2.5.0、v2.6.0-beta.3、v2.6.0、v2.7.0-beta.2、v2.7.1-beta.1、v2.7.1、v2.8.0-beta.1、v2.8.1-beta.2、v2.8.1、v2.8.2-beta.1、v2.8.2、v2.9.0-beta.1、v2.9.0、v2.9.1-beta.1、v2.9.2-beta.1、v2.9.2、v2.9.3-beta.1 皆回報無誤。
-- 測試：485 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
+- 測試：502 個通過＋1 個僅 Windows 執行（單元、GUI、以本機 HTTP 伺服器搭配真實 yt-dlp / FFmpeg 的整合測試；不連線 YouTube）。
 
 ### 2.2 發行紀錄（新 → 舊）
 
@@ -120,6 +120,7 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 | 升級時不被 --mcp 擋住 | `installer.iss` 新增 `SetupMutex=YTMediaTool_SetupMutex`，`--mcp` 每 0.5 秒檢查（`win_job.mutex_exists`），安裝程式執行中就自行結束；並改為 **`CloseApplications=force`**——第一次 CI 發現靜默安裝在啟動後 0.3 秒內就檢查占用中的檔案，沒有視窗的 `--mcp` 無法被 Restart Manager 正常關閉而中止安裝（視窗程式仍由 AppMutex 保護）。CI：`verify_update_while_mcp_running` |
 | 主視窗 | `check_mcp_inbox()`（每 1.5 秒）：功能開啟時把網址附加到輸入框（不重複）、選好格式與品質、狀態列顯示「<用戶端> 帶入了 N 個網址」並 `QApplication.alert`；**不加入佇列**。功能關閉時取出並丟棄 |
 | 設定 | `AppSettings.mcp_enabled`（預設 False，只接受明確的 True）；設定對話框新增「AI 助理（MCP，選用）」群組：勾選框、唯讀的啟動指令（`mcp_server.launch_command()`）與「複製」按鈕 |
+| beta.3：自動下載頻道（白名單） | 使用者問「只要是 YouTube 就允許自動下載？」→ 說明風險後使用者提議白名單 → 選「頻道白名單」。`AppSettings.mcp_auto_channels`（`[{id: UC…, name}]`，`valid_channels()` 驗證、最多 50）；`Downloader.video_channel()` / `resolve_channel()`（yt-dlp 只讀資訊，`ChannelInfo`、`CHANNEL_ID`）；`url_parser.parse_channel_url()`。主視窗 `check_mcp_inbox()`：白名單非空時，單支影片（VIDEO / SHORTS，每批最多 `MAX_AUTO_DOWNLOADS`=10）以 `BackgroundJob` 查頻道（`self._mcp_jobs`，**不可放進 `self._jobs`**——播放清單完成時會 `clear()`），`_on_mcp_channels_checked()`：在白名單 → `queue.add_tasks(TaskSpec(..., settings.download_dir))`（已在佇列或 `DownloadedIndex` 找得到就略過）；其他、查不到頻道、播放清單、沒有 FFmpeg → 輸入框。設定頁「自動下載頻道」清單＋「加入頻道…」（背景解析，加入前確認）/「移除」；`SettingsDialog(channel_resolver=...)`。MCP 工具說明與回覆訊息依是否有白名單調整（`McpServer.has_auto_channels()`，**AI 不能讀取或修改清單**）。測試：`tests/test_gui.py`、`tests/test_url_parser.py`、`tests/test_mcp_server.py`、`tests/test_downloader.py` |
 | beta.2：自動寫入 AI 助理設定 | 使用者問「偵測到有安裝 Claude 就自動寫入設定檔？」→ 同意改為「偵測到就顯示按鈕、按下才寫入」，Codex 一起做。新檔 `core/ai_clients.py`（無 Qt）：偵測 `%APPDATA%\\Claude`（一般版優先）與 `%LOCALAPPDATA%\\Packages\\Claude_*\\LocalCache\\Roaming\\Claude`（Store 版）、`CODEX_HOME` 或 `~/.codex`；`add_to_claude_desktop()`（JSON 合併，保留其他 key 與同一項的 env）、`add_to_codex()`（**文字層級修改 TOML**：只替換 `[mcp_servers.yt-media-tool]` 段的 command / args，保留註解、其他鍵與 CRLF；寫入前以 `tomllib` 驗證結果；以 inline table 等其他寫法定義時拒絕）。格式錯誤一律不修改（`ConfigState.INVALID`）；寫入前備份為 `<檔名>.ytmt-backup-<時間>`，以暫存檔 + `os.replace` 寫入。Claude Code（`~/.claude.json`）**不自動修改**，只提供 `claude mcp add --scope user …` 指令。設定頁：每個 AI 助理一列狀態＋「加入 / 更新」按鈕；按下後自動勾選允許，提示按「儲存」並完全結束 AI 助理。測試：`tests/test_ai_clients.py`、`tests/test_gui.py` |
 | 測試與文件 | 新檔 `tests/test_mcp_server.py`（含以獨立程序啟動 `main.py --mcp` 的端對端測試）、`tests/test_gui.py`、`tests/test_release_config.py`（SetupMutex 一致）；README 新章節「AI 助理（MCP）」（Claude Desktop / Claude Code / Codex 設定範例）、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS（第 J 段） |
 
@@ -382,6 +383,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 | 決定 | 原因 |
 |---|---|
+| **自動下載只限使用者設定的頻道白名單**（v2.10.0-beta.3），且每批 ≤10 部、播放清單仍需確認、AI 不能改清單 | 使用者想讓 AI 直接下載；「任何 YouTube 網址」無法防止提示詞注入或 AI 選錯影片，白名單把自動下載限制在使用者事先確認有權利的頻道。頻道以 ID（UC…）比對，名稱或 @帳號改了也不受影響 |
 | **AI 不能開始下載**，只能把網址放進輸入框，由使用者按「加入佇列」 | 影片標題、說明、播放清單名稱由上傳者決定，可能藏有誘導 AI 的文字（提示詞注入）；也符合「只下載有權利的內容」須由使用者本人確認。使用者同意此設計 |
 | 只有三個工具，沒有刪除、改設定、指定資料夾 | 被誘導時的最壞情況只是輸入框多出網址 |
 | 預設關閉、每次呼叫都重新檢查設定 | 取消勾選立即生效，不必重新啟動 AI 助理 |
@@ -488,7 +490,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `v2.9.1-beta.1`（6330fe2）使用者實測下載無誤，已以 `v2.9.1` 發布正式版。
 - `v2.9.2-beta.1`（9e96f32）使用者實測下載無誤，已以 `v2.9.2` 發布正式版（第六次檢查：安全性強化，見 2.3）。
 - `v2.9.3-beta.1`（58a02d7）使用者實測無誤（含新 FFmpeg），已以 `v2.9.3` 發布正式版（進度顯示修正＋新的 FFmpeg 建置＋upload-artifact v6）。
-- **進行中：`v2.10.0-beta.2`（6b2665a）已發布為預先發行，等待使用者實測**（含「偵測到 Claude Desktop / Codex 就顯示『加入』按鈕」；beta.1 未實測、由 beta.2 取代）；實測請使用者實際接上 Claude Desktop / Claude Code / Codex（WINDOWS_INTEGRATION_TESTS 第 J 段），無誤後再發 `v2.10.0`。
+- **進行中：v2.10.0 加入「自動下載頻道（白名單）」，等 Windows CI 通過後請使用者以 tag `v2.10.0-beta.3` 發布**（beta.1、beta.2 已發布、未實測，由 beta.3 取代）；實測請使用者實際接上 Claude Desktop / Claude Code / Codex（WINDOWS_INTEGRATION_TESTS 第 J 段），無誤後再發 `v2.10.0`。
   （使用者在 CI 通過後自行按了 Run workflow，本 session 當時重新啟動、未監看到；事後以 API 核對附件與 `.sha256`。）
 - v2.9.0 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.2 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
@@ -540,7 +542,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 ### 近期新增功能的雷
 - **`--mcp` 模式的標準輸出只能有 JSON-RPC 訊息**：不可 `print`、不可把日誌送到 stdout（日誌寫 `logs\mcp.log`）。
-- **不要新增會下載、刪除或改設定的 MCP 工具**（見 3.0）；新增唯讀工具時回傳內容要附 `UNTRUSTED_NOTE`。
+- **不要新增會下載、刪除或改設定的 MCP 工具**（見 3.0；自動下載只由視窗程式依使用者的頻道白名單決定）；新增唯讀工具時回傳內容要附 `UNTRUSTED_NOTE`。
 - `mcp_server.SETTING_KEY` 必須等於 `SettingsStore.PREFIX + "mcp_enabled"`（測試守著）；`--mcp` 不可建立程式 mutex 或取得單一執行個體鎖。
 - `installer.iss` 的 `SetupMutex` 與 `win_job.SETUP_MUTEX_NAME` 必須一致（測試守著），否則 AI 助理開著時升級會失敗。
 - **README 的結構**：前半給一般使用者（白話、用「您」、不放程式碼或網址格式），開發內容一律放在「開發者說明」之後。新增功能時要更新「功能」中對應的表；使用者會遇到的問題加到「常見問題」。README 會由 `build_exe.bat` 複製進發行資料夾。

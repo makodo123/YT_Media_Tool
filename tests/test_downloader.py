@@ -322,3 +322,28 @@ def test_extract_playlist_keeps_channel_for_name_preview():
                                          {"id": "bbbbbbbbbbb", "title": "B", "uploader": "五月天"}]}
     entries = make_downloader(info=info).extract_playlist("https://www.youtube.com/playlist?list=PLxxxxxxxxxx").entries
     assert [e.channel for e in entries] == ["周杰倫 Jay Chou", "五月天"]
+
+
+def test_channel_lookups(tmp_path):
+    from yt_media_tool.core.downloader import ChannelInfo
+
+    captured = []
+
+    def factory(info):
+        def make(params):
+            captured.append(params)
+            return FakeYDL(params, info)
+        return make
+
+    video = {"id": "aaaaaaaaaaa", "channel_id": "UCaaaaaaaaaaaaaaaaaaaaaa", "channel": "我的頻道"}
+    d = Downloader(tools_provider=lambda: TOOLS, js_runtime_provider=JsRuntimeInfo, ydl_factory=factory(video))
+    assert d.video_channel("https://www.youtube.com/watch?v=aaaaaaaaaaa") == ChannelInfo(
+        "UCaaaaaaaaaaaaaaaaaaaaaa", "我的頻道")
+    assert captured[-1]["noplaylist"] is True
+    page = {"id": "UCbbbbbbbbbbbbbbbbbbbbbb", "title": "別人 - Videos", "entries": []}
+    d = Downloader(tools_provider=lambda: TOOLS, js_runtime_provider=JsRuntimeInfo, ydl_factory=factory(page))
+    assert d.resolve_channel("https://www.youtube.com/@x") == ChannelInfo("UCbbbbbbbbbbbbbbbbbbbbbb", "別人")
+    d = Downloader(tools_provider=lambda: TOOLS, js_runtime_provider=JsRuntimeInfo, ydl_factory=factory({"id": "x"}))
+    assert d.video_channel("https://www.youtube.com/watch?v=x") is None
+    with pytest.raises(RuntimeError, match="讀不到"):
+        d.resolve_channel("https://www.youtube.com/@x")

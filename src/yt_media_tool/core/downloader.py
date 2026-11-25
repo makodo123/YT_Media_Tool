@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import shutil
 import tempfile
 import threading
@@ -161,6 +162,15 @@ class PlaylistEntry:
     channel: str = ""  # 頻道名稱（歌名整理時補演出者用）
 
 
+@dataclass(frozen=True)
+class ChannelInfo:
+    channel_id: str  # 例如「UCxxxxxxxxxxxxxxxxxxxxxx」（不會變；頻道名稱與 @帳號可能改）
+    name: str
+
+
+CHANNEL_ID = re.compile(r"^UC[0-9A-Za-z_-]{22}$")
+
+
 @dataclass
 class PlaylistInfo:
     title: str
@@ -280,6 +290,39 @@ class Downloader:
         opts.update(cookie_options or {})
         opts.update(self._extra_options)
         return opts
+
+    # ---- 頻道（AI 助理自動下載白名單）----
+    def _extract_without_download(self, url: str, extra: dict[str, Any]) -> dict[str, Any]:
+        logger = _YdlLogger(None)
+        with tempfile.TemporaryDirectory(prefix="ytmt_info_") as work_dir:
+            cookie_options = ydl_cookie_options(self._cookies_provider(), Path(work_dir))
+            opts = self._base_options(logger, None, cookie_options)
+            opts.update(extra)
+            with self._ydl_factory(opts) as ydl:
+                return ydl.extract_info(url, download=False) or {}
+
+    @staticmethod
+    def _channel_of(info: dict[str, Any]) -> ChannelInfo | None:
+        channel_id = str(info.get("channel_id") or "")
+        if not CHANNEL_ID.match(channel_id) and CHANNEL_ID.match(str(info.get("id") or "")):
+            channel_id = str(info["id"])  # 頻道頁面本身的 id 就是頻道 ID
+        if not CHANNEL_ID.match(channel_id):
+            return None
+        name = str(info.get("channel") or info.get("uploader") or info.get("title") or channel_id)
+        return ChannelInfo(channel_id, name.removesuffix(" - Videos").strip()[:100])
+
+    def video_channel(self, url: str) -> ChannelInfo | None:
+        """影片所屬的頻道；讀不到時回傳 None。不下載影片。"""
+        return self._channel_of(self._extract_without_download(url, {"noplaylist": True}))
+
+    def resolve_channel(self, url: str) -> ChannelInfo:
+        """頻道網址（@帳號、/channel/UC…、/c/…、/user/…）→ 頻道 ID 與名稱。"""
+        info = self._extract_without_download(url, {"noplaylist": False, "extract_flat": "in_playlist",
+                                                    "playlistend": 1})
+        channel = self._channel_of(info)
+        if channel is None:
+            raise RuntimeError("讀不到這個頻道的資訊，請確認網址是否正確。")
+        return channel
 
     # ---- 播放清單展開 ----
     def extract_playlist(self, url: str, limit: int = 500) -> PlaylistInfo:

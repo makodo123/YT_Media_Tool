@@ -532,7 +532,7 @@ def test_saving_settings_keeps_current_choices(window, monkeypatch, tmp_path):
     window.folder_edit.setText(str(tmp_path / "chosen"))
 
     class FakeDialog:
-        def __init__(self, settings, parent):
+        def __init__(self, settings, parent, **kwargs):
             self.settings = settings
 
         def exec(self):
@@ -1741,3 +1741,85 @@ def test_settings_dialog_adds_detected_ai_clients(qtbot, window, dialogs, tmp_pa
     dialog.codex_button.click()
     data = tomllib.loads((tmp_path / "home" / ".codex" / "config.toml").read_text(encoding="utf-8"))
     assert data["model"] == "x" and data["mcp_servers"]["yt-media-tool"]["args"][-1] == "--mcp"
+
+
+AUTO_CHANNEL = "UCaaaaaaaaaaaaaaaaaaaaaa"
+
+
+def _auto_window(window, fake):
+    from yt_media_tool.core.downloader import ChannelInfo
+
+    window.ctx.settings.mcp_enabled = True
+    window.ctx.settings.mcp_auto_channels = [{"id": AUTO_CHANNEL, "name": "我的頻道"}]
+    fake.channels["https://www.youtube.com/watch?v=aaaaaaaaaaa"] = ChannelInfo(AUTO_CHANNEL, "我的頻道")
+    fake.channels["https://www.youtube.com/watch?v=bbbbbbbbbbb"] = ChannelInfo("UCbbbbbbbbbbbbbbbbbbbbbb", "別人")
+
+
+def test_mcp_whitelisted_channel_is_queued_directly(window, fake, qtbot, dialogs):
+    """白名單頻道的影片直接加入佇列；其他頻道、讀不到頻道、播放清單放進輸入框等使用者確認。"""
+    from yt_media_tool import mcp_server
+
+    _auto_window(window, fake)
+    mcp_server.write_inbox(["https://youtu.be/aaaaaaaaaaa", "https://youtu.be/bbbbbbbbbbb",
+                            "https://youtu.be/nochannel01", "https://www.youtube.com/playlist?list=PLabcdefghij123456"],
+                           "mp3", "320", "Claude")
+    assert window.check_mcp_inbox() == 1  # 播放清單立即放進輸入框
+    qtbot.waitUntil(lambda: rows(window) == 1, timeout=5000)
+    task = window.ctx.queue.tasks()[0]
+    assert task.url == "https://www.youtube.com/watch?v=aaaaaaaaaaa" and task.media_format is MediaFormat.MP3
+    assert task.quality == "320" and task.output_dir == window.ctx.settings.download_dir
+    qtbot.waitUntil(lambda: "youtu.be/bbbbbbbbbbb" in window.url_input.toPlainText(), timeout=5000)
+    text = window.url_input.toPlainText()
+    assert "youtu.be/nochannel01" in text and "playlist?list=" in text and "aaaaaaaaaaa" not in text
+    assert "已自動加入 1 部" in window.statusBar().currentMessage()
+    assert dialogs.messages == []
+
+
+def test_mcp_auto_download_is_limited_and_skips_downloaded(window, fake, qtbot):
+    from yt_media_tool import mcp_server
+    from yt_media_tool.core.downloader import ChannelInfo
+
+    _auto_window(window, fake)
+    urls = [f"https://youtu.be/vid{i:08d}" for i in range(12)]
+    for i in range(12):
+        fake.channels[f"https://www.youtube.com/watch?v=vid{i:08d}"] = ChannelInfo(AUTO_CHANNEL, "我的頻道")
+    mcp_server.write_inbox(urls, None, None, "Claude")
+    window.check_mcp_inbox()
+    qtbot.waitUntil(lambda: rows(window) == 10, timeout=5000)  # 每批最多 10 部
+    qtbot.waitUntil(lambda: window.url_input.toPlainText().count("youtu.be") == 2, timeout=5000)
+    # 同一批再送一次：已在佇列中的不重複加入
+    window.url_input.clear()
+    mcp_server.write_inbox(urls[:3], None, None, "Claude")
+    window.check_mcp_inbox()
+    qtbot.waitUntil(lambda: "已略過" in window.statusBar().currentMessage(), timeout=5000)
+    assert rows(window) == 10
+
+
+def test_mcp_without_whitelist_never_queues(window, fake, qtbot):
+    from yt_media_tool import mcp_server
+
+    _auto_window(window, fake)
+    window.ctx.settings.mcp_auto_channels = []
+    mcp_server.write_inbox(["https://youtu.be/aaaaaaaaaaa"], None, None, "Claude")
+    assert window.check_mcp_inbox() == 1 and rows(window) == 0
+
+
+def test_settings_dialog_manages_auto_channels(qtbot, window, monkeypatch, dialogs):
+    from yt_media_tool.core.downloader import ChannelInfo
+
+    channel = ChannelInfo(AUTO_CHANNEL, "我的頻道")
+    dialog = SettingsDialog(window.ctx.settings, window,
+                            channel_resolver=lambda url: channel if url.endswith("@mine") else None)
+    qtbot.addWidget(dialog)
+    dialog.add_channel("https://vimeo.com/x")
+    assert "YouTube 頻道網址" in dialogs.text() and dialog.channels() == []
+    dialog.add_channel("@mine")
+    qtbot.waitUntil(lambda: dialog.channels() != [], timeout=5000)
+    assert dialog.channels() == [{"id": AUTO_CHANNEL, "name": "我的頻道"}]
+    assert "不再需要您確認" in dialogs.text()  # 加入前先確認
+    dialog.add_channel("https://www.youtube.com/@mine/videos")
+    qtbot.waitUntil(lambda: "已經在清單中" in dialogs.text(), timeout=5000)
+    assert dialog.result_settings().mcp_auto_channels == [{"id": AUTO_CHANNEL, "name": "我的頻道"}]
+    dialog.auto_channels.selectAll()
+    dialog._remove_channels()
+    assert dialog.result_settings().mcp_auto_channels == []

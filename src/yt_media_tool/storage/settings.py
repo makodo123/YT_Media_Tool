@@ -6,7 +6,7 @@ import dataclasses
 from dataclasses import dataclass, field
 
 from yt_media_tool.core.cookies import COOKIE_SOURCES, CookieConfig
-from yt_media_tool.core.downloader import DownloadPreferences
+from yt_media_tool.core.downloader import CHANNEL_ID, DownloadPreferences
 from yt_media_tool.core.task_models import MP3_QUALITIES, MP4_QUALITIES, MediaFormat
 from yt_media_tool.storage.database import Database
 from yt_media_tool.utils import paths
@@ -42,6 +42,8 @@ class AppSettings:
     skipped_update_version: str = ""  # 使用者選擇「略過這個版本」的版本號
     pending_update_version: str = ""  # 已啟動自動更新、等待安裝完成的版本（下次啟動時確認是否成功）
     mcp_enabled: bool = False  # 允許 AI 助理透過 MCP 查詢紀錄、佇列並把網址帶入輸入框（mcp_server 直接讀取此值）
+    # AI 助理帶入的影片屬於這些頻道時直接加入佇列（不需確認）：[{"id": "UC…", "name": "頻道名稱"}]
+    mcp_auto_channels: list = field(default_factory=list)
 
     def validated(self) -> AppSettings:
         defaults = AppSettings()
@@ -74,6 +76,7 @@ class AppSettings:
         s.check_updates = bool(s.check_updates)
         s.auto_download_updates = bool(s.auto_download_updates)
         s.mcp_enabled = s.mcp_enabled is True  # 只接受明確的 True（與 mcp_server.McpServer.enabled 相同）
+        s.mcp_auto_channels = valid_channels(s.mcp_auto_channels)
         s.skipped_update_version = s.skipped_update_version if isinstance(s.skipped_update_version, str) else ""
         s.pending_update_version = s.pending_update_version if isinstance(s.pending_update_version, str) else ""
         s.ffmpeg_dir = s.ffmpeg_dir if isinstance(s.ffmpeg_dir, str) else ""
@@ -94,6 +97,23 @@ class AppSettings:
 
     def default_quality_for(self, media_format: MediaFormat) -> str:
         return self.default_mp4_quality if media_format is MediaFormat.MP4 else self.default_mp3_quality
+
+
+MAX_AUTO_CHANNELS = 50
+
+
+def valid_channels(value: object) -> list[dict[str, str]]:
+    """自動下載白名單：只保留格式正確、不重複的頻道（頻道 ID 為 UC 開頭的 24 碼）。"""
+    channels: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in value if isinstance(value, list) else []:
+        if not isinstance(item, dict):
+            continue
+        channel_id, name = item.get("id"), item.get("name")
+        if isinstance(channel_id, str) and CHANNEL_ID.match(channel_id) and channel_id not in seen:
+            seen.add(channel_id)
+            channels.append({"id": channel_id, "name": name[:100] if isinstance(name, str) and name else channel_id})
+    return channels[:MAX_AUTO_CHANNELS]
 
 
 class SettingsStore:

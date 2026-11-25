@@ -151,3 +151,25 @@ def test_plain_text_is_ignored_but_url_like_text_is_reported():
     assert result.ignored == ["只有文字", "hello"]
     assert [i.original for i in result.invalid] == ["https://vimeo.com/1", "example.com/x"]
     assert [p.video_id for p in result.valid] == [VID, "aaaaaaaaaaa"]  # 兩個網址黏在一起也能分開
+
+
+@pytest.mark.parametrize("raw,expected", [
+    ("@mine", "https://www.youtube.com/@mine"),
+    ("https://www.youtube.com/@mine/videos", "https://www.youtube.com/@mine"),
+    ("youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaaaa", "https://www.youtube.com/channel/UCaaaaaaaaaaaaaaaaaaaaaa"),
+    ("https://m.youtube.com/c/SomeName?x=1", "https://www.youtube.com/c/SomeName"),
+    ("https://www.youtube.com/user/old_name", "https://www.youtube.com/user/old_name"),
+])
+def test_parse_channel_url(raw, expected):
+    from yt_media_tool.core.url_parser import parse_channel_url
+
+    assert parse_channel_url(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [f"https://youtu.be/{VID}", "https://vimeo.com/@x", "https://www.youtube.com/watch?v=x",
+                                 "https://evil.example/@mine", ""])
+def test_parse_channel_url_rejects_non_channels(raw):
+    from yt_media_tool.core.url_parser import parse_channel_url
+
+    with pytest.raises(UrlParseError):
+        parse_channel_url(raw)

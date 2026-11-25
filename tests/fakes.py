@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 from yt_media_tool.core.downloader import (
-    CancelToken, DownloadResult, PlaylistEntry, PlaylistInfo, ProgressUpdate,
+    CancelToken, ChannelInfo, DownloadResult, PlaylistEntry, PlaylistInfo, ProgressUpdate,
 )
 from yt_media_tool.core.errors import DownloadCancelledError
 from yt_media_tool.core.task_models import DownloadTask, TaskStatus
@@ -29,6 +29,7 @@ class FakeDownloader:
         self.running = 0
         self.max_running = 0
         self.playlists: dict[str, PlaylistInfo] = {}
+        self.channels: dict[str, ChannelInfo] = {}  # 影片或頻道網址 → 所屬頻道
 
     def release(self, url: str) -> None:
         self.release_events.setdefault(url, threading.Event()).set()
@@ -59,6 +60,16 @@ class FakeDownloader:
         finally:
             with self.lock:
                 self.running -= 1
+
+    def video_channel(self, url: str) -> ChannelInfo | None:
+        if "nochannel" in url:
+            raise RuntimeError("ERROR: Unable to download webpage")
+        return self.channels.get(url)
+
+    def resolve_channel(self, url: str) -> ChannelInfo:
+        if url not in self.channels:
+            raise RuntimeError("ERROR: [youtube:tab] This channel does not exist.")
+        return self.channels[url]
 
     def extract_playlist(self, url: str, limit: int = 500) -> PlaylistInfo:
         return self.playlists.get(url, PlaylistInfo("清單", [PlaylistEntry(

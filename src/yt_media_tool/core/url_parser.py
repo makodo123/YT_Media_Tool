@@ -184,6 +184,25 @@ _URL_TRAILING = ".,;:!?)]}>'\""  # 句子結尾或括號，不會是 YouTube 網
 _DOMAIN_LIKE = re.compile(r"^[A-Za-z0-9.-]+\.[A-Za-z]{2,}(/|$)")
 
 
+_CHANNEL_PATH = re.compile(r"^/(@[\w.\-%]+|channel/UC[0-9A-Za-z_-]{22}|c/[\w.\-%]+|user/[\w.\-%]+)(?:/.*)?$")
+
+
+def parse_channel_url(raw: str) -> str:
+    """頻道網址（或「@帳號」）→ 標準的頻道網址；不是 YouTube 頻道時拋出 UrlParseError。"""
+    text = (raw or "").strip()
+    if re.match(r"^@[\w.\-]+$", text):
+        text = f"https://www.youtube.com/{text}"
+    elif "://" not in text and _DOMAIN_LIKE.match(text):
+        text = "https://" + text
+    parts = urlsplit(text)
+    if parts.scheme.lower() not in ("http", "https") or (parts.hostname or "").lower() not in _YOUTUBE_HOSTS:
+        raise UrlParseError("請貼上 YouTube 頻道網址，例如 https://www.youtube.com/@帳號")
+    match = _CHANNEL_PATH.match(parts.path or "")
+    if not match:
+        raise UrlParseError("這不是頻道網址。請到頻道首頁複製網址，例如 https://www.youtube.com/@帳號")
+    return f"https://www.youtube.com/{match.group(1)}"
+
+
 def split_input(text: str) -> list[str]:
     """將使用者輸入（可能多行、以空白或逗號分隔，或夾在一段文字裡）拆成候選項目。
 

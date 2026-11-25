@@ -183,3 +183,21 @@ def test_mcp_mode_end_to_end_in_separate_process(data_db, isolated_app_data):
     assert not replies[2]["result"]["isError"]
     assert take_inbox()[0]["client"] == "test-client"
     assert not (isolated_app_data / "instance.lock").exists()  # 不取得視窗程式的單一執行個體鎖
+
+
+def test_auto_channels_setting_is_validated():
+    from yt_media_tool.storage.settings import valid_channels
+
+    good = {"id": "UCaaaaaaaaaaaaaaaaaaaaaa", "name": "我的頻道"}
+    assert valid_channels([good, good, {"id": "bad"}, "x", {"id": "UCbbbbbbbbbbbbbbbbbbbbbb"}]) == [
+        good, {"id": "UCbbbbbbbbbbbbbbbbbbbbbb", "name": "UCbbbbbbbbbbbbbbbbbbbbbb"}]
+    assert valid_channels("not a list") == []
+
+
+def test_add_urls_message_mentions_auto_channels(data_db):
+    server = McpServer()
+    assert "尚未開始下載" in call(server, "add_urls_to_input", urls=[f"https://youtu.be/{VID}"])["structuredContent"]["message"]
+    SettingsStore(data_db).save(AppSettings(mcp_enabled=True,
+                                            mcp_auto_channels=[{"id": "UCaaaaaaaaaaaaaaaaaaaaaa", "name": "x"}]))
+    message = call(server, "add_urls_to_input", urls=[f"https://youtu.be/{VID}"])["structuredContent"]["message"]
+    assert "自動下載頻道" in message

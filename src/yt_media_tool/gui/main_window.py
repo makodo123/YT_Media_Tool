@@ -44,7 +44,7 @@ from yt_media_tool.gui.qt_bridge import QueueEventBridge
 from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.gui.queue_table import ACTION_CANCEL, ACTION_OPEN, ACTION_RETRY, QueueTableView
 from yt_media_tool.gui import update_dialog
-from yt_media_tool.gui.settings_dialog import SettingsDialog
+from yt_media_tool.gui.settings_dialog import MAX_AUTO_DOWNLOADS, SettingsDialog
 from yt_media_tool.gui.update_dialog import UpdateDialog, UpdateView
 from yt_media_tool.gui.workers import BackgroundJob
 from yt_media_tool.storage.settings import AppSettings
@@ -104,6 +104,7 @@ class MainWindow(QMainWindow):
         self._update_signals.progress.connect(self._on_update_progress)
         self._update_signals.finished.connect(self._on_update_downloaded)
         self._jobs: set[BackgroundJob] = set()
+        self._mcp_jobs: set[BackgroundJob] = set()  # 查詢 AI 助理帶入影片的頻道（與播放清單讀取分開）
         self._expand_context: tuple = ()
         self._custom_names: dict[str, str] = {}  # 選歌視窗中修改過的檔名（網址 → 檔名）
         self.setWindowTitle(APP_DISPLAY_NAME)
@@ -385,7 +386,7 @@ class MainWindow(QMainWindow):
         self.quality_combo.setToolTip(tip)
 
     def open_settings(self) -> None:
-        dialog = SettingsDialog(self.ctx.settings, self)
+        dialog = SettingsDialog(self.ctx.settings, self, channel_resolver=self.ctx.downloader.resolve_channel)
         if dialog.exec():
             previous = self.ctx.settings
             self.ctx.apply_settings(dialog.result_settings())
@@ -737,35 +738,116 @@ class MainWindow(QMainWindow):
         return len(new)
 
     def check_mcp_inbox(self) -> int:
-        """把 AI 助理（MCP）送來的網址放進輸入框（不自動加入佇列）。回傳帶入的網址數。
+        """處理 AI 助理（MCP）送來的網址。回傳立即放進輸入框的網址數。
 
-        功能關閉時直接丟棄收到的請求，之後開啟也不會冒出舊的網址。
+        - 一般情況：只放進輸入框，由使用者按「加入佇列」。
+        - 設定了「自動下載頻道」時：單支影片（每次最多 MAX_AUTO_DOWNLOADS 部）先在背景查詢所屬頻道，
+          屬於白名單頻道的直接加入佇列，其餘放進輸入框（見 _on_mcp_channels_checked）。
+        - 功能關閉時直接丟棄收到的請求，之後開啟也不會冒出舊的網址。
         """
         if self._closing:
             return 0
         requests = mcp_server.take_inbox()
         if not requests or not self.ctx.settings.mcp_enabled:
             return 0
-        added, client, choice = [], "", None
+        whitelist = {c["id"] for c in self.ctx.settings.mcp_auto_channels}
+        to_input: list[str] = []
+        candidates: list[tuple[ParsedUrl, dict]] = []
         for request in requests:
-            present = {p.dedupe_key for p in parse_urls(self.url_input.toPlainText()).valid}
-            new = [p.original for p in parse_urls("\n".join(request["urls"])).valid if p.dedupe_key not in present]
-            if new:
-                self._append_urls("\n".join(new))
-                added += new
-                client = request["client"] or client
+            pending = self.url_input.toPlainText() + "\n" + "\n".join(to_input)
+            present = {p.dedupe_key for p in parse_urls(pending).valid}
+            for parsed in parse_urls("\n".join(request["urls"])).valid:
+                if parsed.dedupe_key in present:
+                    continue
+                present.add(parsed.dedupe_key)
+                if (whitelist and parsed.kind in (UrlKind.VIDEO, UrlKind.SHORTS)
+                        and len(candidates) < MAX_AUTO_DOWNLOADS):
+                    candidates.append((parsed, request))
+                else:  # 播放清單一律讓使用者在選歌視窗勾選
+                    to_input.append(parsed.original)
+        client = next((r["client"] for r in requests if r["client"]), "")
+        choice = next(((r["format"], mcp_server.valid_quality(r["format"], r["quality"]))
+                       for r in requests if r["format"]), None)
+        if candidates:
+            self._check_mcp_channels(candidates, client)
+        return self._put_mcp_urls_in_input(to_input, client, choice)
+
+    def _put_mcp_urls_in_input(self, urls: list[str], client: str, choice: tuple[str, str | None] | None,
+                               auto_note: str = "") -> int:
+        if urls:
+            self._append_urls("\n".join(urls))
+            if choice is not None:  # 預先選好 AI 助理指定的格式與品質；使用者仍可在加入前修改
+                (self.mp3_radio if choice[0] == MediaFormat.MP3.value else self.mp4_radio).setChecked(True)
+                if choice[1] is not None:
+                    self.quality_combo.setCurrentIndex(max(0, self.quality_combo.findData(choice[1])))
+        if urls or auto_note:
+            who = plain(client) if client else "AI 助理"
+            parts = ([auto_note] if auto_note else []) + (
+                [f"{len(urls)} 個網址放進輸入框，請確認後按「加入佇列」"] if urls else [])
+            self.statusBar().showMessage(f"{who}：" + "；".join(parts), 15000)
+            QApplication.alert(self)  # 程式不在前景時讓工作列閃爍，提醒使用者
+        return len(urls)
+
+    def _check_mcp_channels(self, candidates: list[tuple[ParsedUrl, dict]], client: str) -> None:
+        downloader = self.ctx.downloader
+
+        def work() -> list[tuple[ParsedUrl, dict, str]]:
+            results = []
+            for parsed, request in candidates:
+                try:
+                    channel = downloader.video_channel(parsed.video_url)
+                except Exception:  # 讀不到頻道就當作不在白名單，交給使用者確認
+                    log.info("無法讀取影片所屬頻道：%s", parsed.video_url, exc_info=True)
+                    channel = None
+                results.append((parsed, request, channel.channel_id if channel else ""))
+            return results
+
+        job = BackgroundJob(work)
+        job.signals.succeeded.connect(lambda results, c=client, j=job: self._on_mcp_channels_checked(results, c, j))
+        job.signals.failed.connect(lambda exc, c=client, j=job: self._on_mcp_channels_checked(
+            [(p, r, "") for p, r in candidates], c, j))
+        self._mcp_jobs.add(job)
+        QThreadPool.globalInstance().start(job)
+
+    def _on_mcp_channels_checked(self, results: list[tuple[ParsedUrl, dict, str]], client: str,
+                                 job: BackgroundJob | None = None) -> None:
+        self._mcp_jobs.discard(job)
+        if self._closing:
+            return
+        settings = self.ctx.settings
+        whitelist = {c["id"] for c in settings.mcp_auto_channels} if settings.mcp_enabled else set()
+        index = self.downloaded_index()
+        queued = {(t.url, t.media_format) for t in self.ctx.queue.tasks() if not t.status.is_finished}
+        to_input, specs, skipped = [], [], 0
+        choice = None
+        for parsed, request, channel_id in results:
+            fmt = MediaFormat(request["format"] or settings.default_format)
+            if channel_id not in whitelist or not self.ctx.current_tools().available:
+                to_input.append(parsed.original)
                 if request["format"]:
                     choice = (request["format"], mcp_server.valid_quality(request["format"], request["quality"]))
-        if not added:
-            return 0
-        if choice is not None:  # 預先選好 AI 助理指定的格式與品質；使用者仍可在加入前修改
-            (self.mp3_radio if choice[0] == MediaFormat.MP3.value else self.mp4_radio).setChecked(True)
-            if choice[1] is not None:
-                self.quality_combo.setCurrentIndex(max(0, self.quality_combo.findData(choice[1])))
-        who = plain(client) if client else "AI 助理"
-        self.statusBar().showMessage(f"{who} 帶入了 {len(added)} 個網址，請確認後按「加入佇列」開始下載", 15000)
-        QApplication.alert(self)  # 程式不在前景時讓工作列閃爍，提醒使用者確認
-        return len(added)
+                continue
+            url = parsed.video_url or parsed.original
+            if (url, fmt) in queued or index.find(url, fmt) is not None:
+                skipped += 1  # 已在佇列或已經下載過（檔案還在）：不重複下載
+                continue
+            quality = mcp_server.valid_quality(fmt.value, request["quality"]) or settings.default_quality_for(fmt)
+            specs.append(TaskSpec(url, fmt, quality, settings.download_dir))
+            queued.add((url, fmt))
+        auto_note = ""
+        if specs:
+            try:
+                Path(settings.download_dir).mkdir(parents=True, exist_ok=True)
+                self.ctx.queue.add_tasks(specs)
+                auto_note = f"已自動加入 {len(specs)} 部影片到佇列（自動下載頻道）"
+                if self.ctx.queue.is_paused:
+                    auto_note += "，佇列目前暫停中"
+            except (OSError, RuntimeError):
+                log.warning("無法自動加入 AI 助理的影片", exc_info=True)
+                to_input += [s.url for s in specs]
+        if skipped:
+            auto_note += ("；" if auto_note else "") + f"{skipped} 部已下載過或已在佇列中，已略過"
+        self._put_mcp_urls_in_input(to_input, client, choice, auto_note)
 
     def _paste_clipboard(self) -> None:
         text = QGuiApplication.clipboard().text()
