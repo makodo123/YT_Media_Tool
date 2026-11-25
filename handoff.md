@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-25（v2.10.0-beta.3 實測無誤，準備發布 v2.10.0 正式版）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-25（v2.10.0 正式版已發布）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -34,8 +34,8 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 
 ### 2.1 目前狀態
 
-- **最新正式版 `v2.9.3`**（標示為 Latest）：2026-11-18 發布（e15eae8，程式碼同使用者實測無誤的 `v2.9.3-beta.1`），4 個附件與 `.sha256` 已核對。
-  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.9.3
+- **最新正式版 `v2.10.0`**（標示為 Latest）：2026-11-25 發布（a143ac2，程式碼同使用者實測無誤的 `v2.10.0-beta.3`），4 個附件與 `.sha256` 已核對。
+  https://github.com/makodo123/YT_Media_Tool/releases/tag/v2.10.0
 - v2.8.1 的程式碼與使用者實測無誤的 `v2.8.1-beta.2`（d81de15）相同，之後只改 handoff.md。內容：GitHub API 額度用完時改用 Releases 網頁（beta.1）、更新視窗與更新結果顯示（beta.2）。
 - **自動更新已在實機確認成功（C27）**：使用者從已安裝的 v2.8.0 按「立即安裝並重新開啟」，自動更新到 v2.8.1 並重新開啟，回報沒問題（2026-11-01）。
   v2.6.0 / v2.7.0 的自動更新有錯（Job Object），v2.7.1 修正；這些舊版的使用者需手動安裝一次新版。
@@ -60,10 +60,11 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 
 | 版本 | commit | 狀態 |
 |---|---|---|
+| **v2.10.0** | a143ac2 | **正式版（Latest）**；程式碼同 v2.10.0-beta.3；setup.exe 106.2 MB（`64a7df71…72b081`）、zip 144.2 MB（`8cba6453…d70312`），sha256 已核對 |
 | v2.10.0-beta.3 | f161f6c | 預先發行；AI 助理（MCP）＋一鍵加入設定＋自動下載頻道白名單；setup.exe 106.2 MB（`22728c9c…5e3a70`）、zip 144.2 MB（`300adfb9…162111`），sha256 已核對；**使用者實測無誤** |
 | v2.10.0-beta.2 | 6b2665a | 預先發行；AI 助理（MCP）＋一鍵加入 Claude Desktop / Codex 設定；setup.exe 106.2 MB（`40393ab5…e640a6`）、zip 144.2 MB（`ba9cb2d3…02fd56`），sha256 已核對；未實測（由 beta.3 取代） |
 | v2.10.0-beta.1 | 04c702d | 預先發行；AI 助理（MCP）；setup.exe 106.2 MB（`6fae51b3…37e01a`）、zip 144.2 MB（`e4f6496a…a215c`），sha256 已核對；未實測（由 beta.2 取代）。使用者按了兩次 Run workflow：第二次（45418101910）在「建立 GitHub Release」因 tag 已存在而失敗，屬預期、不影響已發布的檔案 |
-| **v2.9.3** | e15eae8 | **正式版（Latest）**；程式碼同 v2.9.3-beta.1；setup.exe 106.1 MB（`dbbcc921…0183fb`）、zip 144.1 MB（`212b11ef…533ebd`），sha256 已核對 |
+| v2.9.3 | e15eae8 | 正式版；程式碼同 v2.9.3-beta.1；setup.exe 106.1 MB（`dbbcc921…0183fb`）、zip 144.1 MB（`212b11ef…533ebd`），sha256 已核對 |
 | v2.9.3-beta.1 | 58a02d7 | 預先發行；重新開啟後已完成任務顯示 100%、FFmpeg 改用 autobuild-2026-11-17-12-40、upload-artifact v6；setup.exe 106.1 MB（`b8af3681…02c458`）、zip 144.1 MB（`72991d7d…aeb532`），sha256 已核對；**使用者實測無誤** |
 | v2.9.2 | e2f787d | 正式版；程式碼同 v2.9.2-beta.1；setup.exe 106.2 MB（`2333b0a8…d2c2ec`）、zip 144.2 MB（`24e60a6b…27667d`），sha256 已核對；**使用者實測無誤** |
 | v2.9.2-beta.1 | 9e96f32 | 預先發行；安全性強化（cookies 副本位置、安裝前再驗證、純文字顯示）；setup.exe 106.2 MB（`e7516fce…91a236`）、zip 144.2 MB（`5c88b914…98434`），sha256 已核對；**使用者實測無誤** |
@@ -491,8 +492,7 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `v2.9.1-beta.1`（6330fe2）使用者實測下載無誤，已以 `v2.9.1` 發布正式版。
 - `v2.9.2-beta.1`（9e96f32）使用者實測下載無誤，已以 `v2.9.2` 發布正式版（第六次檢查：安全性強化，見 2.3）。
 - `v2.9.3-beta.1`（58a02d7）使用者實測無誤（含新 FFmpeg），已以 `v2.9.3` 發布正式版（進度顯示修正＋新的 FFmpeg 建置＋upload-artifact v6）。
-- **進行中：`v2.10.0-beta.3`（f161f6c）使用者實測無誤，等待以 `v2.10.0` 發布正式版**（AI 助理＋一鍵加入 Claude Desktop / Codex＋自動下載頻道白名單；beta.1、beta.2 未實測，由 beta.3 取代）；實測請使用者實際接上 Claude Desktop / Claude Code / Codex（WINDOWS_INTEGRATION_TESTS 第 J 段），無誤後再發 `v2.10.0`。
-  （使用者在 CI 通過後自行按了 Run workflow，本 session 當時重新啟動、未監看到；事後以 API 核對附件與 `.sha256`。）
+- `v2.10.0-beta.3`（f161f6c）使用者實測無誤（實際接上 AI 助理，含自動下載頻道），已以 `v2.10.0` 發布正式版（AI 助理＋一鍵加入 Claude Desktop / Codex＋自動下載頻道白名單；beta.1、beta.2 未實測，由 beta.3 取代）；目前沒有進行中的開發。
 - v2.9.0 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.2 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.1 正式版已發布，使用者從 v2.8.0 **自動更新**到 v2.8.1 成功，實測無誤。
