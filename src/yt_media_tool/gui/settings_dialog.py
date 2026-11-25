@@ -14,8 +14,20 @@ from PySide6.QtWidgets import (
 from yt_media_tool.core import converter
 from yt_media_tool.core.cookies import COOKIE_SOURCES
 from yt_media_tool.core.task_models import MP3_QUALITIES, MP4_QUALITIES, MediaFormat
+from yt_media_tool.core import ai_clients
+from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.mcp_server import launch_command
+
 from yt_media_tool.storage.settings import MAX_CONCURRENT, MAX_RATE_LIMIT_MBPS, MIN_CONCURRENT, AppSettings
+
+# AI 助理設定檔的狀態 → （顯示文字, 按鈕文字；None 表示不顯示按鈕）
+AI_CLIENT_TEXT = {
+    ai_clients.ConfigState.NOT_FOUND: ("未偵測到（沒有安裝，或安裝後還沒開啟過）", None),
+    ai_clients.ConfigState.NOT_CONFIGURED: ("已偵測到，尚未加入", "加入"),
+    ai_clients.ConfigState.CONFIGURED: ("✔ 已加入", None),
+    ai_clients.ConfigState.OUTDATED: ("已加入，但程式位置不同（例如改裝到別的資料夾）", "更新"),
+    ai_clients.ConfigState.INVALID: ("設定檔格式有誤，無法自動加入", None),
+}
 
 
 def _folder_row(parent: QWidget, line_edit: QLineEdit, title: str) -> QWidget:
@@ -177,23 +189,28 @@ class SettingsDialog(QDialog):
             "開啟後，Claude、Codex 等支援 MCP 的 AI 助理可以：查詢下載歷史紀錄、查看佇列，"
             "以及把 YouTube 網址放進主視窗的輸入框。\n"
             "AI 助理不能開始下載、刪除紀錄或更改設定：帶入的網址一定要由您按「加入佇列」才會下載。\n"
-            "設定方式：在 AI 助理的 MCP 設定中加入下方的啟動指令（詳見「說明 → 使用說明」）。")
+            "偵測到 Claude Desktop 或 Codex 時，可按「加入」自動寫入它們的設定（只新增這一項，原檔會先備份）；"
+            "Claude Code 請複製指令到命令提示字元執行一次；其他 AI 助理請在其 MCP 設定中填入啟動指令。")
         mcp_note.setObjectName("hintLabel")
         mcp_note.setWordWrap(True)
-        self.mcp_command = QLineEdit(" ".join(f'"{part}"' if " " in part else part for part in launch_command()))
+        self._mcp_launch = launch_command()
+        self.mcp_command = QLineEdit(" ".join(f'"{part}"' if " " in part else part for part in self._mcp_launch))
         self.mcp_command.setReadOnly(True)
-        copy_mcp = QPushButton("複製")
-        copy_mcp.clicked.connect(self._copy_mcp_command)
-        mcp_row = QWidget(self)
-        mcp_layout = QHBoxLayout(mcp_row)
-        mcp_layout.setContentsMargins(0, 0, 0, 0)
-        mcp_layout.addWidget(self.mcp_command, 1)
-        mcp_layout.addWidget(copy_mcp)
+        self.claude_code_command = QLineEdit(ai_clients.claude_code_command(self._mcp_launch))
+        self.claude_code_command.setReadOnly(True)
+        self.claude_desktop_status, self.claude_desktop_button, claude_desktop_row = self._client_row()
+        self.claude_desktop_button.clicked.connect(lambda: self._add_ai_client(ai_clients.add_to_claude_desktop))
+        self.codex_status, self.codex_button, codex_row = self._client_row()
+        self.codex_button.clicked.connect(lambda: self._add_ai_client(ai_clients.add_to_codex))
         mcp_group = QGroupBox("AI 助理（MCP，選用）")
         mcp_form = QFormLayout(mcp_group)
         mcp_form.addRow(self.mcp_enabled)
-        mcp_form.addRow("啟動指令：", mcp_row)
+        mcp_form.addRow("Claude Desktop：", claude_desktop_row)
+        mcp_form.addRow("Codex：", codex_row)
+        mcp_form.addRow("Claude Code：", self._copy_row(self.claude_code_command))
+        mcp_form.addRow("其他 AI 助理：", self._copy_row(self.mcp_command))
         mcp_form.addRow(mcp_note)
+        self._refresh_ai_clients()
 
         note = QLabel("影片沒有所選的畫質或音質時，會下載可取得的最高品質，並在佇列的「品質」欄標示 ⚠。")
         note.setObjectName("hintLabel")
@@ -273,8 +290,66 @@ class SettingsDialog(QDialog):
         self.accept()
 
     def _copy_mcp_command(self) -> None:
-        QApplication.clipboard().setText(self.mcp_command.text())
-        self.mcp_command.selectAll()
+        self._copy_text(self.mcp_command)
+
+    @staticmethod
+    def _copy_text(edit: QLineEdit) -> None:
+        QApplication.clipboard().setText(edit.text())
+        edit.selectAll()
+
+    def _copy_row(self, edit: QLineEdit) -> QWidget:
+        button = QPushButton("複製")
+        button.clicked.connect(lambda: self._copy_text(edit))
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(edit, 1)
+        layout.addWidget(button)
+        return row
+
+    def _client_row(self) -> tuple[QLabel, QPushButton, QWidget]:
+        status = QLabel()
+        status.setWordWrap(True)
+        button = QPushButton("加入")
+        row = QWidget(self)
+        layout = QHBoxLayout(row)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(status, 1)
+        layout.addWidget(button)
+        return status, button, row
+
+    def _refresh_ai_clients(self) -> None:
+        launch = self._mcp_launch
+        for config, label, button in (
+            (ai_clients.claude_desktop_status(launch), self.claude_desktop_status, self.claude_desktop_button),
+            (ai_clients.codex_status(launch), self.codex_status, self.codex_button),
+        ):
+            text, action = AI_CLIENT_TEXT[config.state]
+            if config.state is ai_clients.ConfigState.INVALID:
+                text += f"：{config.detail}"
+            label.setText(text)
+            label.setToolTip(plain(str(config.path)) if config.path else "")
+            button.setVisible(action is not None)
+            button.setText(action or "")
+
+    def _add_ai_client(self, add) -> None:
+        try:
+            config = add(self._mcp_launch)
+        except ai_clients.ConfigError as exc:
+            QMessageBox.warning(self, "AI 助理",
+                                f"無法自動加入：{exc}\n\n可以改為手動設定（詳見「說明 → 使用說明」）。")
+            self._refresh_ai_clients()
+            return
+        self.mcp_enabled.setChecked(True)  # 加入 AI 助理就是要使用這個功能
+        self._refresh_ai_clients()
+        how_to_quit = ("（在右下角系統匣的 Claude 圖示按右鍵 →「結束」，只關閉視窗不夠）"
+                       if config.name == "Claude Desktop" else "")
+        QMessageBox.information(
+            self, "AI 助理",
+            f"已加入 {config.name}。\n\n"
+            "1. 按「儲存」保存設定（已同時勾選「允許 AI 助理」）。\n"
+            f"2. 完全結束 {config.name} 後重新開啟{how_to_quit}。\n\n"
+            "原本的設定檔已備份在同一個資料夾（檔名結尾為「.ytmt-backup-日期」）。")
 
     def result_settings(self) -> AppSettings:
         return dataclasses.replace(

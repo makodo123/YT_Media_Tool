@@ -1706,3 +1706,38 @@ def test_settings_dialog_mcp_option(qtbot, window):
     assert QApplication.clipboard().text() == dialog.mcp_command.text()
     dialog.mcp_enabled.setChecked(True)
     assert dialog.result_settings().mcp_enabled is True
+
+
+def test_settings_dialog_adds_detected_ai_clients(qtbot, window, dialogs, tmp_path, monkeypatch):
+    import json
+    import tomllib
+
+    from yt_media_tool.core import ai_clients
+
+    monkeypatch.setenv("APPDATA", str(tmp_path / "Roaming"))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path / "Local"))
+    monkeypatch.delenv("CODEX_HOME", raising=False)
+    monkeypatch.setattr(ai_clients.Path, "home", lambda: tmp_path / "home")
+    (tmp_path / "Roaming" / "Claude").mkdir(parents=True)
+
+    dialog = SettingsDialog(window.ctx.settings, window)
+    qtbot.addWidget(dialog)
+    assert dialog.claude_desktop_status.text() == "已偵測到，尚未加入" and not dialog.claude_desktop_button.isHidden()
+    assert dialog.codex_status.text().startswith("未偵測到") and dialog.codex_button.isHidden()
+    assert "claude mcp add" in dialog.claude_code_command.text()
+
+    dialog.claude_desktop_button.click()
+    config = json.loads((tmp_path / "Roaming" / "Claude" / "claude_desktop_config.json").read_text(encoding="utf-8"))
+    assert config["mcpServers"]["yt-media-tool"]["args"][-1] == "--mcp"
+    assert dialog.claude_desktop_status.text() == "✔ 已加入" and dialog.claude_desktop_button.isHidden()
+    assert dialog.mcp_enabled.isChecked() and "完全結束 Claude Desktop" in dialogs.text()
+
+    (tmp_path / "home" / ".codex").mkdir(parents=True)
+    (tmp_path / "home" / ".codex" / "config.toml").write_text("[broken\n", encoding="utf-8")
+    dialog._refresh_ai_clients()
+    assert dialog.codex_status.text().startswith("設定檔格式有誤") and dialog.codex_button.isHidden()
+    (tmp_path / "home" / ".codex" / "config.toml").write_text('model = "x"\n', encoding="utf-8")
+    dialog._refresh_ai_clients()
+    dialog.codex_button.click()
+    data = tomllib.loads((tmp_path / "home" / ".codex" / "config.toml").read_text(encoding="utf-8"))
+    assert data["model"] == "x" and data["mcp_servers"]["yt-media-tool"]["args"][-1] == "--mcp"

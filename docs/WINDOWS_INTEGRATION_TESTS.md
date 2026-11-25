@@ -159,3 +159,7 @@
 | J5 | 請 AI 助理帶入非 YouTube 網址，或要求它刪除紀錄、改下載資料夾 | 非 YouTube 網址被拒絕並說明原因；沒有可以刪除或改設定的工具 |
 | J6 | 「設定 → AI 助理」的「複製」按鈕 | 複製出含 `YT_Media_Tool.exe` 完整路徑與 `--mcp` 的指令 |
 | J7 | AI 助理連線中執行新版安裝程式（升級） | 安裝程式不會因 `--mcp` 程序而判定「程式正在執行」 |
+| J8 | 已安裝並開啟過 Claude Desktop，開啟「設定 → AI 助理」 | Claude Desktop 顯示「已偵測到，尚未加入」與「加入」；按下後顯示「✔ 已加入」、自動勾選允許；`%APPDATA%\Claude` 中原有的設定檔有「.ytmt-backup-日期」備份，其他 MCP 設定保留；結束並重開 Claude Desktop 後可使用（J2、J3） |
+| J9 | 已安裝 Codex（有 `%USERPROFILE%\.codex`），按 Codex 的「加入」 | `config.toml` 多了 `[mcp_servers.yt-media-tool]`，原有內容與註解保留，並有備份；Codex 可使用 |
+| J10 | 把 Claude Desktop 設定檔故意改壞（例如刪掉一個 `}`）後開啟設定 | 顯示「設定檔格式有誤，無法自動加入」，沒有「加入」按鈕，檔案沒有被修改 |
+| J11 | 改裝到其他資料夾後開啟設定 | 顯示「已加入，但程式位置不同」與「更新」；按下後路徑更新 |
