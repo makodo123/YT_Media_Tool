@@ -31,6 +31,13 @@ from yt_media_tool.storage.settings import (
 
 MAX_AUTO_DOWNLOADS = 10  # 與 MainWindow 相同：AI 助理每批最多自動加入佇列的影片數
 
+
+def channel_error_message(exc: Exception) -> str:
+    """讀取頻道失敗時的說明。一般下載錯誤的說明（例如「影片不存在」「下載失敗：」）用在頻道上會誤導，這裡只分兩種。"""
+    if explain_error(exc).startswith(("網路連線失敗", "請求次數過多")):
+        return "無法連線到 YouTube，請確認網路連線後再試。"
+    return "讀不到這個頻道。請到頻道首頁複製網址後再試，例如 https://www.youtube.com/@帳號"
+
 # AI 助理設定檔的狀態 → （顯示文字, 按鈕文字；None 表示不顯示按鈕）
 AI_CLIENT_TEXT = {
     ai_clients.ConfigState.NOT_FOUND: ("未偵測到（沒有安裝，或安裝後還沒開啟過）", None),
@@ -202,7 +209,8 @@ class SettingsDialog(QDialog):
         mcp_note = QLabel(
             "開啟後，Claude、Codex 等支援 MCP 的 AI 助理可以：查詢下載歷史紀錄、查看佇列，"
             "以及把 YouTube 網址放進主視窗的輸入框。\n"
-            "AI 助理不能開始下載、刪除紀錄或更改設定：帶入的網址一定要由您按「加入佇列」才會下載。\n"
+            "AI 助理不能刪除紀錄或更改設定；帶入的網址要由您按「加入佇列」才會下載"
+            "（下方「自動下載頻道」的影片除外）。\n"
             "偵測到 Claude Desktop 或 Codex 時，可按「加入」自動寫入它們的設定（只新增這一項，原檔會先備份）；"
             "Claude Code 請複製指令到命令提示字元執行一次；其他 AI 助理請在其 MCP 設定中填入啟動指令。")
         mcp_note.setObjectName("hintLabel")
@@ -372,7 +380,7 @@ class SettingsDialog(QDialog):
 
     def _on_channel_failed(self, exc: Exception) -> None:
         self._channel_done()
-        QMessageBox.warning(self, "自動下載頻道", plain(f"讀不到這個頻道：{explain_error(exc)}"))
+        QMessageBox.warning(self, "自動下載頻道", channel_error_message(exc))
 
     def _on_channel_resolved(self, channel: ChannelInfo) -> None:
         self._channel_done()

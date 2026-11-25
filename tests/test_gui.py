@@ -1823,3 +1823,22 @@ def test_settings_dialog_manages_auto_channels(qtbot, window, monkeypatch, dialo
     dialog.auto_channels.selectAll()
     dialog._remove_channels()
     assert dialog.result_settings().mcp_auto_channels == []
+
+
+@pytest.mark.parametrize("exc,expected", [
+    (RuntimeError("ERROR: [youtube:tab] @nosuch: This channel does not exist."), "讀不到這個頻道"),
+    (RuntimeError("讀不到這個頻道的資訊，請確認網址是否正確。"), "讀不到這個頻道"),
+    (RuntimeError("ERROR: Unable to download webpage: <urlopen error timed out>"), "無法連線到 YouTube"),
+])
+def test_channel_error_messages_are_about_channels(exc, expected):
+    """讀取頻道失敗時不可顯示「影片不存在」「下載失敗：」等下載用的說明。"""
+    from yt_media_tool.gui.settings_dialog import channel_error_message
+
+    message = channel_error_message(exc)
+    assert expected in message and "影片不存在" not in message and "下載失敗" not in message
+
+
+def test_mcp_disabled_message_points_to_the_right_setting():
+    from yt_media_tool import mcp_server
+
+    assert "AI 助理（MCP，選用）" in mcp_server.DISABLED_MESSAGE

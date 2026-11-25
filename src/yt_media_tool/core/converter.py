@@ -36,7 +36,7 @@ FFMPEG_INSTALL_GUIDE = (
     "解決方式（擇一）：\n"
     "1. 重新安裝本程式的最新版（已隨附 FFmpeg，最簡單）。\n"
     "2. 自行下載 Windows 版 FFmpeg（例如 https://www.gyan.dev/ffmpeg/builds/ 或 "
-    "https://github.com/BtbN/FFmpeg-Builds/releases ），解壓縮後在「設定 → FFmpeg 資料夾」"
+    "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases ），解壓縮後在「設定 → FFmpeg 資料夾」"
     "指定含有 ffmpeg.exe 與 ffprobe.exe 的 bin 資料夾。\n"
     "3. 使用 winget 安裝：winget install --id Gyan.FFmpeg -e，安裝後重新啟動本程式。"
 )
