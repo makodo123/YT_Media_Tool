@@ -54,16 +54,17 @@ def test_default_concurrency_is_one(queue_factory, spec_factory, fake_downloader
     assert fake_downloader.max_running == 1
 
 
-def test_concurrency_can_be_raised_to_three_but_not_more(queue_factory, spec_factory, fake_downloader):
+def test_concurrency_can_be_raised_to_five_but_not_more(queue_factory, spec_factory, fake_downloader):
     queue = queue_factory(max_concurrent=10)
-    assert queue.max_concurrent == 3
-    urls = [f"https://www.youtube.com/watch?v=block{i:06d}" for i in range(5)]
+    assert queue.max_concurrent == 5
+    urls = [f"https://www.youtube.com/watch?v=block{i:06d}" for i in range(7)]
     queue.add_tasks([spec_factory(u) for u in urls])
-    assert wait_until(lambda: fake_downloader.running == 3)
+    assert wait_until(lambda: fake_downloader.running == 5)
+    assert sum(t.status is TaskStatus.WAITING for t in queue.tasks()) == 2
     for u in urls:
         fake_downloader.release(u)
     assert wait_until(idle(queue))
-    assert fake_downloader.max_running == 3
+    assert fake_downloader.max_running == 5
 
 
 def test_cancel_waiting_task(queue_factory, spec_factory, fake_downloader):

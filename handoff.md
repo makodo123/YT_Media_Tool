@@ -1,6 +1,6 @@
 # YT Media Tool 交接文件
 
-> 更新時間：2026-11-25（v2.10.1 正式版已發布，目前沒有進行中的開發）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
+> 更新時間：2026-11-26（v2.11.0 同時下載上限提高到 5 已推送，等待 CI 與發布 v2.11.0-beta.1）｜儲存庫：https://github.com/makodo123/YT_Media_Tool （分支 `main`，最新 commit 見 `git log`）
 > 使用者以**繁體中文**溝通，請全程使用繁體中文回覆，說明技術選項時用淺白比喻（使用者偏好見附錄 A）。
 
 本文件分五大項：**1. 任務目標**、**2. 已完成的內容與修改的檔案**、**3. 關鍵決定與原因**、
@@ -113,6 +113,15 @@ v2.8.1 改善自動更新的使用體驗：GitHub 查詢額度用完時改用網
 **使用者決定保留所有 beta 版本，不刪除**。
 
 ### 2.3 各版改了什麼、改了哪些檔（新 → 舊）
+
+**v2.11.0**（使用者從功能建議中選「更多同時下載」，再選「A：上限改成 5」；不做分段同時下載）
+
+| 項目 | 修改的檔案與重點 |
+|---|---|
+| 同時下載上限 3 → 5 | `storage/settings.py`：`MAX_CONCURRENT = 5`、新增 `WARN_CONCURRENT = 3`；預設仍是 1。`QueueManager._clamp` 與 `SettingsStore.load` 都用 `MAX_CONCURRENT`，舊設定不受影響 |
+| 3 部以上的提醒 | `gui/settings_dialog.py`：數量框旁新增 `concurrent_warning`（`CONCURRENT_WARNING`「3 部以上較容易被 YouTube 要求驗證，遇到時請調回 1–2。」），`_update_concurrent_warning()` 依數值顯示 / 隱藏 |
+| 速度上限 | 不變：`download_preferences()` 仍把合計上限平均分給同時下載的任務 |
+| 測試與文件 | test_queue_manager（7 筆中同時 5 筆、2 筆等待）、test_database（99 → 5）、test_gui（提醒顯示 / 隱藏）；README、RELEASE_NOTES、WINDOWS_INTEGRATION_TESTS C9 |
 
 **v2.10.1**（使用者：「以使用者角度檢查文字與功能」第七次；著重 v2.10.0 新增的 AI 助理）
 
@@ -505,7 +514,8 @@ THIRD_PARTY_NOTICES.md              第三方授權
 - `v2.9.2-beta.1`（9e96f32）使用者實測下載無誤，已以 `v2.9.2` 發布正式版（第六次檢查：安全性強化，見 2.3）。
 - `v2.9.3-beta.1`（58a02d7）使用者實測無誤（含新 FFmpeg），已以 `v2.9.3` 發布正式版（進度顯示修正＋新的 FFmpeg 建置＋upload-artifact v6）。
 - `v2.10.0-beta.3`（f161f6c）使用者實測無誤（實際接上 AI 助理，含自動下載頻道），已以 `v2.10.0` 發布正式版（AI 助理＋一鍵加入 Claude Desktop / Codex＋自動下載頻道白名單；beta.1、beta.2 未實測，由 beta.3 取代）。
-- 目前沒有進行中的開發：`v2.10.1` 已於 2026-11-26 發布為正式版（Latest），sha256 已核對。
+- `v2.10.1` 已於 2026-11-26 發布為正式版（Latest），sha256 已核對，使用者安裝後確認無誤。
+- **進行中：v2.11.0（同時下載上限 3 → 5）已推送，等 Windows CI 通過後請使用者以 tag `v2.11.0-beta.1` 發布**；實測無誤後再發 `v2.11.0`。
 - v2.9.0 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.2 正式版已發布，使用者實測下載無誤（beta.1 與正式版皆是）。
 - v2.8.1 正式版已發布，使用者從 v2.8.0 **自動更新**到 v2.8.1 成功，實測無誤。
@@ -517,14 +527,11 @@ THIRD_PARTY_NOTICES.md              第三方授權
 
 - 提出過但使用者未選的項目（2026-10-31～11-01）：
   - 多次未選：記住上次在主視窗選的格式與品質。
-  - 第二次檢查（v2.3.0）未選：同時下載上限從 3 提高到 5。
   - 第三次檢查（v2.4.0）未選：自訂檔名格式（例如「演出者 - 標題」）。
   - 「實用小工具」建議中仍未選：依章節分割成多首、音量平衡、全部下載完成後自動睡眠 / 關機、另存影片縮圖。
-- **多線程下載**（使用者詢問過，尚未決定）：
-  - 已支援「同時下載多個影片」1–3 筆（原始規格上限 3）。
-  - 選項 A：設定新增「單一影片分段同時下載數」（yt-dlp `concurrent_fragment_downloads`，建議 1–8、預設 4）；
-    只對分段格式（直播錄影、HLS、部分 DASH）有加速效果，一般 YouTube 影片無差別。
-  - 選項 B：同時下載數量上限從 3 提高（例如 5），需註明可能觸發 YouTube 機器人驗證。
+- **多線程下載**：v2.11.0 已把同時下載上限提高到 5（使用者選擇，原始規格為 3）。
+  - 使用者**沒有選**「單一影片分段同時下載」（yt-dlp `concurrent_fragment_downloads`）：一般 YouTube 影片走 https 直接下載（yt-dlp 的 HttpFD），
+    分段下載只對 HLS / DASH 分段格式（直播錄影等）有效，加速效果很小。
   - 不建議外接 aria2c 多連線（需多附程式，且易被 YouTube 限速或要求驗證）。
 - 依 `docs/WINDOWS_INTEGRATION_TESTS.md` 完整跑一次實機清單。
 - （已完成）`actions/upload-artifact` 升到 v6（Node.js 24），消除 Node.js 20 淘汰警告；checkout@v5、setup-python@v6 已是 Node.js 24。

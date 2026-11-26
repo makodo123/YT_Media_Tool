@@ -12,7 +12,8 @@ from yt_media_tool.storage.database import Database
 from yt_media_tool.utils import paths
 
 MIN_CONCURRENT = 1
-MAX_CONCURRENT = 3
+MAX_CONCURRENT = 5
+WARN_CONCURRENT = 3  # 達到這個數量時在設定畫面提醒：較容易被 YouTube 要求驗證
 MAX_RATE_LIMIT_MBPS = 100.0
 
 

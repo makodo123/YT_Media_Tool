@@ -118,7 +118,7 @@ def test_settings_round_trip_and_validation(db):
     db.set_setting("settings.default_mp3_quality", "999")
     db.set_setting("settings.default_format", "avi")
     loaded = store.load()
-    assert loaded.max_concurrent == 3
+    assert loaded.max_concurrent == 5
     assert loaded.default_mp3_quality == "192"
     assert loaded.default_format == "mp4"
 

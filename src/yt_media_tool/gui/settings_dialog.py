@@ -26,9 +26,10 @@ from yt_media_tool.gui.safe_text import plain
 from yt_media_tool.mcp_server import launch_command
 
 from yt_media_tool.storage.settings import (
-    MAX_AUTO_CHANNELS, MAX_CONCURRENT, MAX_RATE_LIMIT_MBPS, MIN_CONCURRENT, AppSettings,
+    MAX_AUTO_CHANNELS, MAX_CONCURRENT, MAX_RATE_LIMIT_MBPS, MIN_CONCURRENT, WARN_CONCURRENT, AppSettings,
 )
 
+CONCURRENT_WARNING = "3 部以上較容易被 YouTube 要求驗證，遇到時請調回 1–2。"
 MAX_AUTO_DOWNLOADS = 10  # 與 MainWindow 相同：AI 助理每批最多自動加入佇列的影片數
 
 
@@ -81,6 +82,11 @@ class SettingsDialog(QDialog):
         self.max_concurrent.setRange(MIN_CONCURRENT, MAX_CONCURRENT)
         self.max_concurrent.setValue(settings.max_concurrent)
         self.max_concurrent.setToolTip("同時下載太多影片較容易被 YouTube 要求驗證，一般建議 1–2。")
+        self.concurrent_warning = QLabel(CONCURRENT_WARNING)
+        self.concurrent_warning.setObjectName("hintLabel")
+        self.concurrent_warning.setWordWrap(True)
+        self.max_concurrent.valueChanged.connect(self._update_concurrent_warning)
+        self._update_concurrent_warning(self.max_concurrent.value())
         self.rate_limit = QDoubleSpinBox()
         self.rate_limit.setRange(0.0, MAX_RATE_LIMIT_MBPS)
         self.rate_limit.setDecimals(1)
@@ -151,7 +157,12 @@ class SettingsDialog(QDialog):
         folder_row = _folder_row(self, self.download_dir, "選擇下載資料夾")
         folder_row.setToolTip("與主視窗的「儲存至」相同；在主視窗換資料夾並加入任務後，這裡也會跟著更新。")
         form.addRow("下載資料夾：", folder_row)
-        form.addRow("同時下載數量：", self.max_concurrent)
+        concurrent_row = QWidget()
+        concurrent_layout = QHBoxLayout(concurrent_row)
+        concurrent_layout.setContentsMargins(0, 0, 0, 0)
+        concurrent_layout.addWidget(self.max_concurrent)
+        concurrent_layout.addWidget(self.concurrent_warning, 1)
+        form.addRow("同時下載數量：", concurrent_row)
         form.addRow("速度上限：", self.rate_limit)
         form.addRow("預設格式：", self.default_format)
         form.addRow("預設 MP4 解析度：", self.mp4_quality)
@@ -312,6 +323,9 @@ class SettingsDialog(QDialog):
         if chosen:
             self.cookies_file.setText(chosen)
             self._use_cookie_file_source()
+
+    def _update_concurrent_warning(self, value: int) -> None:
+        self.concurrent_warning.setVisible(value >= WARN_CONCURRENT)
 
     def _check_ffmpeg(self) -> None:
         info = converter.find_ffmpeg(self.ffmpeg_dir.text().strip() or None)

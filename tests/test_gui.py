@@ -341,7 +341,12 @@ def test_restore_queue_on_restart(qtbot, tmp_path, db_path, dialogs):
 def test_settings_dialog_returns_validated_settings(qtbot, window):
     dialog = SettingsDialog(window.ctx.settings, window)
     qtbot.addWidget(dialog)
-    dialog.max_concurrent.setValue(3)
+    assert dialog.concurrent_warning.isHidden()  # 預設 1：不顯示提醒
+    dialog.max_concurrent.setValue(5)
+    assert not dialog.concurrent_warning.isHidden() and "驗證" in dialog.concurrent_warning.text()
+    dialog.max_concurrent.setValue(2)
+    assert dialog.concurrent_warning.isHidden()
+    dialog.max_concurrent.setValue(5)
     dialog.default_format.setCurrentIndex(dialog.default_format.findData("mp3"))
     dialog.mp3_quality.setCurrentIndex(dialog.mp3_quality.findData("320"))
     dialog.keep_history.setChecked(False)
@@ -349,12 +354,12 @@ def test_settings_dialog_returns_validated_settings(qtbot, window):
     assert dialog.clean_titles.isChecked()  # 預設開啟
     dialog.clean_titles.setChecked(False)
     result = dialog.result_settings()
-    assert result.max_concurrent == 3 and result.default_format == "mp3"
+    assert result.max_concurrent == 5 and result.default_format == "mp3"
     assert result.default_mp3_quality == "320" and result.keep_history is False
     assert result.embed_metadata is False
     assert result.clean_titles is False and result.download_preferences().clean_titles is False
     window.ctx.apply_settings(result)
-    assert window.ctx.queue.max_concurrent == 3
+    assert window.ctx.queue.max_concurrent == 5
     assert window.ctx.queue.keep_history is False
 
 
