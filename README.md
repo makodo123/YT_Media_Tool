@@ -152,8 +152,8 @@ AI 助理帶入**這些頻道**的影片時會直接加入佇列開始下載，�
    args = ["--mcp"]
    ```
 
-3. 重新開啟 AI 助理。AI 助理帶入網址時，程式的工作列會閃爍、狀態列會顯示「… 帶入了 N 個網址」；
-   程式沒開啟時，網址會在下次開啟時出現在輸入框。
+3. 重新開啟 AI 助理。AI 助理帶入網址時，程式的工作列會閃爍，狀態列會顯示例如「Claude：2 個網址放進輸入框，請確認後按「加入佇列」」
+   （自動下載頻道的影片則顯示「已自動加入 N 部影片到佇列」）；程式沒開啟時，網址會在下次開啟時出現在輸入框。
 
 **注意**：
 - 只有在設定中勾選時才有作用；取消勾選後，AI 助理的所有要求都會被拒絕，期間送來的網址也會被丟棄。
@@ -208,9 +208,12 @@ AI 助理帶入**這些頻道**的影片時會直接加入佇列開始下載，�
 | 項目 | 位置 |
 |---|---|
 | 設定、下載佇列與歷史紀錄 | `%LOCALAPPDATA%\YT_Media_Tool\yt_media_tool.sqlite3` |
-| 日誌（每個檔案 2 MB，保留 5 份） | `%LOCALAPPDATA%\YT_Media_Tool\logs\yt_media_tool.log` |
+| 日誌（每個檔案 2 MB，保留 5 份） | `%LOCALAPPDATA%\YT_Media_Tool\logs\yt_media_tool.log`（AI 助理的日誌為同資料夾的 `mcp.log`） |
 | 預設下載資料夾 | 「下載」資料夾中的 `YT_Media_Tool` |
 | 下載中的暫存檔 | 下載資料夾中隱藏的 `.ytmt_tmp` 資料夾（下載完成、失敗或取消時會自動刪除） |
+| 自動更新下載的安裝程式 | `%LOCALAPPDATA%\YT_Media_Tool\updates`（只保留最新一份） |
+| cookies.txt 的暫存副本 | `%LOCALAPPDATA%\YT_Media_Tool\tmp`（任務結束即刪除） |
+| AI 助理帶入的網址 | `%LOCALAPPDATA%\YT_Media_Tool\mcp_inbox`（程式讀取後立即刪除） |
 
 在檔案總管的網址列貼上 `%LOCALAPPDATA%\YT_Media_Tool` 按 Enter，就能打開設定與紀錄所在的資料夾。
 程式不會在安裝資料夾中寫入任何資料。
@@ -219,7 +222,7 @@ AI 助理帶入**這些頻道**的影片時會直接加入佇列開始下載，�
 
 - 在合併影音或轉檔的步驟中按取消，會等該步驟結束（通常幾秒）才停止並清除暫存檔，期間狀態會顯示「取消中…」。
 - 關閉程式時被中斷的任務，下次會從頭重新下載（不會接續下載到一半的檔案）。
-- 不支援受 DRM 保護的內容與頻道網址。需要登入才能看的內容（年齡限制、會員專屬等），只有在設定 YouTube 登入資訊、
+- 不支援受 DRM 保護的內容；也不能貼上頻道網址下載整個頻道（頻道網址只用於 AI 助理的「自動下載頻道」清單）。需要登入才能看的內容（年齡限制、會員專屬等），只有在設定 YouTube 登入資訊、
   且該帳號本身有權觀看時才能下載。
 - YouTube 改版時，可能暫時無法下載；請更新到最新版（程式會提醒）。
 
@@ -360,8 +363,9 @@ scripts\build_installer.bat
 
 #### 發布新版本到 GitHub Releases
 
-1. 更新 `src/yt_media_tool/__init__.py`、`scripts/build_exe.bat` 與 `pyproject.toml` 中的版本號，推送到 `main`
-   （EXE 與安裝程式的版本資訊會自動取用 `__init__.py` 的版本號；測試會檢查三者一致）。
+1. 更新 `src/yt_media_tool/__init__.py`、`scripts/build_exe.bat` 與 `pyproject.toml` 中的版本號，
+   並在 `docs/RELEASE_NOTES.md` 的「最近更新」最上方加入該版本的說明（會成為 Release 頁面的內文），推送到 `main`
+   （EXE 與安裝程式的版本資訊會自動取用 `__init__.py` 的版本號；測試會檢查三者一致，以及發行說明有寫到目前版本）。
 2. 等待該次推送的 Windows CI 全部通過。
 3. 以下列任一方式觸發 `.github/workflows/release.yml`，它會在 Windows 上自動測試、打包（隨附 FFmpeg 與 Deno）、
    建立並測試安裝程式，再建立 Release（附上 zip、安裝程式與兩者的 `.sha256`）：
@@ -373,19 +377,20 @@ scripts\build_installer.bat
      git push origin v2.0.1
      ```
 
-標籤格式為 `vX.Y.Z`，或加上後綴的 `vX.Y.Z-beta.N`；含 `-` 的標籤會發布為「預先發行版本」。
+標籤格式為 `vX.Y.Z`，或加上後綴的 `vX.Y.Z-beta.N`；含 `-` 的標籤會發布為「預先發行版本」（不會觸發使用者的自動更新）。
+同一個標籤已經發布過時，再執行會直接略過，不會重複建立。
 若因標籤輸入錯誤而失敗，請從 Release workflow 頁面重新執行，不要對失敗的那次按「Re-run」（會沿用錯誤的輸入）。
 
 #### FFmpeg 部署方式（可重現）
 
 - 版本、下載網址、SHA256 與授權資訊集中在 `packaging/ffmpeg_manifest.json`。
-- 目前使用 BtbN 的 **LGPL 共用函式庫（win64-lgpl-shared）** 建置：ffmpeg.exe 與 ffprobe.exe 共用同一組 DLL，
+- 目前使用 FFmpeg-Builds（原 BtbN/FFmpeg-Builds）的 **LGPL 共用函式庫（win64-lgpl-shared）** 建置：ffmpeg.exe 與 ffprobe.exe 共用同一組 DLL，
   比靜態建置小約 40–55 MB，且不含 GPL 元件。下載、合併與 MP3 轉檔所需的功能（libmp3lame、stream copy）皆已具備。
 - `scripts/fetch_ffmpeg.ps1` 下載後會比對 SHA256，不符即中止；manifest 未填 SHA256 時預設拒絕建置。
   若本機 `vendor\ffmpeg` 的版本與 manifest 不同，會自動重新下載。
 - `.github/workflows/ffmpeg-verify.yml` 會將 manifest 中的 SHA256 與 GitHub release digest、建置者公布的
   `checksums.sha256` 交叉比對。
-- BtbN 的每日建置不保證長期保留。若來源被移除，可用 `.github/workflows/ffmpeg-candidates.yml` 比較新的候選版本，
+- 這類每日建置不保證長期保留（2026-11 曾發生原本使用的建置被刪除）。若來源被移除，可用 `.github/workflows/ffmpeg-candidates.yml` 比較新的候選版本，
   更新 manifest 後重新驗證。
 - 離線建置：`scripts\fetch_ffmpeg.ps1 -ZipPath D:\ffmpeg-n9.0.2-57-gd838f9f9ae-win64-lgpl-shared-9.0.zip`
 - 授權與原始碼取得方式請見 `THIRD_PARTY_NOTICES.md`。
@@ -410,8 +415,9 @@ YT_Media_Tool/
 ├── requirements.txt / requirements-dev.txt / pyproject.toml
 ├── handoff.md                      開發交接文件（目前狀態、關鍵決定、注意事項）
 ├── src/yt_media_tool/
-│   ├── app.py                      進入點：日誌、單一執行個體鎖、Qt 中文翻譯、主視窗、--smoke-test
+│   ├── app.py                      進入點：日誌、單一執行個體鎖、Qt 中文翻譯、主視窗、--smoke-test、--mcp
 │   ├── app_context.py              組合資料庫、設定、下載引擎與佇列
+│   ├── mcp_server.py               AI 助理（MCP）伺服器：stdio JSON-RPC、三個工具、收件資料夾
 │   ├── core/
 │   │   ├── task_models.py          任務資料模型與狀態機
 │   │   ├── url_parser.py           網址分類、正規化、去重與錯誤原因
@@ -425,6 +431,7 @@ YT_Media_Tool/
 │   │   ├── playlist_files.py       播放清單檔（.m3u8）
 │   │   ├── local_convert.py        本機檔案轉 MP3
 │   │   ├── updates.py              新版本檢查與自動更新
+│   │   ├── ai_clients.py           偵測 Claude Desktop / Codex 並加入 MCP 設定（先備份）
 │   │   └── errors.py               錯誤訊息轉換（yt-dlp、FFmpeg、cookies、磁碟、權限）
 │   ├── storage/
 │   │   ├── database.py             SQLite（參數化 SQL、user_version migration）
@@ -437,8 +444,10 @@ YT_Media_Tool/
 │   │   ├── playlist_dialog.py      選擇播放清單中要下載的影片（預計檔名、已下載標示）
 │   │   ├── rename_dialog.py        整理舊檔案的歌名
 │   │   ├── convert_dialog.py       本機檔案轉 MP3
+│   │   ├── update_dialog.py        檢查新版本 / 下載 / 安裝進度視窗
+│   │   ├── safe_text.py            把影片標題等外部文字當純文字顯示
 │   │   ├── qt_bridge.py            工作執行緒事件 → Qt signal（主執行緒）
-│   │   ├── workers.py              背景工作（播放清單展開）
+│   │   ├── workers.py              背景工作（播放清單展開、頻道查詢等）
 │   │   ├── i18n.py                 載入 Qt 繁體中文翻譯
 │   │   └── theme.py                深色主題
 │   └── utils/
@@ -462,7 +471,7 @@ YT_Media_Tool/
 - GUI 主執行緒只處理介面；每個下載任務在獨立的工作執行緒中執行 yt-dlp。
 - yt-dlp 的 progress hooks / postprocessor hooks 回報進度 → `QueueManager` 更新狀態（每 0.2 秒節流）
   → `QueueEventBridge` 以 Qt signal 排入主執行緒更新表格。
-- 播放清單在 `QThreadPool` 中於背景展開。
+- 播放清單展開、頻道查詢等需要連網的工作在 `QThreadPool` 中於背景執行。
 
 #### 下載流程與檔案安全
 

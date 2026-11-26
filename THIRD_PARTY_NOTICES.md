@@ -10,7 +10,7 @@ YT Media Tool 本身以 Apache License 2.0 授權（見專案根目錄 `LICENSE`
 | yt-dlp | 2026.10.26 | 影片資訊取得與下載 | Unlicense | https://github.com/yt-dlp/yt-dlp |
 | yt-dlp-ejs | 0.8.0 | yt-dlp 處理 YouTube 所需的 JavaScript 元件 | Unlicense（詳見套件內授權檔） | https://github.com/yt-dlp/ejs |
 | Deno | 2.9.8 | yt-dlp 使用的 JavaScript 執行環境 | MIT | https://github.com/denoland/deno |
-| FFmpeg / FFprobe | 9.0.2（BtbN win64-lgpl-shared） | 影音合併、MP3 轉檔、輸出檢查 | LGPL-2.1-or-later（不含 GPL 元件） | 見下方 |
+| FFmpeg / FFprobe | 9.0.2（FFmpeg-Builds win64-lgpl-shared） | 影音合併、MP3 轉檔、輸出檢查 | LGPL-2.1-or-later（不含 GPL 元件） | 見下方 |
 | PyInstaller bootloader | 6.22.3 | EXE 啟動程式 | GPL-2.0 with bootloader exception | https://pyinstaller.org/ |
 
 ## FFmpeg
@@ -25,7 +25,7 @@ YT Media Tool 本身以 Apache License 2.0 授權（見專案根目錄 `LICENSE`
 - FFmpeg 以共用函式庫（`_internal/ffmpeg/*.dll`）形式散布，本程式以子程序方式呼叫 `ffmpeg.exe` / `ffprobe.exe`，
   使用者可自行以相容版本替換這些 DLL 或執行檔。
 - 對應原始碼：https://github.com/FFmpeg/FFmpeg/tree/d838f9f9ae ；建置腳本與設定：https://github.com/FFmpeg-Builds/FFmpeg-Builds 。
-- 注意：BtbN 的每日建置不保證長期保留。若日後該 release 被移除，需在 manifest 改用新的版本並重新驗證 SHA256。
+- 注意：FFmpeg-Builds（原 BtbN）的每日建置不保證長期保留。若日後該 release 被移除，需在 manifest 改用新的版本並重新驗證 SHA256。
 - 也可使用 `scripts\build_exe.bat --no-ffmpeg` 建置不隨附 FFmpeg 的版本，由使用者自行安裝。
 
 ## 使用聲明
